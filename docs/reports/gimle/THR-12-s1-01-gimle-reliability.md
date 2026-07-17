@@ -2,7 +2,7 @@
 
 ## Status
 
-- Workflow phase: design rework after adversarial REVISE; fresh review required.
+- Workflow phase: revision-3 design rework after adversarial REVISE; fresh review required.
 - Trust: **RED**.
 - ThorChainKit evidence base: `771bad30bb4ff20fa32ed0f4be260a7b934899e9`.
 - Canonical machine checkpoint: `audit/runs/thorchainkit-s1-01-THR-12-20260717/state.json` in the Gimle skills audit root.
@@ -14,9 +14,9 @@ RED describes Gimle trust, not the independent current-tree evidence. Gimle was 
 
 - Codebase-memory project `Users-ant013-Data-AI-thorchain` is ready with 433 nodes and 431 edges; it contains documentation sections and no implementation symbols.
 - Serena was activated on the exact ThorChainKit workspace before local verification.
-- Gimle runtime identity resolved to `52bb684fdd9492519ed7c87b0cae67c7b978810e`; Neo4j and native code discovery were reachable.
-- Twelve Gimle calls were recorded: 11 success, one warning, no protocol errors, and no false-success envelope.
-- The warning was a deliberately rejected broad `AdapterManager` query that mixed current and legacy paths.
+- Gimle runtime identity refreshed to `0e9cf57c00ff970f584256126b500166580e7a72`; Neo4j and native code discovery were reachable.
+- Sixteen Gimle calls are recorded: 14 success, two warnings, no protocol errors, and no false-success envelope.
+- One warning is the deliberately rejected broad `AdapterManager` query. The revision-3 warning records non-policy Palace roots and unknown freshness for load-bearing projects.
 
 ## Trust Defects
 
@@ -24,18 +24,19 @@ RED describes Gimle trust, not the independent current-tree evidence. Gimle was 
 |---|---|---|---|---|
 | `GIM-THR12-TRON-MAPPING` | high | Gimle maps TronKit at `f8ce0c00…`; the mandated checkout is `aa691bcd…`. | Indexed package/facade results cannot establish the primary analog. | Use discovery only; verify the mandated checkout with Serena, `rg`, and Git. |
 | `GIM-THR12-UW-MAPPING` | high | Gimle maps Unstoppable at `1eeed4e9…`; the mandated checkout is `5b06860e…`. | Indexed consumer/lifecycle results may describe a different revision. | Verify only the pinned WalletCore paths in the mandated checkout. |
+| `GIM-THR12-REV3-MAPPING` | high | The refreshed registry still uses non-policy roots, reports unknown freshness, and maps Unstoppable to a different commit; TronKit's indexed commit now agrees only by SHA. | Revision-3 lifecycle/consumer decisions still cannot use the index as authority. | Retain the exact policy-checkout Git/Serena/`rg` facts as the decision basis. |
 | `GIM-THR12-EVM-PATH` | low | Gimle and the mandated EvmKit roots differ, but both resolve to `be028631…`. | Path identity must remain explicit. | Cite the shared commit and independently verify the mandated tree. |
 | `GIM-THR12-BROAD-ADAPTER` | low | An unscoped name query returned 102 mixed legacy/current matches. | The result cannot select a lifecycle consumer. | Use the exact WalletCore path; the broad result influenced no decision. |
 
-The two high mapping defects force RED trust. Their accepted fallback claims are separate current-tree facts; contradicted Gimle claims remain rejected in the checkpoint.
+The high mapping defects force RED trust. Their accepted fallback claims are separate current-tree facts; contradicted Gimle claims remain rejected in the checkpoint.
 
 ## Verified Analog Family
 
 | Slice | Primary | Supporting | Rejected counterexamples | Required delta |
 |---|---|---|---|---|
-| S1-01A package/test foundation | TronKit `Package.swift` at `aa691bcd…` | TronKit local-package workspace | EvmKit manifest without a test target | Swift 5.10, iOS 13, BigInt only, one library, 18 behavioral tests plus separate executable contract audits |
-| S1-01B public facade/lifecycle | TronKit `Kit` and factory at `aa691bcd…` | Unstoppable `TronKitManager` and `AdapterManager` at `5b06860e…` | duplicate demo lifecycle ownership and mnemonic persistence | complete constructible value layer, strict Address decode, typed factory errors, synchronized lifecycle owner, optional replaying publishers, inert nil/idle/zero state |
-| S1-01C Example/UI gate | TronKit Example workspace at `aa691bcd…` | EvmKit workspace at `be028631…` | demo secrets/duplicate starts and Vultisig zero-case-green fixture discovery | fixture-only diagnostics, stable accessibility IDs, secret-free artifacts, manifest/JUnit-count guards |
+| S1-01A package/test foundation | TronKit `Package.swift` at `aa691bcd…` | TronKit local-package workspace | EvmKit manifest without a test target | Swift tools 5.10, iOS 13, pinned Xcode/Swift identity, staged behavioral tests, then exact allowlists and separate contract audits |
+| S1-01B public facade/lifecycle | TronKit `Kit` and factory at `aa691bcd…` | Unstoppable `TronKitManager` and `AdapterManager` at `5b06860e…` | duplicate demo lifecycle ownership and mnemonic persistence | complete value/state layer, strict Address decode, internal namespace, explicit lock linearization/reentry, no-op factory, inert nil/idle/zero state |
+| S1-01C Example/UI gate | TronKit Example workspace at `aa691bcd…` | EvmKit workspace at `be028631…` | demo secrets/duplicate starts and Vultisig zero-case-green fixture discovery | fixture-only diagnostics, exact-device argv canaries, strict JUnit guards, raw plus Vision-OCR artifact scans |
 
 All three slices passed the mechanical verified-analog gate. The lifecycle and UI-test roles without matching analog tests carry explicit bounded-search waivers; their missing coverage is a required test-first delta, not an absence claim from Gimle.
 
@@ -53,7 +54,8 @@ All three slices passed the mechanical verified-analog gate. The lifecycle and U
 
 - The target repository remains documentation-only; no implementation path exists at the evidence HEAD.
 - Maestro CLI is unavailable on the evidence machine, so no fixture flow is claimed green during design review.
-- Adversarial decisions D-001…D-007 require the full S1-01 value surface, fail-closed `Address`, optional publishers, executable verification gates, a PR-number-only repository marker, exact lifecycle/namespace semantics, and corrected toolchain claims; revision 2 implements those design corrections and still requires fresh review.
-- BigInt `v5.0.0` at `19f5e8a48be155e34abb98a2bcf4a343316f0343` declares `BigUInt` without `Sendable`; revision 2 removes BigUInt-containing `Sendable` promises and requires a strict-concurrency build without `@unchecked Sendable`.
+- Revision-2 review accepted D-003 and D-005 and returned D-001, D-002, D-004, D-006, and D-007. Revision 3 replaces `Duration`, removes the invalid `RawRepresentable` claim, pins non-mainnet constants, owns state invariants, stages tests, internalizes the namespace, defines legal concurrency/reentry, and makes the platform/device/artifact gates executable; fresh review is still required.
+- BigInt `v5.0.0` at `19f5e8a48be155e34abb98a2bcf4a343316f0343` declares `BigUInt` without `Sendable`; revision 3 retains no BigUInt-containing `Sendable` promise and names the Swift-5 complete strict-concurrency warnings-as-errors command.
+- Focused iOS-13 Swift-5 typechecking rejects public `Duration` and accepts the `TimeInterval`/throwing-`Denom` replacement. Design validation does not claim package tests or Maestro green before implementation.
 - The Unstoppable analog profile was not loaded because S1-01 contains no Unstoppable integration change.
 - No reference repository was modified, and no secret, mnemonic, credential, or operator-local absolute path is stored in this repository report.

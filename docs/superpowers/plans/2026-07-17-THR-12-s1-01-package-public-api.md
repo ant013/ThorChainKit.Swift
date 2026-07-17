@@ -9,94 +9,103 @@ Implementation may begin only after the revised slice spec, this plan, the Gimle
 ## Acceptance Criteria
 
 - Parsed `swift package dump-package` JSON shows exactly one `ThorChainKit` library product, one library target, and one `ThorChainKitTests` target.
-- The exact 18-method `PublicApiTests` allowlist is discovered and green; manifest, import, symbol-graph, discovery, and external-consumer audits run as separate executable gates.
-- Network/endpoint/denom values are publicly constructible and validated; `Address` performs strict classic-Bech32 network-bound decoding with no unchecked fixture path.
-- Whitespace-only wallet IDs and address/network mismatch fail with stable typed errors; factory construction performs no lifecycle work.
-- One synchronized owner linearizes lifecycle calls; start/stop are idempotent, running refresh forwards once per call, stopped refresh is a no-op, and initial/replayed state is exactly nil/idle/zero/no-account.
-- Public source/API contains no seed/private key and no MarketKit, RxSwift, SwiftUI, or WalletCore import; BigUInt-containing types make no unproven `Sendable` claim under Swift 5.10.
-- The shared Example workspace builds against `group:..`, constructs only public validated values, and launches in visibly labeled `FIXTURE` mode without live-test behavior.
-- `THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh` is the sole UI gate and reports JUnit `tests=1`, `failures=0`, `errors=0`, `skipped=0` on the same boot/build/install/launch device.
-- Secret/namespace scanning covers tracked inputs and generated logs/JUnit/screenshots; its positive canary runs only in a temporary copy.
-- A temporary Swift-tools-5.10/iOS-17 local-package consumer using only public `import ThorChainKit` builds with `xcodebuild` for generic iOS Simulator.
+- The authoritative 18 `PublicApiTests` methods are staged with their owning implementation, then locked by an exact discovery allowlist after all 18 exist.
+- Network constants, finite `TimeInterval` endpoint values, throwing `Denom`, and state-model invariants are constructible and validated; `Address` performs strict classic-Bech32 network-bound decoding with structural/canonical and Bech32m rejection coverage.
+- Whitespace-only wallet IDs and address/network mismatch fail with stable typed errors; the persistence namespace remains internal; factory construction and lifecycle create no network, storage, timer, or task.
+- One lock defines lifecycle linearization and legal overlap traces; start/stop are idempotent, running refresh forwards once, stopped refresh no-ops, and publisher delivery permits synchronous getter/lifecycle reentry.
+- Initial/replayed state is exactly nil/idle/zero/no-account; S1-01 promises no later snapshot mutation.
+- Public source/API contains no seed/private key and no MarketKit, RxSwift, SwiftUI, or WalletCore import; BigUInt-containing types make no unproven `Sendable` claim.
+- CI asserts Xcode 26.3 (`17C529`) and Apple Swift 6.2.4, compiles in Swift 5 mode, and promotes complete strict-concurrency warnings to errors.
+- A temporary Swift-tools-5.10/iOS-13 public-only consumer builds with the pinned Xcode for generic iOS Simulator.
+- The shared Example workspace builds against `group:..` on one exact simulator destination and launches in visibly labeled `FIXTURE` mode.
+- `THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh` uses that UDID for boot/build/install/launch/`maestro --device` and reports JUnit `tests=1`, `failures=0`, `errors=0`, `skipped=0`.
+- Command-shim canaries prove device argv consistency; secret/namespace scanning covers tracked inputs, raw generated artifacts, and Vision-OCR text from every PNG. Canaries run only in a temporary copy.
 - Reviewer, QA, and CI cite the same final `headRefOid`; the implementation PR stores only its real PR number in the roadmap marker, and the CTO separately verifies `mergeCommit.oid` on `origin/main` after merge.
 
 ## Execution Steps
 
-### 1. Establish package topology and failing contract gates
+### 1. Establish executable package topology
 
+- [ ] Completion evidence recorded in this plan and the implementation commit.
 - Suggested owner: ThorChainSwiftEngineer.
 - Dependencies: accepted plan confirmation.
-- Affected paths: `Package.swift`, `Tests/ThorChainKitTests/PublicApiTests.swift`, `Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt`, `Tests/ThorChainKitTests/Fixtures/S1-01-public-symbols.txt`, `Scripts/verify-s1-01.sh`.
-- Test first: add the exact behavioral test/discovery allowlist plus manifest/import/symbol/consumer canaries and observe failure because no package exists.
-- Implementation: add `import PackageDescription`, Swift tools 5.10, iOS 13, one `ThorChainKit` library product/target, one test target, and only BigInt.
-- Acceptance: parsed topology is exact; extra products/targets/imports/symbols/tests fail their own named gates.
-- Check: `swift package dump-package` JSON assertions, `swift build`, and the initially failing `Scripts/verify-s1-01.sh` subgates.
+- Affected paths: `Package.swift`, `Sources/ThorChainKit/ThorChainKit.swift`, `Tests/ThorChainKitTests/PublicApiTests.swift`, and the topology subgate in `Scripts/verify-s1-01.sh`.
+- Test first: add an independent parsed-manifest topology check and observe its named failure because `Package.swift` is absent.
+- Implementation: add `import PackageDescription`, Swift tools 5.10, iOS 13, one `ThorChainKit` library product/target, one test target, only BigInt, and empty compiling source/test shells. Do not add behavioral test bodies or allowlist fixtures yet.
+- Acceptance: parsed topology is exact; extra products/targets/dependencies fail the topology gate; `swift build` succeeds without a future-slice stub.
+- Check: `swift package dump-package`, the topology subgate, and `swift build`.
 - Commit: `test: establish ThorChainKit package contract`.
 
-### 2. Add the complete immutable public value layer
+### 2. Add the complete immutable value layer and methods 1–12
 
+- [ ] Completion evidence recorded in this plan and the implementation commit.
 - Suggested owner: ThorChainSwiftEngineer.
 - Dependencies: step 1.
-- Affected paths: `Models/Network.swift`, `Models/EndpointConfiguration.swift`, `Network/EndpointFamilyDescriptor.swift`, `Network/EndpointPolicy.swift`, `Models/Denom.swift`, `Models/Address.swift`, `Address/AddressError.swift`, `Address/Bech32Codec.swift`, `Address/BitConversion.swift`, and `PublicApiTests.swift`.
-- Test first: methods 1–12 from the authoritative list, including invalid endpoint bounds and valid/invalid external THOR address fixtures.
-- Implementation: add exactly the public signatures and validation in the spec; strict `Address.init` performs classic checksum, mixed-case, exact HRP, canonical lowercase, strict padding/re-encode, and exact 20-byte payload checks.
-- Acceptance: mainnet is `thorchain-1`/`thor`/`931`; persistence identity includes environment plus exact chain ID; no fake payload, unchecked initializer, probe, HTTP, failover, hashing, or public payload encoder appears.
-- Check: `swift test --filter PublicApiTests` for methods 1–12 plus strict-concurrency compile of the value layer.
+- Affected paths: `Models/Network.swift`, `Models/EndpointConfiguration.swift`, `Network/EndpointFamilyDescriptor.swift`, `Network/EndpointPolicy.swift`, `Models/Denom.swift`, `Models/Address.swift`, `Models/AccountState.swift`, `Models/SyncState.swift`, `Models/SyncError.swift`, `Address/AddressError.swift`, `Address/Bech32Codec.swift`, `Address/BitConversion.swift`, and `PublicApiTests.swift`.
+- Test first: add only authoritative methods 1–12. Cover `thor/sthor/cthor` plus coin type 931, invalid chain IDs, normalized/control-safe endpoint fields, hostless URL and finite-positive seconds rejection, throwing Denom validation, both directions of the AccountState existence invariant, stable SyncError cases, and table-driven Address structure/canonical/classic-checksum/Bech32m/HRP/padding/payload failures.
+- Implementation: add exactly the public signatures and validation in the spec. `TimeInterval` is measured in seconds; `Denom` does not conform to `RawRepresentable`; strict `Address.init` performs classic checksum, exact HRP, canonical lowercase re-encoding, strict padding, and exact 20-byte payload checks.
+- Acceptance: mainnet is `thorchain-1`/`thor`/`931`; stagenet is `sthor`/`931`; chainnet is `cthor`/`931`; persistence identity includes environment plus exact chain ID; no fake payload, unchecked initializer, probe, HTTP, failover, hashing, or public payload encoder appears.
+- Check: `swift test --filter PublicApiTests` with exactly methods 1–12 present, plus `swift build -Xswiftc -swift-version -Xswiftc 5 -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors`.
 - Commit: `feat: add S1-01 public value contracts`.
 
-### 3. Add the inert synchronized Kit facade
+### 3. Add the inert synchronized facade and methods 13–18
 
+- [ ] Completion evidence recorded in this plan and the implementation commit.
 - Suggested owner: ThorChainSwiftEngineer.
 - Dependencies: step 2.
 - Affected paths: `Sources/ThorChainKit/Core/Kit.swift`, `KitFactory.swift`, `KitDependencies.swift`, and `PublicApiTests.swift`.
-- Test first: methods 13–18, including whitespace-only ID, address/network mismatch, inert factory, concurrent lifecycle ordering/call counts, immediate optional publisher replay, and namespace-safe errors.
-- Implementation: create one synchronized lifecycle/snapshot owner, internal injected dependencies, exact `uniqueId`, optional current-value publishers, and public factory without auto-start.
-- Acceptance: start/stop transition once, repeated/concurrent transitions no-op, every running refresh forwards once, stopped refresh no-ops, and initial getters/publishers are nil/idle/zero/no-account.
-- Check: `swift test --filter PublicApiTests` with expectation/barrier synchronization and no sleeps.
+- Test first: add only methods 13–18: whitespace-only wallet ID, address/network mismatch, no-work inert factory, both legal overlap orders with exact lifecycle call counts, initial current-value replay with a subscriber that reads getters and invokes lifecycle synchronously, and deterministic internal namespace absent from errors/public API.
+- Implementation: create one nonrecursive lock owner, exact linearization points, internal test dependencies, the internal persistence namespace, current-value initial publishers, and a public factory backed only by `NoOpLifecycle` and the nil/idle/zero snapshot.
+- Acceptance: start/stop transition once, repeated calls no-op, overlapping calls match one documented sequential trace, every running refresh forwards once, stopped refresh no-ops, subscriber reentry does not deadlock, and no URL session/storage/task/timer is created.
+- Check: `swift test --filter PublicApiTests` with expectation/barrier/call-entry synchronization and no sleeps.
 - Commit: `feat: add inert ThorChainKit facade`.
 
-### 4. Lock the public and toolchain surface
+### 4. Lock the complete public, test, platform, and toolchain surface
 
+- [ ] Completion evidence recorded in this plan and the implementation commit.
 - Suggested owner: ThorChainSwiftEngineer.
 - Dependencies: step 3.
-- Affected paths: public documentation, both allowlist fixtures, and `Scripts/verify-s1-01.sh` only as required by the approved gates.
-- Test first: prove that a temporary extra product, forbidden import, extra public symbol, missing/extra test, and public-consumer use of an internal symbol each fail the corresponding gate.
-- Implementation: canonicalize/compare `dump-package`, generated symbol graph, `swift test list`, and imports; generate a temporary Swift-tools-5.10/iOS-17 public-only local-package consumer and build it with `xcodebuild -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO`.
-- Acceptance: all contract audits are independently named and green; host `swift build` is not used as an iOS compatibility substitute; no BigUInt-containing `Sendable` or `@unchecked Sendable` declaration exists.
-- Check: `Scripts/verify-s1-01.sh`.
+- Affected paths: `Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt`, `Tests/ThorChainKitTests/Fixtures/S1-01-public-symbols.txt`, `Scripts/verify-s1-01.sh`, `.github/workflows/ci.yml`, and public documentation only as required by the approved gates.
+- Test first: after all 18 methods exist, prove that an extra product, forbidden import, extra public symbol, missing/extra test, wrong Xcode/Swift identity, strict-concurrency warning, iOS-16-only public API, and public-consumer use of an internal symbol each fail their own named canary.
+- Implementation: canonicalize/compare `dump-package`, generated symbol graph, `swift test list`, imports, and toolchain identity; run the named Swift-5 strict-concurrency command; generate a `mktemp -d` Swift-tools-5.10 package with `.iOS(.v13)` and build it using only public `import ThorChainKit` with `IPHONEOS_DEPLOYMENT_TARGET=13.0 SWIFT_VERSION=5 SWIFT_STRICT_CONCURRENCY=complete SWIFT_TREAT_WARNINGS_AS_ERRORS=YES`.
+- Acceptance: all audits are independently named and green; the discovered allowlist is exactly 18; host `swift build` is not an iOS compatibility substitute; no BigUInt-containing `Sendable` or `@unchecked Sendable` declaration exists.
+- Check: `Scripts/verify-s1-01.sh` under Xcode 26.3 (`17C529`) / Apple Swift 6.2.4.
 - Commit: `test: lock S1-01 public API surface`.
 
-### 5. Add the local-package fixture-only iOS Example
+### 5. Add and independently build the fixture-only iOS Example
 
+- [ ] Completion evidence recorded in this plan and the implementation commit.
 - Suggested owner: ThorChainSwiftEngineer.
-- Dependencies: step 4.
+- Dependencies: step 4; an exact simulator UDID for the build check.
 - Affected paths: `iOS Example/iOS Example.xcodeproj/`, shared scheme, `.xcworkspace/`, and the minimal `Sources/` files listed in the spec.
-- Test first: structure/build assertion fails until the workspace includes `container:iOS Example.xcodeproj` and `group:..`.
+- Test first: structure/build assertions fail until the workspace includes `container:iOS Example.xcodeproj` and `group:..` and the exact destination can build the scheme.
 - Implementation: add the UIKit diagnostics app using a valid public THOR address and safe `.invalid` fixture endpoints through the public factory; it never starts the kit or exposes an unchecked SPI.
-- Acceptance: exact workspace/scheme build, visible `FIXTURE`, canonical address, nil/idle/zero/no-account state, and no mnemonic/key/provider-credential/wallet-ID/unique-ID output or persistence.
-- Check: the build step inside the exact-UDID runner; no independent ambiguous simulator command.
+- Acceptance: exact workspace/scheme build, visible `FIXTURE`, canonical address, nil/idle/zero/no-account state, and no mnemonic/key/provider-credential/wallet-ID/internal-namespace output or persistence.
+- Check: `THORCHAIN_SIMULATOR_UDID=<exact> xcodebuild -workspace 'iOS Example/iOS Example.xcworkspace' -scheme 'iOS Example' -destination "platform=iOS Simulator,id=$THORCHAIN_SIMULATOR_UDID" CODE_SIGNING_ALLOWED=NO build`.
 - Commit: `feat: add fixture-only iOS Example`.
 
-### 6. Add the guarded exact-UDID Maestro flow
+### 6. Add the guarded exact-UDID Maestro flow and artifact scanner
 
+- [ ] Completion evidence recorded in this plan and the implementation commit.
 - Suggested owner: ThorChainSwiftEngineer.
 - Dependencies: step 5; exact simulator UDID and Maestro CLI for live execution.
-- Affected paths: `.maestro/config.yaml`, `.maestro/flows/00-launch-foundation.yaml`, `Scripts/run-maestro.sh`, scanner/test helper, and ignore rules only if generated artifacts require them.
-- Test first: in a temporary copy only, prove failure for empty/extra manifest entries, zero/mismatched/skipped/error/failure JUnit attributes, missing/different UDID use, and a secret/namespace canary.
-- Implementation: require `THORCHAIN_SIMULATOR_UDID`, use it for boot/build/install/launch/Maestro, emit artifacts under `build/maestro-results`, and scan tracked inputs plus logs/JUnit/screenshots.
-- Acceptance: exactly one fixture flow and one passing/non-skipped JUnit test; no raw `maestro test` gate and no S1-01 live branch.
-- Check: `THORCHAIN_SIMULATOR_UDID=<exact-udid> Scripts/run-maestro.sh`; unavailable CLI/device is recorded as unrun, never green.
+- Affected paths: `.maestro/config.yaml`, `.maestro/flows/00-launch-foundation.yaml`, `Scripts/run-maestro.sh`, `Scripts/test-run-maestro.sh`, `Scripts/scan-s1-01-artifacts.swift`, and ignore rules only for generated artifacts.
+- Test first: in a temporary copy, use PATH shims that record `xcrun`/`xcodebuild`/`maestro` argv and prove failure for a substituted UDID, empty/extra manifest entries, zero/mismatched/skipped/error/failure JUnit attributes, raw secret/namespace text, and a rendered PNG canary recognized by Vision OCR.
+- Implementation: require one UUID, use it for simctl boot/bootstatus/install/launch, the xcodebuild destination, and `maestro --device`; pass explicit JUnit/test-output/debug-output paths; capture logs; OCR every PNG through `VNRecognizeTextRequest`; scan normalized OCR text and raw artifacts.
+- Acceptance: exactly one fixture flow and one passing/non-skipped JUnit test; the success screenshot is scanned; no unqualified `maestro test` gate and no S1-01 live branch exist.
+- Check: `Scripts/test-run-maestro.sh`, then `THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh`; unavailable CLI/device is recorded as unrun, never green.
 - Commit: `test: add guarded foundation Maestro flow`.
 
 ### 7. Prepare one exact-head implementation PR
 
+- [ ] Completion evidence recorded in this plan and the implementation commit.
 - Suggested owner: ThorChainSwiftEngineer.
 - Dependencies: steps 1–6.
-- Affected paths: `docs/roadmap/sprint-01-foundation.md`, PR body, and plan checkboxes/evidence; temporary consumer remains outside the repository.
+- Affected paths: `docs/roadmap/sprint-01-foundation.md`, PR body, and these plan checkboxes/evidence; the temporary consumer remains outside the repository.
 - Test first: roadmap lint rejects `#TBD`, merge/head SHA text, duplicates, and a marker not tied to the real PR number.
-- Implementation: open the PR, update the S1-01 row status cell to `✅ Implemented — PR #<real> — <date>`, push the final head, and run all approved gates against that head.
-- Acceptance: no later push after Reviewer/QA/CI evidence; no roadmap-only follow-up or direct push; PR body links this plan and contains `## QA Evidence`.
-- Check: spec commands, `git diff --name-only origin/main...HEAD`, roadmap lint, `gh pr view --json headRefOid`, and required PR checks.
+- Implementation: open the PR, update the S1-01 row status cell to `✅ Implemented — PR #<real> — <date>`, check off only completed plan steps, push the final head, and run all approved gates against that head.
+- Acceptance: local `git rev-parse HEAD` equals `gh pr view <PR> --json headRefOid --jq .headRefOid`; no later push occurs after Reviewer/QA/CI evidence; PR body links this plan and contains `## QA Evidence`.
+- Check: spec commands, `git diff --name-only origin/main...HEAD`, roadmap lint, exact head comparison, and required PR checks. Immediately before merge the CTO re-reads Reviewer/QA/CI evidence against that OID; after merge, fetches `origin/main`, proves `git merge-base --is-ancestor <mergeCommit.oid> origin/main`, and reads the PR-number marker from `git show <mergeCommit.oid>:docs/roadmap/sprint-01-foundation.md`.
 - Commit: `docs: record S1-01 PR marker`.
 
 ## Review and Handoff Sequence
@@ -106,6 +115,6 @@ Implementation may begin only after the revised slice spec, this plan, the Gimle
 3. ThorChainSwiftEngineer implements test-first and opens the PR.
 4. ThorChainCodeReviewer performs exact-head mechanical review; the architecture reviewer performs adversarial code review.
 5. ThorChainQAEngineer independently verifies the same `headRefOid`.
-6. ThorChainCTO verifies approval, QA, CI, exact head, and PR marker; squash-merges; records/verifies `mergeCommit.oid` on `origin/main`; then closes the slice.
+6. ThorChainCTO re-reads Reviewer/QA/CI evidence, verifies exact head and marker, squash-merges, records/verifies `mergeCommit.oid` on `origin/main`, then closes the slice.
 
 No phase may self-review, implement another role's fixes, or bypass the approval wait.
