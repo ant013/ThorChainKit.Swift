@@ -1,6 +1,6 @@
 # S1-04 — THORChain read client, coordinated failover, and freshness
 
-**Status:** revised after adversarial review; implementation blocked pending approval.
+**Status:** synchronized to S1-01 revision 7 after adversarial REVISE; implementation blocked pending approval.
 **Risk:** high/network and data-integrity boundary.
 **Observable outcome:** fixtures and a controlled mainnet test return one complete typed account read; retry repeats the entire operation on another verified family, while malformed/partial/wrong-network/cancelled results do not become zeros or partial successes.
 
@@ -290,6 +290,10 @@ The fixture flow launches the Example app with canned multi-page bank responses 
 5. Controlled proxy/provider failure proves whole-operation retry when two families are configured.
 
 Current research environment DNS failure is recorded as unrun, not success.
+
+## Slice-versioned contract gates
+
+S1-04 adds `Tests/ThorChainKitTests/Fixtures/S1-04-public-symbols.txt` and `Scripts/verify-s1-04.sh`; its CI job compares the generated public graph exactly with the S1-04 baseline and requires every canonical declaration in S1-01…S1-03 to remain an unchanged subset. New read/SPI declarations appear only in the S1-04 exact baseline; prior removal or signature mutation fails. This script replaces the S1-01 whole-factory prohibition with two explicit paths: production `Kit.instance` remains inert and retains the S1-01 forbidden-capability audit, while only the enumerated `@_spi(Testing)` fixture composition may accept `TestingHttpTransport`; production imports and factory reachability to that SPI fail the gate.
 
 ## Acceptance criteria
 

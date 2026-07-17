@@ -1,6 +1,6 @@
 # S1-05 — RUNE account sync lifecycle
 
-**Status:** synchronized to S1-01 revision 6 after adversarial REVISE; implementation blocked pending approval.
+**Status:** synchronized to S1-01 revision 7 after adversarial REVISE; implementation blocked pending approval.
 **Risk:** high/concurrency, persistence, stale-state semantics.
 **Observable outcome:** `Kit.start/refresh/stop` create one managed sync lifecycle; account/balances/height are published as a single snapshot, cached state survives reconstruction, and a cancelled/old generation cannot overwrite the new state.
 
@@ -71,7 +71,7 @@ AccountSyncer ─▶ ReadOperationCoordinator ─▶ EndpointPool + ThorNodeClie
 
 `LifecycleCommandBridge` becomes the concrete S1-05 collaborator behind S1-01's synchronized owner and facade dispatcher. It receives only already-linearized, monotonically sequenced effective commands. It neither stores `desiredRunning`, filters idempotent start/stop/refresh calls, nor assigns a second public-command sequence. Its task tail preserves the accepted command order while handing asynchronous actor work across the synchronous facade boundary; `start/stop/start` never create independent unordered `Task {}` instances. Every refresh reaching the bridge was already accepted while running, after which the actor may coalesce redundant network work.
 
-`LifecycleGate` uses the exact S1-01 facade dispatcher rather than a second serial publication queue. `acceptIfCurrent(generation:snapshot:)` checks the token, sets getters, and sends publishers in one dispatcher turn. That turn drains already-admitted lifecycle commands immediately before publisher delivery and drains every command admitted during synchronous delivery before yielding; a reentrant command makes no competing dispatcher submission. An ordinary external `stop()` completes only after its ordered bridge invocation establishes the generation/publication barrier. An effective `start`, `stop`, or `refresh` called synchronously by a subscriber follows S1-01's append-and-return rule, and the active turn's post-drain completes it before any competing publication begins. A separate storage control row provides transaction-level compare-and-swap.
+`LifecycleGate` introduces the first post-construction snapshot mutation interface and owns publication-turn admission on the S1-01 facade dispatcher; S1-01 deliberately defines neither. `acceptIfCurrent(generation:snapshot:)` admits the entire publication turn to that dispatcher before any pre-drain, checks the token, drains already-admitted lifecycle commands, sets getters, sends publishers, and drains every command admitted during synchronous delivery before yielding. Admission plus both drains are one dispatcher turn, so a competing publication cannot enter between reentrant command linearization and its drain. An ordinary external `stop()` completes only after its ordered bridge invocation establishes the generation/publication barrier. An effective `start`, `stop`, or `refresh` called synchronously by a subscriber follows S1-01's dispatcher-context append-and-return rule, and the active turn's post-drain completes it before any competing publication begins. A separate storage control row provides transaction-level compare-and-swap.
 
 ## Contracts
 
@@ -288,6 +288,8 @@ Storage failure policy: the network result is not published as durably `.synced`
 - Restore network and refresh: state fresh without recreating Kit.
 
 ## Acceptance criteria
+
+Before acceptance, S1-05 adds `Tests/ThorChainKitTests/Fixtures/S1-05-public-symbols.txt` and `Scripts/verify-s1-05.sh`; its CI job compares the generated public graph exactly with the S1-05 baseline and requires every canonical declaration in S1-01…S1-04 to remain an unchanged subset. New sync projections appear only in the S1-05 exact baseline; prior removal or signature mutation fails. The S1-05 script replaces the S1-01 inert-factory audit with an exact production composition allowlist for endpoint/read/storage/lifecycle components. Construction may create those approved dependencies but must not auto-start, open a request, launch a task, or begin polling; all other networking, database, task, timer, dispatch-source, file, and helper escapes remain forbidden by named temporary-copy canaries.
 
 - One actor owns runtime lifecycle tasks; the bridge receives only S1-01-filtered commands and serializes actor work plus persistent generation barriers without a second desired-running state.
 - Stop/restart/cancellation invariants are proven by deterministic tests.

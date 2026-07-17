@@ -3,7 +3,7 @@
 - Task: THR-12
 - Workflow/phase: analog_change / adversarial_review
 - Trust: **RED**
-- Repository: /Users/ant013/Data/AI/thorchain
+- Repository: ThorChainKit.Swift
 - Base HEAD: 771bad30bb4ff20fa32ed0f4be260a7b934899e9
 - Final HEAD: n/a
 - Gimle runtime: 52bb684fdd9492519ed7c87b0cae67c7b978810e
@@ -11,10 +11,10 @@
 
 ## Metrics
 
-- Calls: 28 (success 25, warning 3, error 0, false-success 0)
-- Useful-call rate: 53.6%
-- Response-byte coverage: 18/28; total 80375
-- Duration coverage: 6/28; total 35000 ms
+- Calls: 32 (success 26, warning 6, error 0, false-success 0)
+- Useful-call rate: 46.9%
+- Response-byte coverage: 22/32; total 86355
+- Duration coverage: 6/32; total 35000 ms
 - Gimle agreement: 66.7%
 - Gimle contradiction: 33.3%
 - Location validity: 100.0%; coverage 6/6
@@ -30,8 +30,9 @@
 | palace.code.list_passthrough_projects | 4 | 0 | 0 | 0 |
 | palace.code.search_code | 2 | 0 | 0 | 0 |
 | palace.code.search_graph | 2 | 1 | 0 | 0 |
-| palace.health.status | 4 | 0 | 0 | 0 |
-| palace.memory.get_project_overview | 7 | 0 | 0 | 0 |
+| palace.code.semantic_search | 0 | 2 | 0 | 0 |
+| palace.health.status | 5 | 0 | 0 | 0 |
+| palace.memory.get_project_overview | 7 | 1 | 0 | 0 |
 | palace.memory.health | 4 | 0 | 0 | 0 |
 | palace.memory.list_projects | 2 | 2 | 0 | 0 |
 
@@ -71,6 +72,10 @@ Bug statuses: {'workaround': 7}
 | E-0026 | evidence | palace.code.list_passthrough_projects | ok | success | n/a/7 | 350 | 10000 | no | 44136fa355b3678a | n/a |
 | E-0027 | evidence | palace.memory.get_project_overview | ok | success | n/a/1 | 1300 | 2400 | no | 04799ff4fb4e3a8b | n/a |
 | E-0028 | evidence | palace.memory.get_project_overview | ok | success | n/a/1 | 1300 | 2400 | no | 4282f54d43bbb349 | n/a |
+| E-0029 | adversarial_review | palace.health.status | ok | success | n/a/1 | 520 | n/a | no | 44136fa355b3678a | n/a |
+| E-0030 | adversarial_review | palace.memory.get_project_overview | ok | warning | 1/1 | 1180 | n/a | no | e40d2aa6fdce6b6f | Payload is valid and mirror freshness is current at 8a63bfda, but repo_path and commit differ from the policy-mandated Unstoppable checkout 5b06860e; exact-checkout claims still... |
+| E-0031 | adversarial_review | palace.code.semantic_search | ok | warning | 0/0 | 980 | n/a | no | 5b0a30810b8c66ca | Bounded indexed search returned zero candidates with complete reported symbol coverage, but project roots are not the policy-mandated checkouts; absence must be verified at exac... |
+| E-0032 | adversarial_review | palace.code.semantic_search | ok | warning | 3/3 | 3300 | n/a | no | 03295673f797df04 | Three AdapterFactory/IAdapter hits contain no comparable ordering mechanism, but the indexed mirror is 8a63bfda rather than the mandated 5b06860e checkout. |
 
 ## Component analog family
 
@@ -78,8 +83,9 @@ Bug statuses: {'workaround': 7}
 |---|---|---|---|---|---|---|---|
 | S1-01A | normal | boundary, dependencies, responsibility, tests | composition, consumer, contract, counterexample, implementation, test | n/a | A-TRON-PACKAGE | A-TRON-WORKSPACE | A-EVM-NO-TEST |
   - Conflict: TronKit uses Swift 5.5 and a mature dependency set, while the new host compatibility target is Swift 5.10 and S1-01 authorizes only BigInt.; resolution: Preserve only product/test/workspace topology; pin Swift 5.10, iOS 13, and BigInt, deferring all S1-03/S1-05 dependencies.
-| S1-01B | normal | boundary, dependencies, lifecycle, responsibility, state_errors, trust | composition, consumer, contract, counterexample, implementation, lifecycle_error, test | test | B-TRON-FACADE | B-UW-CONSUMER, B-UW-LIFECYCLE | B-TRON-DEMO-DUPLICATE-LIFECYCLE |
+| S1-01B | high | boundary, dependencies, lifecycle, responsibility, state_errors, trust | composition, consumer, contract, counterexample, implementation, lifecycle_error, test | test | B-TRON-FACADE | B-UW-CONSUMER, B-UW-LIFECYCLE | B-TRON-DEMO-DUPLICATE-LIFECYCLE |
   - Conflict: TronKit composes uniqueId by ambiguous concatenation and Unstoppable TronKitManager auto-starts the kit even though generic AdapterManager also owns adapter lifecycle.; resolution: Keep the facade shape; hash walletId, NUL delimiter, and network persistenceKey; reject empty walletId; inject lifecycle internally; factory remains inert and S1-01 adds no host adapter.
+  - Conflict: TronKit, EvmKit, and the exact Unstoppable managers directly forward lifecycle calls and do not establish the proposed lock-owned sequence/FIFO, synchronous completion, or reentrant command algorithm.; resolution: Use selected analogs only for facade boundary and lifecycle ownership. Treat command admission/completion as a high-concurrency greenfield delta with two bounded absence searches and deterministic tests; defer every post-construction publication race to S1-05.
 | S1-01C | normal | boundary, dependencies, responsibility | composition, consumer, counterexample, implementation, test | test | C-TRON-WORKSPACE | C-EVM-WORKSPACE | C-TRON-DEMO-SECRETS, C-VULTISIG-ZERO-CASE |
   - Conflict: Both kit demos have empty scheme testables, duplicate lifecycle starts, and persisted mnemonic material; Vultisig shows a zero-case green test hazard.; resolution: Retain only project/workspace/shared-scheme/root-package topology; create a fixture-only diagnostics app, no secret persistence, stable accessibility IDs, and a runner that rejects empty manifests and mismatched JUnit counts.
 | S1-01D | high | boundary, dependencies, responsibility, state_errors, trust | composition, consumer, contract, counterexample, implementation, lifecycle_error, test | test | D-EVM-THROWING-ADDRESS | D-TRON-THROWING-ADDRESS, D-VULTISIG-THOR-HRP | D-EVM-RAW-ADDRESS, D-VULTISIG-FORCE-URL, D-VULTISIG-PRINT-TEST |
@@ -167,35 +173,43 @@ Bug statuses: {'workaround': 7}
 | F-PROTOCOL-EVM-ADDRESS | 1 | yes | MATCH | yes | serena+rg | E-0028 | valid | known_current | At EvmKit be028631, public Address.init(hex:) validates prefix, exact length, symbols, and mixed-case checksum before storing bytes; real consumers use the throwing initializer. |
   - Serena: Exact Address struct and validate bodies are present at Sources/EvmKit/Models/Address.swift lines 6-75; iOS Example and ENS consumers call Address(hex:).
   - rg: git show HEAD confirms lines 6-75 and rg finds Address(hex:) consumers in Example, ENS, and transforms.
-  - Anchors: /Users/ant013/Ios/HorizontalSystems/EvmKit.Swift@be028631:Sources/EvmKit/Models/Address.swift:6, /Users/ant013/Ios/HorizontalSystems/EvmKit.Swift@be028631:iOS Example/Sources/Core/Manager.swift:76
+  - Anchors: EvmKit.Swift@be028631:Sources/EvmKit/Models/Address.swift:6, EvmKit.Swift@be028631:iOS Example/Sources/Core/Manager.swift:76
 | F-PROTOCOL-TRON-ADDRESS | 1 | yes | MATCH | yes | serena+rg | E-0027 | valid | known_current | At TronKit aa691bcd, both public Address initializers throw after checksum, prefix, and exact-length validation, and production transforms/consumers use them. |
   - Serena: Exact Address initializer and validate bodies are present at Sources/TronKit/Models/Address.swift lines 6-59.
   - rg: git show HEAD confirms checksum/prefix/length validation; rg finds throwing Address use in transforms, signer, smart-contract parsing, and Example controllers.
-  - Anchors: /Users/ant013/Ios/HorizontalSystems/TronKit.Swift@aa691bcd:Sources/TronKit/Models/Address.swift:6, /Users/ant013/Ios/HorizontalSystems/TronKit.Swift@aa691bcd:Sources/TronKit/Core/Transforms.swift:63
+  - Anchors: TronKit.Swift@aa691bcd:Sources/TronKit/Models/Address.swift:6, TronKit.Swift@aa691bcd:Sources/TronKit/Core/Transforms.swift:63
 | F-PROTOCOL-VULTISIG-HRP | 1 | yes | MATCH | yes | serena+rg | n/a | valid | known_current | At Vultisig d3123dbe, THOR-specific validation selects cthor for chainnet, sthor for stagenet, and the thorchain coin validator for mainnet; this is vocabulary support only. |
   - Serena: AddressService.validateAddress has exact cthor/sthor branches and delegates mainnet through Chain.thorChain.coinType.
   - rg: git show HEAD confirms VultisigApp/Core/Services/AddressService.swift lines 130-151 at d3123dbe.
-  - Anchors: /Users/ant013/Data/AI/thorchain/sources/vultisig-ios@d3123dbe:VultisigApp/VultisigApp/Core/Services/AddressService.swift:130
+  - Anchors: vultisig-ios@d3123dbe:VultisigApp/VultisigApp/Core/Services/AddressService.swift:130
 | F-PROTOCOL-EVM-RAW-COUNTEREXAMPLE | 1 | yes | MATCH | yes | serena+rg | n/a | valid | known_current | EvmKit Address.init(raw:) accepts any byte count other than slicing 32 bytes, so it is not a fail-closed public constructor analog for THOR protocol values. |
   - Serena: Serena shows init(raw:) stores arbitrary non-32-byte Data unchanged.
   - rg: git show HEAD confirms Sources/EvmKit/Models/Address.swift lines 9-15 at be028631.
-  - Anchors: /Users/ant013/Ios/HorizontalSystems/EvmKit.Swift@be028631:Sources/EvmKit/Models/Address.swift:9
+  - Anchors: EvmKit.Swift@be028631:Sources/EvmKit/Models/Address.swift:9
 | F-PROTOCOL-VULTISIG-ENDPOINT-COUNTEREXAMPLE | 1 | yes | MATCH | yes | serena+rg | n/a | valid | known_current | Vultisig endpoint composition force-unwraps URL(string:) through String.asUrl and therefore cannot define S1-01 public endpoint construction. |
   - Serena: Serena resolves Endpoint.thorchainNetworkInfo through private String.asUrl returning URL(string:self)!.
   - rg: git show HEAD confirms Endpoint.swift lines 150 and 731-734 at d3123dbe.
-  - Anchors: /Users/ant013/Data/AI/thorchain/sources/vultisig-ios@d3123dbe:VultisigApp/VultisigApp/Core/Utils/Endpoint.swift:731
+  - Anchors: vultisig-ios@d3123dbe:VultisigApp/VultisigApp/Core/Utils/Endpoint.swift:731
 | F-PROTOCOL-VULTISIG-TEST-COUNTEREXAMPLE | 1 | yes | MATCH | yes | serena+rg | n/a | valid | known_current | Vultisig ThorAddressValidationTests contains two thor addresses but only prints three validation results and has no assertion, so it is not a usable contract-test oracle. |
   - Serena: Serena shows the sole test method loops and prints without XCTAssert.
   - rg: git show HEAD confirms ThorAddressValidationTests.swift lines 5-22 at d3123dbe.
-  - Anchors: /Users/ant013/Data/AI/thorchain/sources/vultisig-ios@d3123dbe:VultisigApp/VultisigAppTests/Chains/ThorAddressValidationTests.swift:5
+  - Anchors: vultisig-ios@d3123dbe:VultisigApp/VultisigAppTests/Chains/ThorAddressValidationTests.swift:5
 | F-PROTOCOL-PINNED-BOUNDS | 1 | yes | MATCH | yes | rg | n/a | valid | known_current | THORNode a759cb4f pins CometBFT v0.38.21 and Cosmos SDK v0.53.0; those exact sources define MaxChainIDLen 50 and the 3-to-128 ASCII denom grammar. |
   - Serena: n/a
   - rg: Exact THORNode go.mod lines 62/65 pin the modules; official tagged sources show MaxChainIDLen=50 and reDnmString=[a-zA-Z][a-zA-Z0-9/:._-]{2,127}.
-  - Anchors: /Users/ant013/Data/AI/research-cache/thornode-develop-20260717@a759cb4f:go.mod:62, https://github.com/cometbft/cometbft/blob/v0.38.21/types/genesis.go, https://github.com/cosmos/cosmos-sdk/blob/v0.53.0/types/coin.go
+  - Anchors: THORNode@a759cb4f:go.mod:62, https://github.com/cometbft/cometbft/blob/v0.38.21/types/genesis.go, https://github.com/cosmos/cosmos-sdk/blob/v0.53.0/types/coin.go
 | F-PROTOCOL-THOR-ADDRESS-VECTOR | 1 | yes | MATCH | yes | rg | n/a | valid | known_current | THORNode a759cb4f uses thor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhudkmnn2 in an asserted swap test; independent bech32@2.0.0 decoding yields the exact 20-byte payload 33e56601b755fe1c8... |
   - Serena: n/a
   - rg: git show HEAD confirms the address at x/thorchain/handler_swap_test.go:563; npx bech32@2.0.0 decode reports hrp thor, length 20, and the stated hex payload.
-  - Anchors: /Users/ant013/Data/AI/research-cache/thornode-develop-20260717@a759cb4f:x/thorchain/handler_swap_test.go:563, bech32@2.0.0:33e56601b755fe1c896da0884b79f38e526d6efc
+  - Anchors: THORNode@a759cb4f:x/thorchain/handler_swap_test.go:563, bech32@2.0.0:33e56601b755fe1c896da0884b79f38e526d6efc
+| F-LIFECYCLE-KIT-FORWARDING-GAP | 1 | yes | MATCH | yes | serena+rg | n/a | valid | known_current | At the mandated TronKit aa691bcd and EvmKit be028631 checkouts, the public Kit lifecycle methods directly forward start/stop/refresh; bounded Core and test searches expose no lo... |
+  - Serena: TronKit Kit.start/stop/refresh at 212-224 and EvmKit Kit.start/stop/refresh at 111-122 contain only direct collaborator calls.
+  - rg: Exact-head bounded searches of TronKit Core+Tests and EvmKit Core found lifecycle methods and subjects/queues but none of FIFO, desiredRunning, sequence+append, lock, or reentrant ordering vocabulary.
+  - Anchors: TronKit.Swift@aa691bcd:Sources/TronKit/Core/Kit.swift:212, EvmKit.Swift@be028631:Sources/EvmKit/Core/Kit.swift:111
+| F-LIFECYCLE-UW-MANAGER-GAP | 1 | yes | MATCH | yes | serena+rg | n/a | valid | known_current | At mandated Unstoppable 5b06860e, the bounded AdapterManager and TronKitManager lifecycle lane uses serial queues for manager state but directly calls adapter/kit start, stop, a... |
+  - Serena: AdapterManager._initAdapters directly starts/stops adapters; refreshAdapters stops then reconstructs; TronKitManager directly starts the new kit before publishing creation.
+  - rg: At 5b06860e, targeted manager/adapter searches found DispatchQueue and direct lifecycle calls but no FIFO, desiredRunning, sequence+append, lock, or reentrant ordering mechanism.
+  - Anchors: unstoppable-wallet-ios@5b06860e:packages/WalletCore/Sources/WalletCore/Core/Managers/AdapterManager.swift:74, unstoppable-wallet-ios@5b06860e:packages/WalletCore/Sources/WalletCore/Core/Managers/TronKitManager.swift:58
 
 ## Adversarial decisions
 
@@ -211,9 +225,9 @@ Bug statuses: {'workaround': 7}
 - D-010@2 ACCEPT: UI evidence is limited to observable behavior
 - D-011@2 REVISE: One-owner rule remains contradicted by the S1-05 start state machine
 - D-012@2 ACCEPT: Revision-5 integrity bindings are mechanically correct
-- D-013@2 REVISE: FIFO atomicity design is stated but the regression is not deterministically falsifiable
+- D-013@3 REVISE: Admission mutation can still false-green
 - D-014@2 REVISE: Factory inertness audit still lacks category-complete canaries
-- D-015@1 REVISE: Lifecycle commands and publication turns lack one admission order
+- D-015@2 REVISE: S1-01 has no legal P0/P1 publication surface
 - D-016@1 REVISE: S1-05 does not consume the exact frozen S1-01 state/error contract
 - D-017@1 REVISE: Endpoint fail-closed rules exceed the named RED coverage
 - D-018@1 REVISE: Exact-head merge readiness and reviewer-QA sequencing are incomplete
@@ -224,7 +238,13 @@ Bug statuses: {'workaround': 7}
 - D-023@1 REVISE: Decoded address payload lacks an independent known-answer assertion
 - D-024@1 REVISE: Security-sensitive protocol values lack their own verified analog slice
 - D-025@1 REVISE: S1-05 storage key is not explicitly bound to the hashed namespace
-- D-026@1 REVISE: Tool version strings do not establish immutable CI provenance
+- D-026@2 REVISE: Revision 6 truncated the Maestro digest
+- D-027@1 REVISE: Permanent S1-01 gates conflict with approved later slices
+- D-028@1 REVISE: Committed report leaks operator paths
+- D-029@1 REVISE: Discovery count does not prove test execution
+- D-030@1 REVISE: Persistence namespace lacks a fixed oracle
+- D-031@1 REVISE: Plan and test text contain false-green wording
+- D-032@1 REVISE: Novel lifecycle ordering was attributed to a forwarding analog
 
 ## Verification and acceptance
 
@@ -246,23 +266,23 @@ Bug statuses: {'workaround': 7}
 
 - Class/severity/confidence/status: mapping_bug / high / confirmed / workaround
 - Tool/events/claims: palace.memory.get_project_overview / E-0005 / n/a
-- Reproduction: Compare tron-kit overview repo_path/tree_head with git -C /Users/ant013/Ios/HorizontalSystems/TronKit.Swift rev-parse HEAD
+- Reproduction: Compare tron-kit overview repo_path/tree_head with git -C TronKit.Swift rev-parse HEAD
 - Expected: The indexed primary analog maps to the exact assigned checkout and HEAD aa691bcd8c79d57a554d72a4996bec4d7e1afce5
-- Actual: Gimle maps /Users/Shared/Ios/Gimle-Repos/HorizontalSystems/TronKit.Swift at f8ce0c00d788a4e06ddfe07ce2a5d6be783dcce4
+- Actual: Gimle maps GimleMirror/tron-kit at f8ce0c00d788a4e06ddfe07ce2a5d6be783dcce4
 - Impact: Gimle facade/package findings cannot establish the current policy analog
-- Workaround: Use Gimle only for candidate discovery and verify every selected TronKit fact in /Users/ant013/Ios/HorizontalSystems/TronKit.Swift with Serena, rg, and Git
-- Anchors: /Users/ant013/Ios/HorizontalSystems/TronKit.Swift@aa691bcd8c79d57a554d72a4996bec4d7e1afce5
+- Workaround: Use Gimle only for candidate discovery and verify every selected TronKit fact in TronKit.Swift with Serena, rg, and Git
+- Anchors: TronKit.Swift@aa691bcd8c79d57a554d72a4996bec4d7e1afce5
 
 ### GIM-THR12-UW-MAPPING: Gimle Unstoppable mapping differs from the policy consumer checkout
 
 - Class/severity/confidence/status: mapping_bug / high / confirmed / workaround
-- Tool/events/claims: palace.memory.get_project_overview / E-0007 / n/a
-- Reproduction: Compare uw-ios-app overview repo_path/tree_head with git -C /Users/ant013/Ios/HorizontalSystems/unstoppable-wallet-ios rev-parse HEAD
-- Expected: The indexed consumer evidence maps to the assigned checkout and HEAD 5b06860e6e0068f05411cacc568bbb50bca1c588
-- Actual: Gimle maps /Users/Shared/Ios/Gimle-Repos/HorizontalSystems/unstoppable-wallet-ios at 1eeed4e9cb172ebd4168d225b61578a0f532f416
-- Impact: Indexed consumer and lifecycle paths may include changes absent from or newer than the assigned integration analog
-- Workaround: Verify only exact paths and symbols in the assigned 5b06860e checkout; do not load the UW integration profile because S1-01 excludes integration
-- Anchors: /Users/ant013/Ios/HorizontalSystems/unstoppable-wallet-ios@5b06860e6e0068f05411cacc568bbb50bca1c588
+- Tool/events/claims: palace.memory.get_project_overview/palace.code.semantic_search / E-0007, E-0030, E-0032 / n/a
+- Reproduction: Inspect uw-ios-app overview and bounded lifecycle semantic search after a healthy Palace probe.
+- Expected: Indexed identity authoritative for Unstoppable 5b06860e.
+- Actual: Overview and three search hits are from mirror 8a63bfda.
+- Impact: Indexed data cannot establish lifecycle algorithm similarity or absence at the mandated checkout.
+- Workaround: Verify AdapterManager and kit-manager lifecycle at 5b06860e with Serena and rg.
+- Anchors: uw-ios-app@8a63bfda, unstoppable-wallet-ios@5b06860e
 
 ### GIM-THR12-EVM-PATH: Gimle and policy EvmKit roots differ although HEAD agrees
 
@@ -273,18 +293,18 @@ Bug statuses: {'workaround': 7}
 - Actual: Roots differ, but both resolve to be0286317c202084784c5a695928cdc985c4ff7b
 - Impact: Path identity must be stated explicitly even though content freshness agrees by commit
 - Workaround: Verify the assigned EvmKit tree directly and cite the shared commit
-- Anchors: /Users/ant013/Ios/HorizontalSystems/EvmKit.Swift@be0286317c202084784c5a695928cdc985c4ff7b
+- Anchors: EvmKit.Swift@be0286317c202084784c5a695928cdc985c4ff7b
 
-### GIM-THR12-REV3-MAPPING: Revision-3 Palace mappings remain non-policy with unknown freshness
+### GIM-THR12-REV3-MAPPING: Palace kit mappings remain non-policy for lifecycle discovery
 
 - Class/severity/confidence/status: mapping_bug / high / confirmed / workaround
-- Tool/events/claims: palace.memory.list_projects / E-0015 / n/a
-- Reproduction: Compare E-0015 tron-kit and uw-ios-app repo_path/freshness_state with the policy checkouts and exact Git HEADs
-- Expected: Load-bearing indexes map to the mandated /Users/ant013/Ios/HorizontalSystems checkouts with known freshness
-- Actual: Palace maps /Users/Shared/Ios/Gimle-Repos roots; freshness_state is unknown; TronKit indexed commit matches but Unstoppable indexed commit differs from the mandated checkout
-- Impact: Indexed lifecycle and consumer evidence cannot establish the revision-3 design
-- Workaround: Use Palace only for discovery and retain the exact policy checkout Git/Serena/rg facts as the decision basis
-- Anchors: /Users/ant013/Ios/HorizontalSystems/TronKit.Swift@aa691bcd8c79d57a554d72a4996bec4d7e1afce5, /Users/ant013/Ios/HorizontalSystems/unstoppable-wallet-ios@5b06860e6e0068f05411cacc568bbb50bca1c588
+- Tool/events/claims: palace.memory.list_projects/palace.code.semantic_search / E-0015, E-0031 / n/a
+- Reproduction: Inspect project mappings, then run the bounded tron-kit/evm-kit lifecycle semantic search.
+- Expected: Fresh indexed identities bound to policy heads aa691bcd and be028631.
+- Actual: Mappings remain non-policy; their lifecycle search returned zero but cannot establish exact-checkout absence.
+- Impact: Indexed data cannot own facade or lifecycle-algorithm decisions.
+- Workaround: Use Serena and rg at exact policy heads for every load-bearing fact.
+- Anchors: TronKit.Swift@aa691bcd, EvmKit.Swift@be028631
 
 ### GIM-THR12-RUNTIME-DRIFT: Live Gimle runtime changed after the frozen evidence context
 
@@ -306,7 +326,7 @@ Bug statuses: {'workaround': 7}
 - Actual: No Vultisig slug is registered; only local Serena and Git/rg can inspect the pinned checkout.
 - Impact: Gimle cannot discover or freshness-check the required THOR-specific supporting candidate.
 - Workaround: Activate the exact local Vultisig checkout in Serena and independently verify a bounded supporting/counterexample candidate with rg and Git.
-- Anchors: /Users/ant013/Data/AI/thorchain/sources/vultisig-ios
+- Anchors: vultisig-ios
 
 ## Interpretation
 

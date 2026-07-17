@@ -1,6 +1,6 @@
 # S1-03 — Account Derivation and Address Codec
 
-**Status:** design ready, implementation blocked pending approval.
+**Status:** synchronized to S1-01 revision 7 after adversarial REVISE; implementation blocked pending approval.
 **Risk:** high/cryptographic boundary.
 **Observable outcome:** an independent seed/public-key vector produces the expected THORChain address; checksum, payload length, mixed case, and wrong-network HRP are rejected before any network/signing call.
 
@@ -228,6 +228,10 @@ let compressedPublicKey = try wallet
 ```
 
 Changing `xPrivKey`, account, index, chain, or curve is a fixture-breaking design change, not an implementation detail.
+
+## Slice-versioned contract gates
+
+S1-03 adds `Tests/ThorChainKitTests/Fixtures/S1-03-public-symbols.txt` and `Scripts/verify-s1-03.sh`; its CI job compares the generated public graph exactly with the S1-03 baseline and requires every canonical declaration in both S1-01 and S1-02 baselines to remain an unchanged subset. New codec/derivation declarations appear only in the S1-03 exact baseline; prior removal or signature mutation fails. S1-03 repeats S1-01's exact production factory capability audit because derivation remains a separate public value operation and does not change `Kit.instance` composition.
 
 ## Acceptance Criteria
 
