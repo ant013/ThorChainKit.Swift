@@ -1,6 +1,6 @@
 # S1-05 — RUNE account sync lifecycle
 
-**Status:** revised after adversarial review; implementation blocked pending approval.
+**Status:** synchronized to S1-01 revision 6 after adversarial REVISE; implementation blocked pending approval.
 **Risk:** high/concurrency, persistence, stale-state semantics.
 **Observable outcome:** `Kit.start/refresh/stop` create one managed sync lifecycle; account/balances/height are published as a single snapshot, cached state survives reconstruction, and a cancelled/old generation cannot overwrite the new state.
 
@@ -71,7 +71,7 @@ AccountSyncer ─▶ ReadOperationCoordinator ─▶ EndpointPool + ThorNodeClie
 
 `LifecycleCommandBridge` becomes the concrete S1-05 collaborator behind S1-01's synchronized owner and facade dispatcher. It receives only already-linearized, monotonically sequenced effective commands. It neither stores `desiredRunning`, filters idempotent start/stop/refresh calls, nor assigns a second public-command sequence. Its task tail preserves the accepted command order while handing asynchronous actor work across the synchronous facade boundary; `start/stop/start` never create independent unordered `Task {}` instances. Every refresh reaching the bridge was already accepted while running, after which the actor may coalesce redundant network work.
 
-`LifecycleGate` uses the exact S1-01 facade dispatcher rather than a second serial publication queue. `acceptIfCurrent(generation:snapshot:)` checks the token, sets getters, and sends publishers in one dispatcher turn. An ordinary external `stop()` completes only after its ordered bridge invocation establishes the generation/publication barrier. An effective `start`, `stop`, or `refresh` called synchronously by a subscriber on that dispatcher follows S1-01's reentry rule: it appends and returns without waiting behind the active turn; the current turn may finish, then the queued command completes before any later dispatcher turn can overtake it. A separate storage control row provides transaction-level compare-and-swap.
+`LifecycleGate` uses the exact S1-01 facade dispatcher rather than a second serial publication queue. `acceptIfCurrent(generation:snapshot:)` checks the token, sets getters, and sends publishers in one dispatcher turn. That turn drains already-admitted lifecycle commands immediately before publisher delivery and drains every command admitted during synchronous delivery before yielding; a reentrant command makes no competing dispatcher submission. An ordinary external `stop()` completes only after its ordered bridge invocation establishes the generation/publication barrier. An effective `start`, `stop`, or `refresh` called synchronously by a subscriber follows S1-01's append-and-return rule, and the active turn's post-drain completes it before any competing publication begins. A separate storage control row provides transaction-level compare-and-swap.
 
 ## Contracts
 
@@ -110,15 +110,7 @@ S1-05 consumes the exact `AccountState`, `SyncState`, and `SyncError` declaratio
 
 Internal Provider/API/GRDB errors map to this sanitized stable enum; exact diagnostics are available to the internal logger/statusInfo. Cancellation has no case. On stop, state becomes `.idle(cached: lastAccepted != nil)` only for the active generation.
 
-`AccountState` contains:
-
-- `exists`;
-- `accountNumber`, `sequence`, or nil only when `exists == false`;
-- full `[Denom: BigUInt]`;
-- `acceptedHeight`;
-- `fetchedAt`;
-- `providerFamilyId`, `network.expectedChainId`;
-- `runeBalance` computed from exact `.rune`, defaulting to zero only if a successful complete balance snapshot does not contain `rune`.
+`AccountState` contains exactly the frozen S1-01 fields: `accountNumber`, `sequence`, full `[Denom: BigUInt]`, `acceptedHeight`, `fetchedAt`, `providerFamilyId`, and `exists`. Chain identity, generation, and persistence namespace remain in the internal accepted-snapshot/storage context and are not added to the public value. `Kit.runeBalance` is derived from `accountState.balances[.rune]` and defaults to zero only when no accepted account exists or a successful complete balance snapshot omits `rune`; it is not stored as additional `AccountState` content.
 
 A transport/decode failure never creates a zero state.
 
@@ -143,7 +135,7 @@ If the account is nil but balances are non-empty, this is an invariant violation
 
 ### `start()`
 
-- bridge desired state already running → no-op;
+- the S1-01 owner has already filtered repeated start; a bridge spy treats any duplicate start command as a test failure;
 - atomically advance the persistent generation only for stopped→running;
 - load cached state once; publish `.idle(cached:true)` before network access;
 - create exactly one loop task;
@@ -185,6 +177,8 @@ Clock and sleep are injected. The production default is 60 seconds while foregro
 
 ## Persistence schema
 
+`StorageKey` is an internal wrapper around exactly the 64 lowercase-hex S1-01 `persistenceNamespace` (`SHA256(walletId UTF-8 || 0x00 || network.persistenceKey UTF-8)`). It never stores or reconstructs `walletId`, the preimage, or a `walletId-network` concatenation.
+
 One GRDB transaction saves:
 
 ```text
@@ -212,7 +206,7 @@ balances
 
 Within one GRDB write transaction, `saveIfCurrent` first compares `sync_control.generation`; on mismatch, it returns `false` without changing account/balances. On match, it replaces the account and the entire balance set. If the save transaction acquires the writer first, `stop()` waits for it, then increments the generation and only then returns; if stop wins, the CAS save fails. Therefore, a write after stop has returned is impossible. BigUInt is stored as a canonical decimal string. Migration `v1` is idempotent.
 
-Storage failure policy: the network result is not published as durably `.synced` when saving is mandatory. `.notSynced(.storage, cached: previous)` is recommended; this prevents a UI success state that would disappear on relaunch.
+Storage failure policy: the network result is not published as durably `.synced` when saving is mandatory. `.notSynced(.storageUnavailable, cached: previous)` is required; this prevents a UI success state that would disappear on relaunch.
 
 ## State publication
 
@@ -249,7 +243,9 @@ Storage failure policy: the network result is not published as durably `.synced`
 - stop racing an already-started GRDB transaction returns only after save+generation invalidation and permits no later write/publication;
 - immediate start/stop/start is processed in exact FIFO order with one final loop;
 - publication queued before stop completes before stop returns; publication queued after invalidation is rejected;
-- with the real bridge/gate, subscriber delivery reenters effective `start`, `stop`, and `refresh` in separate barrier-controlled cases; each method returns so the current turn unwinds, its command then completes in the S1-01 sequence, and no later dispatcher turn overtakes it;
+- a bridge spy proves repeated start is filtered by S1-01 and no duplicate command reaches the bridge;
+- with the real bridge/gate, subscriber delivery reenters effective `start`, `stop`, and `refresh` in separate barrier-controlled cases; each method returns so the current turn can post-drain its command in the S1-01 sequence;
+- a deterministic `P0/C/P1` barrier admits `C` from `P0`, submits competing `P1` before releasing `P0`, and proves exact publication/command order `P0 → C → P1`;
 - ordinary external effective start/stop/refresh calls cannot return before the corresponding bridge invocation completes;
 - stop→start creates new generation and works;
 - backoff clock deterministic; no fixed sleep.
@@ -263,6 +259,7 @@ Storage failure policy: the network result is not published as durably `.synced`
 - generation control survives reconstruction and remains monotonic;
 - same wallet/network reloads cache;
 - different network/wallet isolated;
+- stored `storage_key` is exactly 64 lowercase hex and database bytes plus captured logs contain neither the raw wallet ID nor a concatenated/unhashed namespace preimage;
 - schema v1 idempotent migration.
 
 `KitLifecycleTests.swift`:
@@ -292,12 +289,12 @@ Storage failure policy: the network result is not published as durably `.synced`
 
 ## Acceptance criteria
 
-- One actor owns runtime lifecycle tasks; the bridge only serializes public commands and persistent generation barriers.
+- One actor owns runtime lifecycle tasks; the bridge receives only S1-01-filtered commands and serializes actor work plus persistent generation barriers without a second desired-running state.
 - Stop/restart/cancellation invariants are proven by deterministic tests.
 - Account, balances, and height are saved/published through generation-CAS; the old generation cannot commit after stop has returned.
 - Cached, stale, missing-account, zero-RUNE, and error states are distinguishable.
 - One refresh performs one complete bank fetch, regardless of the number of denoms.
-- The public facade remains compatible with S1-01.
+- The public facade remains byte-for-byte compatible with S1-01's frozen public models; chain identity stays internal and storage failures use `.storageUnavailable`.
 - Persistence/relaunch and the controlled live read pass.
 
 ## Recorded decisions

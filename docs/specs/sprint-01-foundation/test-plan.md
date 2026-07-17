@@ -25,7 +25,7 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 | Package API isolated from host | exact 18-method PublicApiTests list + mandatory current-value publisher replay | parsed manifest/import/symbol/discovery gates + temporary public-only Swift 5.10/iOS 13 `xcodebuild` consumer |
 | Atomic mainnet identity | NetworkTests | mainnet status/node-info exact `thorchain-1` |
 | Address derivation | DerivationTests independent vectors | imported mnemonic full address match |
-| Strict address validation | AddressCodecTests/fuzz | Receive/parser real UI |
+| Strict address validation | AddressCodecTests/fuzz + independently decoded THORNode address-to-20-byte-payload vector | Receive/parser real UI |
 | Complete balances | fixture pagination tests | public address direct response comparison |
 | Account absence distinction | fixtures/errors | known empty address live read |
 | Cancellation/no stale publication | controlled continuations/clock | remove wallet during delayed proxy request |
@@ -54,6 +54,7 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 - an ordinary external effective start, stop, or running refresh returning before its held lifecycle collaborator completes;
 - a subscriber on the shared facade dispatcher making an effective reentrant start, stop, or running refresh that waits behind the active publication/collaborator turn;
 - lifecycle sequence assignment and FIFO append becoming separable so a later sequence can overtake an earlier one;
+- a competing publication `P1` overtaking lifecycle command `C` admitted by synchronous subscriber delivery during publication `P0`;
 - public factory/no-op composition creating a URL session/request, storage/file/database handle, task, timer, dispatch source, or unaudited helper capability;
 - offline cold/relaunch with cached state;
 - wrong HRP/checksum/mixed-case/address payload length;
@@ -65,7 +66,9 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 - Fixed `sleep` delays are prohibited.
 - Async tests wait on continuations/expectations tied to observed events.
 - S1-01 is the sole `desiredRunning`/idempotence owner. It assigns a sequence and appends the effective command to its pending FIFO in the same owner-lock critical section, then invokes collaborators on the shared facade dispatcher with that lock released. S1-05's bridge preserves accepted actor-command order but owns no duplicate desired-running filter.
-- Outside the facade dispatcher, every effective start/stop/running-refresh call waits for its held collaborator; on dispatcher-context subscriber delivery, an effective reentrant start/stop/refresh returns after enqueue so the active turn can unwind. Barrier-controlled tests cover all six effective completion/reentry cases and use no sleeps.
+- An internal admission probe pauses command 0 after sequence reservation and before FIFO append while the owner lock remains held. Command 1 cannot reserve until command 0 appends, and a temporary structural mutation that moves append outside the critical section must fail this canary.
+- Every publication turn drains admitted lifecycle commands before synchronous publisher delivery and drains commands admitted during delivery before yielding the facade dispatcher. Outside that dispatcher, every effective start/stop/running-refresh call waits for its held collaborator; during subscriber delivery, an effective reentrant call appends and returns. Barrier-controlled tests cover all six effective completion/reentry cases plus exact `P0 → C → P1` order and use no sleeps.
+- S1-01 endpoint tests enumerate every constructor rule: nonempty families, `https`, no credentials/query/fragment, normalized nonempty unique client IDs, finite nonnegative lag, finite positive timeout/revalidation seconds, retryable-status subset, `1...1000` page count, explicit attempts in `1...families.count`, nil attempts, and the exact `effectiveMaximumAttempts` result.
 - Retry count and requested URLs assert exact sequence.
 - Random/property tests log seed on failure.
 - Network live tests excluded from default CI and never make deterministic suite flaky.
@@ -73,12 +76,13 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 - Committed Maestro YAML contains no mnemonic, API key or endpoint credential; runtime values arrive via environment.
 - Fixture and live modes expose an explicit `data-source` badge so fixture success cannot masquerade as live evidence.
 - S1-01's sole UI gate is `THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh`; raw `maestro test` is not accepted. Boot, build, install, launch, and Maestro use that same UDID.
-- S1-01 default CI pins Maestro `2.6.1` and Temurin `17.0.19+10`; both identities are asserted before the fixture flow.
+- S1-01 default CI pins `actions/checkout` to `34e114876b0b11c390a56381ad16ebd13914f8d5`, `actions/setup-java` to `c1e323688fd81a25caa38c78aa6df2d33d3e20d9`, and the Maestro `2.6.1` `maestro.zip` artifact to SHA-256 `3440825f514f537c6a96bcf5de995780c2a4a7f83a43208fdc95d4f1fecfad3`. It asserts Maestro `2.6.1` and Temurin `17.0.19+10` before the fixture flow.
 - S1-01 resolves JUnit, test-output, and debug-output to absolute paths under one repository-root `build/maestro-results` tree. The runner and shims reject workspace-relative or outside-root artifacts, and the scanner covers the separate JUnit file plus both Maestro output trees.
 - The S1-01 launcher requires one configured flow and JUnit `tests=1`, `failures=0`, `errors=0`, and `skipped=0`; detecting zero, extra, failed, errored, or skipped tests fails the gate.
 - All Maestro rules apply only to `ThorChainKit/iOS Example`; the Unstoppable repository receives no Maestro YAML, runner, DEBUG transport, or acceptance launch arguments.
-- Tracked inputs and generated logs/JUnit/screenshots pass a secret and namespace scan before publication. Positive canaries are injected only in a temporary copy, never in the working tree.
-- The exact S1-01 factory/no-op source and dependency-capability path is audited for forbidden network/request, storage/file/database, task, timer, and dispatch-source construction. Temporary-copy canaries prove representative forbidden constructors fail; moving factory composition through an unlisted helper also fails.
+- Tracked inputs and generated logs/JUnit/screenshots pass a secret and namespace scan before publication. OCR recursively enumerates only regular PNG files beneath the two asserted artifact roots, rejects symlinks and path escapes, fails any read/decode/OCR error, and asserts enumerated count equals processed count. Temporary-copy canaries cover safe-first/secret-second images and malformed PNGs; positive canaries never enter the working tree.
+- The exact S1-01 factory/no-op source and dependency-capability path is audited for forbidden network/request, storage/file/database, task, timer, and dispatch-source construction. Temporary-copy canaries separately inject `URLSession.shared`, `URLRequest`, `Task {}`, `Timer.scheduledTimer`, `DispatchSource.makeTimerSource`, `FileHandle(forUpdatingAtPath:)`, `UserDefaults.standard`, and `sqlite3_open`; moving factory composition through an unlisted helper also fails.
+- The named `verify-s1-01-example-workspace` subgate parses the workspace and asserts exactly `container:iOS Example.xcodeproj` plus `group:..` before the exact-destination build.
 - Directly invoked shell scripts have Git mode `100755`, pass `test -x`, and use a valid shell shebang. Non-executable Swift helpers are called through `xcrun swift`.
 
 ## Verification order per slice
@@ -93,6 +97,7 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 8. Opt-in live API gate.
 9. Unstoppable manual create/import/relaunch/App Status checklist for S1-07.
 10. Diff audit confirms that no Maestro/acceptance-only host files were added.
+11. Before merge, `gh pr checks <PR>` is green, `mergeStateStatus` is `CLEAN`, the conflict-marker diff scan is empty, the PR-linked plan exists on the branch, and Paperclip Reviewer and QA evidence cite the exact final head. After QA evidence is copied into the PR body, the CodeReviewer performs one final exact-head pass.
 
 ## Live evidence record
 
@@ -123,4 +128,5 @@ The mnemonic/private key must not appear in the evidence. Use a public fixture m
 - After an offline relaunch, the wallet/address/cache are preserved, and state truthfully shows failure/stale.
 - Unstoppable contains no `.maestro`, acceptance transport, or test launch-argument branches.
 - All high/critical adversarial findings are closed.
+- The final implementation head has green required checks, `CLEAN` merge state, no conflict markers, a valid plan reference, Paperclip CodeReviewer approval, QA PASS, and a final CodeReviewer pass after the PR body contains QA evidence.
 - The S1-01 repository marker contains the real PR number only; after merge, the CTO separately records `mergeCommit.oid`, verifies it is on `origin/main`, and confirms the PR-number marker there.

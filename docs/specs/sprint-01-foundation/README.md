@@ -2,7 +2,7 @@
 
 ## Status
 
-**Architecture review: ACCEPT after revision of the Maestro boundary. Implementation: blocked until explicit user approval.**
+**Architecture review:** S1-01 revision 6 awaits fresh adversarial review; implementation remains blocked until explicit revision-bound user approval.
 
 This package divides the first standalone `ThorChainKit` sprint into seven sequential vertical slices. Each slice concludes with an observable result in the evolving `iOS Example`; S1-06 and S1-07 additionally verify the real Unstoppable Wallet integration surface.
 
@@ -84,12 +84,12 @@ SHA-256 pins the exact versions of the seven approved specs and the test plan. V
 <!-- SPEC_HASHES_START -->
 | Artifact | SHA-256 |
 |---|---|
-| `S1-01-package-public-api.md` | `c2858301ffc43a27b6679053988ac50137309852ade0c2c17953a8e94f4deea3` |
+| `S1-01-package-public-api.md` | `d1a5ec4fdcc0aaaa24e8c50ec1b1185d2e56f48bc15f740bbc09fab9541485dc` |
 | `S1-02-network-endpoint-policy.md` | `c8868f3f5dfc271dbac25c64727721ba2f75282bb9de67e3129e9dbe9db1830e` |
 | `S1-03-derivation-address-codec.md` | `6ecb061bf2d9c7bc22e92b17ed4754d332d69b39de70ba6165cd6fd558839f14` |
 | `S1-04-thornode-read-client.md` | `23654fab771206bc84374105fc9345a28e5327ac9e414646b4f0ac086febdcea` |
-| `S1-05-rune-account-sync.md` | `82d384ffb328055595f03a2fa8bc648100443229383e3017f18a1e51bec23530` |
+| `S1-05-rune-account-sync.md` | `f51fec9460eb2212a398de0fd3a6240119d22c737d7b8cda248925ea02f03d68` |
 | `S1-06-unstoppable-lifecycle-composition.md` | `012b20e9bb4cc3cca9f6d7261dce1d665d59bc995ad422d458543cd9de44d3e2` |
 | `S1-07-unstoppable-rune-surface.md` | `9da09bfc288bf9e43565f503d2db06b29f57291f0870c1d9729f9d092e2f502c` |
-| `test-plan.md` | `c4333acfc81bb9634b67a65d2cce08b7841b7fdfb4f42ea74690435418b8ea53` |
+| `test-plan.md` | `7339befd535e8b6ad1cafc93ee432bb2351238b90466281d2220eeed9a28f1ea` |
 <!-- SPEC_HASHES_END -->
