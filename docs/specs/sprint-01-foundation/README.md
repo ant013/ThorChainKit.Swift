@@ -84,7 +84,7 @@ SHA-256 pins the exact versions of the seven approved specs and the test plan. V
 <!-- SPEC_HASHES_START -->
 | Artifact | SHA-256 |
 |---|---|
-| `S1-01-package-public-api.md` | `402c50b13aba482579b93d54b9a656815908d08d68b5f1b51536034bad5b816d` |
+| `S1-01-package-public-api.md` | `24052b1f561a5e38c10496367710d07285a556e20592530637ce07b79e7c27e9` |
 | `S1-02-network-endpoint-policy.md` | `586c88d968c9a21ff072ba42ea44f6b25eca82aff718a7a179a5e200acafda78` |
 | `S1-03-derivation-address-codec.md` | `348a9e76565a2bca23353e11f33d71102bcdc0b73d98adff6d2ef19d2e4422f0` |
 | `S1-04-thornode-read-client.md` | `6b0db70a01cbe816040461961d839ab12247ab377fba727431f683c5836eebe3` |

@@ -1,8 +1,19 @@
 # S1-01 — Package and Public API Foundation
 
-**Status:** design ready, implementation blocked pending approval.
+**Status:** slice evidence complete; adversarial review pending; implementation blocked pending review and explicit approval.
 **Risk:** normal.
 **Observable outcome:** the new standalone Swift Package builds independently of Unstoppable Wallet; a compile-smoke test creates a mainnet `Kit` with mock dependencies, while a locally connected `iOS Example` launches in fixture mode and displays public state without network/secret material.
+
+## Evidence Revision
+
+This revision is bound to ThorChainKit `771bad30bb4ff20fa32ed0f4be260a7b934899e9` on `feature/THR-12-package-public-api` and to these independently verified analog checkouts:
+
+- TronKit `aa691bcd8c79d57a554d72a4996bec4d7e1afce5` — primary package, facade, lifecycle, and Example spine;
+- EvmKit `be0286317c202084784c5a695928cdc985c4ff7b` — supporting workspace convention and missing-test counterexample;
+- Unstoppable Wallet `5b06860e6e0068f05411cacc568bbb50bca1c588` — consumer shape and lifecycle-ownership evidence only;
+- Vultisig iOS `d3123dbe6ef1103937c272a8b1cd81f613af0acc` — zero-case-green supporting counterexample only.
+
+Gimle trust for this slice is **RED** because its mapped TronKit and Unstoppable roots/HEADs differ from the policy-mandated checkouts. Gimle results influenced discovery only; every selected fact was reverified through Serena plus targeted `rg`/Git reads. The slice report is `docs/reports/gimle/THR-12-s1-01-gimle-reliability.md`.
 
 ## Goal
 
@@ -233,14 +244,51 @@ ThorChainKit → WalletCore / MarketKit / RxSwift / UI
 - Internal mutable lifecycle/state in subsequent slices belongs to an actor; the facade is not declared `Sendable` without proven synchronization.
 - There are no public callbacks/closures: only Combine values and typed snapshots.
 
-## Analog Delta
+## Complete Analog Delta Matrix
 
-| Analog | Retain | Change |
-|---|---|---|
-| TronKit `Kit` | namespace, synchronous state, Combine, `start/stop/refresh`, composition root | DI seam, no auto-start, typed account snapshot, deterministic tests |
-| EvmKit | provider abstraction and consumer-controlled composition | do not publish internal managers/storage |
-| UW consumers | expected facade shape | package has no knowledge of host types |
-| Tron/Evm tests | nothing | test target and compile smoke are mandatory |
+### S1-01A — SwiftPM product and test foundation
+
+| Field | Decision |
+|---|---|
+| Analog family | Primary: TronKit `Package.swift`. Supporting: TronKit local-package Example workspace. Rejected: EvmKit's library-only manifest with no `testTarget` or `Tests/`. |
+| Coverage | Contract, implementation, composition, consumer, and tests are verified at TronKit `aa691bcd`; EvmKit `be028631` supplies an independent counterexample. |
+| Invariants to preserve | One library product, one library target, a separately runnable test target, and a workspace that consumes `group:..`. |
+| Required differences | Swift tools 5.10; iOS 13; exactly the S1-01 dependency set; seven public-API tests from this spec. |
+| Rejected differences | TronKit's mature dependency graph, EvmKit's missing tests, speculative targets, and empty future-slice classes. |
+| Failure modes | Extra public product, accidental host dependency, unresolved local package, zero discovered tests, or toolchain/platform drift. |
+| Tests before code | Manifest/product assertion, compile/link smoke, host-import allowlist, then the seven `PublicApiTests`. |
+| Verification | `swift package dump-package`, `swift build`, filtered tests, full tests, and a temporary Swift 5.10/iOS 17 WalletCore consumer. |
+
+### S1-01B — public facade and inert lifecycle
+
+| Field | Decision |
+|---|---|
+| Analog family | Primary: TronKit `Kit` and `Kit.instance`. Supporting: exact Unstoppable `TronKitManager` consumer and generic `AdapterManager` lifecycle. Rejected: duplicate manager/adapter start ownership in the TronKit demo. |
+| Coverage | Contract, implementation, composition, consumer, lifecycle/error, boundary, dependency, state, and trust dimensions are current-tree verified. No matching Tron/Evm lifecycle contract test exists; the test role is explicitly waived as an analog and added as a required delta. |
+| Invariants to preserve | Public facade, synchronous snapshot access, nonfailing Combine publishers, explicit `start/stop/refresh`, and one composition root. |
+| Required differences | Empty-wallet rejection, collision-resistant `uniqueId`, internal lifecycle DI, idle/zero initial state, no fake account, and no factory auto-start. |
+| Rejected differences | Ambiguous `walletId-network` concatenation, public seed/private-key handling, public internal managers/storage, host imports, or two lifecycle owners. |
+| Failure modes | Empty namespace, unique-ID collision, lifecycle call amplification, auto-start, non-idempotent stop, publisher error termination, or fabricated account state. |
+| Tests before code | Empty wallet ID; factory inertness; exact lifecycle forwarding; initial idle/zero/no-account snapshot; public import surface. |
+| Verification | `PublicApiTests`, source-import allowlist, API-symbol audit, and temporary WalletCore consumer build. |
+
+### S1-01C — local-package Example and fixture UI gate
+
+| Field | Decision |
+|---|---|
+| Analog family | Primary: TronKit Example project/workspace/shared scheme. Supporting: EvmKit's independent `group:..` workspace. Rejected: persisted demo mnemonics/duplicate starts and Vultisig's zero-case-green fixture filter. |
+| Coverage | App implementation, composition, consumer, package boundary, and dependency direction are verified. No applicable UI-test/Maestro analog exists in TronKit/EvmKit; the test role is explicitly waived as an analog and introduced as a task-specific delta. |
+| Invariants to preserve | Separate app project, shared runnable scheme, workspace link to the root package, and a thin Example-only runtime. |
+| Required differences | Fixture-only default, stable accessibility IDs, visible `FIXTURE` badge, no secret entry/storage, one launch flow, and manifest/JUnit-count guards. |
+| Rejected differences | Hardcoded or persisted mnemonic, provider credential, manager-owned start plus adapter start, localized/coordinate selectors, fixed sleeps, and a green zero-test result. |
+| Failure modes | Wrong app ID, package not linked, nonbooted simulator ambiguity, undiscovered flow, zero JUnit cases, fixture labeled live, or secret leakage in YAML/logs/screenshots. |
+| Tests before code | Static manifest/flow count and secret scan, then build/install/launch assertions for network, address, sync state, data source, and inert lifecycle. |
+| Verification | Workspace build, fixture Maestro flow, JUnit-count assertion, artifact canary scan, and explicit recording when Maestro is unavailable. |
+
+## Open Questions for Adversarial Review
+
+1. `Address.init(_:, network:)` promises a decoded `payload`, while the strict Bech32 codec belongs to S1-03. The review must choose between postponing public construction until S1-03 or explicitly moving the minimum decode/validation behavior into S1-01; implementation must not invent an empty/fake payload.
+2. The roadmap contract requires the same implementation PR to contain the actual squash-merge commit SHA. That SHA does not exist before GitHub creates the squash commit. The review must propose a mechanically satisfiable marker rule before implementation begins; `TBD`, a head SHA mislabeled as a merge SHA, direct push, and a silent second PR remain prohibited.
 
 ## Tests Before Implementation
 
