@@ -2,7 +2,7 @@
 
 ## Status
 
-- Workflow phase: adversarial review.
+- Workflow phase: design rework after adversarial REVISE; fresh review required.
 - Trust: **RED**.
 - ThorChainKit evidence base: `771bad30bb4ff20fa32ed0f4be260a7b934899e9`.
 - Canonical machine checkpoint: `audit/runs/thorchainkit-s1-01-THR-12-20260717/state.json` in the Gimle skills audit root.
@@ -33,8 +33,8 @@ The two high mapping defects force RED trust. Their accepted fallback claims are
 
 | Slice | Primary | Supporting | Rejected counterexamples | Required delta |
 |---|---|---|---|---|
-| S1-01A package/test foundation | TronKit `Package.swift` at `aa691bcd…` | TronKit local-package workspace | EvmKit manifest without a test target | Swift 5.10, iOS 13, BigInt only, one library, seven public-API tests |
-| S1-01B public facade/lifecycle | TronKit `Kit` and factory at `aa691bcd…` | Unstoppable `TronKitManager` and `AdapterManager` at `5b06860e…` | duplicate demo lifecycle ownership and mnemonic persistence | typed configuration errors, collision-resistant namespace, internal DI, inert factory, idle/zero initial state |
+| S1-01A package/test foundation | TronKit `Package.swift` at `aa691bcd…` | TronKit local-package workspace | EvmKit manifest without a test target | Swift 5.10, iOS 13, BigInt only, one library, 18 behavioral tests plus separate executable contract audits |
+| S1-01B public facade/lifecycle | TronKit `Kit` and factory at `aa691bcd…` | Unstoppable `TronKitManager` and `AdapterManager` at `5b06860e…` | duplicate demo lifecycle ownership and mnemonic persistence | complete constructible value layer, strict Address decode, typed factory errors, synchronized lifecycle owner, optional replaying publishers, inert nil/idle/zero state |
 | S1-01C Example/UI gate | TronKit Example workspace at `aa691bcd…` | EvmKit workspace at `be028631…` | demo secrets/duplicate starts and Vultisig zero-case-green fixture discovery | fixture-only diagnostics, stable accessibility IDs, secret-free artifacts, manifest/JUnit-count guards |
 
 All three slices passed the mechanical verified-analog gate. The lifecycle and UI-test roles without matching analog tests carry explicit bounded-search waivers; their missing coverage is a required test-first delta, not an absence claim from Gimle.
@@ -53,6 +53,7 @@ All three slices passed the mechanical verified-analog gate. The lifecycle and U
 
 - The target repository remains documentation-only; no implementation path exists at the evidence HEAD.
 - Maestro CLI is unavailable on the evidence machine, so no fixture flow is claimed green during design review.
-- Public `Address` construction versus the deferred S1-03 codec and the pre-merge squash-SHA marker rule remain explicit adversarial-review questions.
+- Adversarial decisions D-001…D-007 require the full S1-01 value surface, fail-closed `Address`, optional publishers, executable verification gates, a PR-number-only repository marker, exact lifecycle/namespace semantics, and corrected toolchain claims; revision 2 implements those design corrections and still requires fresh review.
+- BigInt `v5.0.0` at `19f5e8a48be155e34abb98a2bcf4a343316f0343` declares `BigUInt` without `Sendable`; revision 2 removes BigUInt-containing `Sendable` promises and requires a strict-concurrency build without `@unchecked Sendable`.
 - The Unstoppable analog profile was not loaded because S1-01 contains no Unstoppable integration change.
 - No reference repository was modified, and no secret, mnemonic, credential, or operator-local absolute path is stored in this repository report.

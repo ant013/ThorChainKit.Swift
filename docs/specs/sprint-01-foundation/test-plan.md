@@ -12,6 +12,7 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 | Controlled async | default CI | cancellation, coalescing, generation, retry, pagination |
 | Storage | default CI, temporary DB | migrations, atomic replace, restart/cache namespaces |
 | Package integration | default CI | facade composition, publishers, real dependencies |
+| Contract audit | default CI | parsed manifest topology, import allowlist, public symbol allowlist, exact test discovery, and public-only iOS consumer |
 | WalletCore integration | host branch CI | manager/adapter/factory/consumer lifecycle |
 | Example UI acceptance | default fixture CI via Maestro | public user-visible state, accessibility contract, cross-slice scenario |
 | Opt-in live | manual/release gate | current endpoint/API compatibility and chain identity |
@@ -21,7 +22,7 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 
 | Criterion | Unit/controlled | Integration/live |
 |---|---|---|
-| Package API isolated from host | PublicApiTests + import allowlist | temporary WalletCore consumer build |
+| Package API isolated from host | exact 18-method PublicApiTests list + optional publisher replay | parsed manifest/import/symbol/discovery gates + temporary public-only Swift 5.10/iOS 17 `xcodebuild` consumer |
 | Atomic mainnet identity | NetworkTests | mainnet status/node-info exact `thorchain-1` |
 | Address derivation | DerivationTests independent vectors | imported mnemonic full address match |
 | Strict address validation | AddressCodecTests/fuzz | Receive/parser real UI |
@@ -62,16 +63,17 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 - Maestro selectors use accessibility identifiers, not localized labels or screen coordinates.
 - Committed Maestro YAML contains no mnemonic, API key or endpoint credential; runtime values arrive via environment.
 - Fixture and live modes expose an explicit `data-source` badge so fixture success cannot masquerade as live evidence.
-- The Maestro launcher verifies a non-empty expected-flow manifest and JUnit case count; detecting zero flows/tests fails the gate.
+- S1-01's sole UI gate is `THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh`; raw `maestro test` is not accepted. Boot, build, install, launch, and Maestro use that same UDID.
+- The S1-01 launcher requires one configured flow and JUnit `tests=1`, `failures=0`, `errors=0`, and `skipped=0`; detecting zero, extra, failed, errored, or skipped tests fails the gate.
 - All Maestro rules apply only to `ThorChainKit/iOS Example`; the Unstoppable repository receives no Maestro YAML, runner, DEBUG transport, or acceptance launch arguments.
-- Example artifacts pass a secret/canary scan before publication.
+- Tracked inputs and generated logs/JUnit/screenshots pass a secret and namespace scan before publication. Positive canaries are injected only in a temporary copy, never in the working tree.
 
 ## Verification order per slice
 
 1. `swift build` / compile of changed target.
 2. Narrow new test class.
 3. Full ThorChainKit test target.
-4. Package dependency/manifest inspection.
+4. Parsed package topology, import allowlist, generated symbol graph, exact test discovery, strict-concurrency build, and temporary public-only iOS consumer.
 5. WalletCore narrow tests for S1-06/S1-07.
 6. WalletCore/App build.
 7. Maestro deterministic Example flow for the slice.
@@ -84,6 +86,7 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 For a controlled run, record:
 
 - kit/host commit;
+- final PR `headRefOid`; Reviewer, QA, and CI records are invalidated by any later push;
 - timestamp/timezone;
 - endpoint IDs/roles, without credentials;
 - returned chain ID and heights;
@@ -107,3 +110,4 @@ The mnemonic/private key must not appear in the evidence. Use a public fixture m
 - After an offline relaunch, the wallet/address/cache are preserved, and state truthfully shows failure/stale.
 - Unstoppable contains no `.maestro`, acceptance transport, or test launch-argument branches.
 - All high/critical adversarial findings are closed.
+- The S1-01 repository marker contains the real PR number only; after merge, the CTO separately records `mergeCommit.oid`, verifies it is on `origin/main`, and confirms the PR-number marker there.

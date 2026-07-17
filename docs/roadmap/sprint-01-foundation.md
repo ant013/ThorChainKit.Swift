@@ -8,15 +8,17 @@ Send, history, and swap are intentionally outside Sprint 1.
 
 ## Slice Sequence
 
-| ID | Slice | Verifiable outcome | Depends on |
-|---|---|---|---|
-| S1-01 | Package and public API | standalone package builds; local-package `iOS Example` and the first Maestro fixture flow run | — |
-| S1-02 | Network and endpoint policy | an endpoint with the wrong chain ID/role or a stale endpoint is rejected fail-closed | S1-01 |
-| S1-03 | Derivation and address codec | an official/independent vector produces the expected `thor1…`; wrong HRP/checksum is rejected | S1-01 |
-| S1-04 | THORNode read client | fixtures and opt-in mainnet requests return typed status/account/balances | S1-02, S1-03 |
-| S1-05 | RUNE account sync | start/refresh/stop/restart produce an atomic account snapshot without stale publication | S1-04 |
-| S1-06 | UW lifecycle composition | the adapter creates the kit, owns its lifecycle, and displays a manually constructed RUNE wallet | S1-05 |
-| S1-07 | UW discovery/address/balance/restart | MarketKit metadata + real create/import/enable/relaunch flows | S1-06 |
+| ID | Slice | Verifiable outcome | Depends on | Status |
+|---|---|---|---|---|
+| S1-01 | Package and public API | standalone package builds; local-package `iOS Example` and the first Maestro fixture flow run | — | Pending |
+| S1-02 | Network and endpoint policy | an endpoint with the wrong chain ID/role or a stale endpoint is rejected fail-closed | S1-01 | Pending |
+| S1-03 | Derivation and address codec | an official/independent vector produces the expected `thor1…`; wrong HRP/checksum is rejected | S1-01 | Pending |
+| S1-04 | THORNode read client | fixtures and opt-in mainnet requests return typed status/account/balances | S1-02, S1-03 | Pending |
+| S1-05 | RUNE account sync | start/refresh/stop/restart produce an atomic account snapshot without stale publication | S1-04 | Pending |
+| S1-06 | UW lifecycle composition | the adapter creates the kit, owns its lifecycle, and displays a manually constructed RUNE wallet | S1-05 | Pending |
+| S1-07 | UW discovery/address/balance/restart | MarketKit metadata + real create/import/enable/relaunch flows | S1-06 | Pending |
+
+The status cell is the canonical repository marker. A completed row contains `✅ Implemented — PR #<real> — <YYYY-MM-DD>` and no commit SHA. Exact reviewed `headRefOid` and post-merge `mergeCommit.oid` remain external review/merge evidence.
 
 ## End-to-End Verification Surface
 

@@ -41,8 +41,8 @@ Consolidated verification: [`test-plan.md`](test-plan.md).
 
 ## Assumptions
 
-- The kit will be created in a separate future repository, not inside Unstoppable Wallet.
-- The current folder contains only design/research/report artifacts.
+- This repository is the product authority for the standalone kit; Unstoppable Wallet is a separate future consumer.
+- The repository remains documentation-only until S1-01 receives explicit revision-bound approval.
 - `iOS Example` uses the verified TronKit project/workspace structure, but does not copy its hardcoded mnemonic, plaintext persistence, or demo lifecycle ownership.
 - Vultisig is used only as a THORChain-specific supporting reference and a source of missing protocol details.
 - Production integration follows the exact current-tree Unstoppable contracts; similar names do not constitute evidence.
@@ -57,7 +57,7 @@ Out of scope: send/sign/broadcast, transaction history, native swap, THORName, p
 
 ## Areas Affected by Future Implementation
 
-- new `ThorChainKit.Swift`: package sources, tests, Example app, Maestro workspace;
+- this `ThorChainKit.Swift` repository: package sources, tests, Example app, Maestro workspace;
 - MarketKit: THORChain blockchain/native RUNE metadata and tests;
 - Unstoppable WalletCore: address factory, kit manager/factory, adapter, parser, and Core wiring;
 - Unstoppable host: only existing `AppTests` and manual product acceptance; no acceptance-only runtime is added.
@@ -84,12 +84,12 @@ SHA-256 pins the exact versions of the seven approved specs and the test plan. V
 <!-- SPEC_HASHES_START -->
 | Artifact | SHA-256 |
 |---|---|
-| `S1-01-package-public-api.md` | `24052b1f561a5e38c10496367710d07285a556e20592530637ce07b79e7c27e9` |
-| `S1-02-network-endpoint-policy.md` | `586c88d968c9a21ff072ba42ea44f6b25eca82aff718a7a179a5e200acafda78` |
-| `S1-03-derivation-address-codec.md` | `348a9e76565a2bca23353e11f33d71102bcdc0b73d98adff6d2ef19d2e4422f0` |
-| `S1-04-thornode-read-client.md` | `6b0db70a01cbe816040461961d839ab12247ab377fba727431f683c5836eebe3` |
-| `S1-05-rune-account-sync.md` | `c042b20d9c2264ad7bcfe271c0b221bfaff06b16a6e3ce56bf84c4a7c8950972` |
-| `S1-06-unstoppable-lifecycle-composition.md` | `4252d1cdeaf672998e4c733f0da5f875202ff4c9a2fc93d8823a7cdee275e7f6` |
-| `S1-07-unstoppable-rune-surface.md` | `4694f0a5b67607dd552a1887b03998b7b182bb7451055f863dff66ffe01940ba` |
-| `test-plan.md` | `4c08ea814da8a8ba6a6426dea61a21a21b8bf3bfd4653714503c49c1d0849a45` |
+| `S1-01-package-public-api.md` | `456cb568f7200a3ed63cc1a82e228feae8d158617fc375d12a49977aafc3bd3e` |
+| `S1-02-network-endpoint-policy.md` | `c8868f3f5dfc271dbac25c64727721ba2f75282bb9de67e3129e9dbe9db1830e` |
+| `S1-03-derivation-address-codec.md` | `6ecb061bf2d9c7bc22e92b17ed4754d332d69b39de70ba6165cd6fd558839f14` |
+| `S1-04-thornode-read-client.md` | `23654fab771206bc84374105fc9345a28e5327ac9e414646b4f0ac086febdcea` |
+| `S1-05-rune-account-sync.md` | `2eac25b16eb85a20321ad37bbe69904132be86cbe3f8816c20c184500bb8560f` |
+| `S1-06-unstoppable-lifecycle-composition.md` | `012b20e9bb4cc3cca9f6d7261dce1d665d59bc995ad422d458543cd9de44d3e2` |
+| `S1-07-unstoppable-rune-surface.md` | `9da09bfc288bf9e43565f503d2db06b29f57291f0870c1d9729f9d092e2f502c` |
+| `test-plan.md` | `99000f26f608ed1334a74db014bc84482b35d1c51f4ced4b70dfe346004c0e7d` |
 <!-- SPEC_HASHES_END -->

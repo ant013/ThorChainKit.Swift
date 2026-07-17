@@ -81,9 +81,9 @@ protocol IThorChainKit: AnyObject {
     var runeBalance: BigUInt { get }
     var accountExists: Bool { get }
 
-    var lastBlockHeightPublisher: AnyPublisher<Int64, Never> { get }
+    var lastBlockHeightPublisher: AnyPublisher<Int64?, Never> { get }
     var syncStatePublisher: AnyPublisher<ThorChainKit.SyncState, Never> { get }
-    var accountStatePublisher: AnyPublisher<ThorChainKit.AccountState, Never> { get }
+    var accountStatePublisher: AnyPublisher<ThorChainKit.AccountState?, Never> { get }
 
     func start()
     func stop()

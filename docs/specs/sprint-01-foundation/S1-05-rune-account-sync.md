@@ -45,8 +45,6 @@ Sources/ThorChainKit/Storage/AccountStateStorage.swift
 Sources/ThorChainKit/Storage/GrdbAccountStateStorage.swift
 Sources/ThorChainKit/Storage/StorageRecord.swift
 Sources/ThorChainKit/Storage/Migrations.swift
-Sources/ThorChainKit/Models/SyncState.swift
-Sources/ThorChainKit/Models/AccountState.swift
 Sources/ThorChainKit/Core/Kit.swift
 Sources/ThorChainKit/Core/KitFactory.swift
 Tests/ThorChainKitTests/AccountSyncerTests.swift
@@ -71,7 +69,7 @@ AccountSyncer ─▶ ReadOperationCoordinator ─▶ EndpointPool + ThorNodeClie
 
 `AccountSyncer` is the sole owner of the loop/current request/generation. `AccountStateManager` does not start network operations and does not accept partial values.
 
-`LifecycleCommandBridge` serializes synchronous public commands into one FIFO task chain. It stores the desired running state for idempotence; `start/stop/start` never create independent unordered `Task {}` instances. `LifecycleGate` uses one serial publication queue: `acceptIfCurrent(generation:snapshot:)` checks the token, sets getters, and sends publishers in one queued block; `stop()` performs a queue barrier, so all earlier sends complete and later ones are rejected. A reentrant stop from a subscriber is detected by a queue-specific key and invalidates the token inline without deadlock. A separate storage control row provides transaction-level compare-and-swap.
+`LifecycleCommandBridge` becomes the concrete S1-05 implementation behind S1-01's single synchronized lifecycle owner; it does not introduce a second facade state machine. It serializes synchronous public commands into one FIFO task chain. It stores the desired running state for idempotence; `start/stop/start` never create independent unordered `Task {}` instances. Every running public refresh reaches the bridge once, after which the actor may coalesce redundant network work. `LifecycleGate` uses one serial publication queue: `acceptIfCurrent(generation:snapshot:)` checks the token, sets getters, and sends publishers in one queued block; `stop()` performs a queue barrier, so all earlier sends complete and later ones are rejected. A reentrant stop from a subscriber is detected by a queue-specific key and invalidates the token inline without deadlock. A separate storage control row provides transaction-level compare-and-swap.
 
 ## Contracts
 
@@ -106,24 +104,7 @@ Public `Kit.start/stop/refresh` preserve the synchronous host contract. Under th
 
 ## State model
 
-```swift
-public enum SyncState: Equatable, Sendable {
-    case idle(cached: Bool)
-    case syncing(previous: AccountState?)
-    case synced(AccountState)
-    case notSynced(SyncError, cached: AccountState?)
-}
-
-public enum SyncError: Error, Equatable, Sendable {
-    case noConnection
-    case rateLimited
-    case wrongNetwork
-    case nodeUnavailable
-    case invalidResponse
-    case storageUnavailable
-    case internalInvariant
-}
-```
+S1-05 consumes the exact `AccountState`, `SyncState`, and `SyncError` declarations from S1-01; it does not redeclare them or add a BigUInt-containing `Sendable`/`@unchecked Sendable` conformance. The S1-01 optional publishers remain optional and replay current absence/state immediately.
 
 Internal Provider/API/GRDB errors map to this sanitized stable enum; exact diagnostics are available to the internal logger/statusInfo. Cancellation has no case. On stop, state becomes `.idle(cached: lastAccepted != nil)` only for the active generation.
 

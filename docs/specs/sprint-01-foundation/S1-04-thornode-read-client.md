@@ -39,7 +39,6 @@ Sources/ThorChainKit/Network/DTO/AccountResponse.swift
 Sources/ThorChainKit/Network/DTO/BankBalancesResponse.swift
 Sources/ThorChainKit/Models/NodeStatus.swift
 Sources/ThorChainKit/Models/Account.swift
-Sources/ThorChainKit/Models/Denom.swift
 Sources/ThorChainKit/Models/CoinBalance.swift
 Tests/ThorChainKitTests/LiveThorNodeClientTests.swift
 Tests/ThorChainKitTests/ReadOperationCoordinatorTests.swift
@@ -134,13 +133,7 @@ A retry creates a new lease and retrieves status/account/all balance pages again
 ## Domain models
 
 ```swift
-public struct Denom: RawRepresentable, Hashable, Sendable {
-    public let rawValue: String
-    public init(rawValue: String) throws
-    public static let rune: Denom
-}
-
-public struct CoinBalance: Equatable, Sendable {
+public struct CoinBalance: Equatable {
     public let denom: Denom
     public let amount: BigUInt
     public init(denom: Denom, amount: BigUInt)
@@ -151,7 +144,7 @@ struct Account: Equatable, Sendable {
     let sequence: UInt64
 }
 
-struct AccountReadResult: Equatable, Sendable {
+struct AccountReadResult: Equatable {
     let status: NodeStatus
     let acceptedHeight: Int64
     let account: Account?
@@ -161,9 +154,11 @@ struct AccountReadResult: Equatable, Sendable {
 }
 ```
 
-Only `Denom/CoinBalance` are public because `AccountState` exposes balances. Low-level account/status remain internal.
+S1-01 owns `Denom`; S1-04 consumes it without redeclaration. `CoinBalance` becomes public because the read layer exposes typed balances internally to the kit snapshot; low-level account/status remain internal.
 
 `Denom`: non-empty, no whitespace/control; opaque/case-sensitive; `/` allowed; native only exact `rune`.
+
+`CoinBalance` and `AccountReadResult` are intentionally not `Sendable` under the minimum BigInt `v5.0.0`, whose `BigUInt` has no such conformance. S1-04 must pass the strict-concurrency build without `@unchecked Sendable`; changing the dependency or isolation design requires separate review.
 
 ## Request construction
 
@@ -269,7 +264,7 @@ Each fixture records source class, capture date, chain ID/height and redaction n
 - zero/max BigUInt, invalid amount never zero;
 - full pagination, cycle, max pages, duplicate denom, later-page failure;
 - account/all pages exact pinned height; missing/mismatched `x-cosmos-block-height` rejects whole attempt;
-- immutable `Sendable` compile checks.
+- strict-concurrency compile checks for immutable DTOs, with no BigUInt-containing `Sendable` or `@unchecked Sendable` claim.
 
 ### Coordinator
 
