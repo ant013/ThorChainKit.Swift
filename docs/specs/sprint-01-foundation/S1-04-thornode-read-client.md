@@ -1,6 +1,6 @@
 # S1-04 — THORChain read client, coordinated failover, and freshness
 
-**Status:** synchronized to S1-01 revision 7 after adversarial REVISE; implementation blocked pending approval.
+**Status:** synchronized to S1-01 revision 9 after revision-8 adversarial REVISE; implementation blocked pending fresh review and approval.
 **Risk:** high/network and data-integrity boundary.
 **Observable outcome:** fixtures and a controlled mainnet test return one complete typed account read; retry repeats the entire operation on another verified family, while malformed/partial/wrong-network/cancelled results do not become zeros or partial successes.
 
@@ -293,7 +293,7 @@ Current research environment DNS failure is recorded as unrun, not success.
 
 ## Slice-versioned contract gates
 
-S1-04 adds `Tests/ThorChainKitTests/Fixtures/S1-04-public-symbols.txt` and `Scripts/verify-s1-04.sh`; its CI job compares the generated public graph exactly with the S1-04 baseline and requires every canonical declaration in S1-01…S1-03 to remain an unchanged subset. New read/SPI declarations appear only in the S1-04 exact baseline; prior removal or signature mutation fails. This script replaces the S1-01 whole-factory prohibition with two explicit paths: production `Kit.instance` remains inert and retains the S1-01 forbidden-capability audit, while only the enumerated `@_spi(Testing)` fixture composition may accept `TestingHttpTransport`; production imports and factory reachability to that SPI fail the gate.
+S1-04 adds `Tests/ThorChainKitTests/Fixtures/S1-04-public-symbols.txt`, `Tests/ThorChainKitTests/Fixtures/S1-04-spi-factory-syntax.txt`, and `Scripts/verify-s1-04.sh`; its CI job compares the generated public graph exactly with the S1-04 baseline and requires every canonical declaration in S1-01…S1-03 to remain an unchanged subset. New read/SPI declarations appear only in the S1-04 exact baseline; prior removal or signature mutation fails. The script owns two independent positive normalized syntax/callee paths: production `Kit.instance` must still match the exact S1-01 inert baseline, including its transitive `Network.persistenceKey` getter and dispatcher-context key operations, while only the enumerated `@_spi(Testing)` fixture composition may match the separate S1-04 SPI baseline and accept `TestingHttpTransport`. A missing or extra declaration/import/identifier/member/call shape fails its owning path; production imports or reachability to the SPI, and SPI capabilities beyond the enumerated transport fixture, fail named temporary-copy canaries. No blacklist-only audit substitutes for either positive baseline.
 
 ## Acceptance criteria
 

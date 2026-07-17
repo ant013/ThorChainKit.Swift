@@ -1,6 +1,6 @@
 # S1-05 — RUNE account sync lifecycle
 
-**Status:** synchronized to S1-01 revision 7 after adversarial REVISE; implementation blocked pending approval.
+**Status:** synchronized to S1-01 revision 9 after revision-8 adversarial REVISE; implementation blocked pending fresh review and approval.
 **Risk:** high/concurrency, persistence, stale-state semantics.
 **Observable outcome:** `Kit.start/refresh/stop` create one managed sync lifecycle; account/balances/height are published as a single snapshot, cached state survives reconstruction, and a cancelled/old generation cannot overwrite the new state.
 
@@ -12,7 +12,7 @@ Connect the S1-02 endpoint policy and S1-04 read client in an actor-owned, read-
 
 Included:
 
-- idempotent start/stop/refresh;
+- idempotent public-facade start/stop/refresh admission;
 - one-shot sync and periodic polling;
 - coalescing concurrent refresh;
 - one complete `ReadOperationCoordinator.read` per refresh;
@@ -50,6 +50,7 @@ Sources/ThorChainKit/Core/KitFactory.swift
 Tests/ThorChainKitTests/AccountSyncerTests.swift
 Tests/ThorChainKitTests/AccountStateStorageTests.swift
 Tests/ThorChainKitTests/KitLifecycleTests.swift
+Scripts/test-s1-05-lifecycle-invariants.sh
 iOS Example/Sources/Controllers/LifecycleController.swift
 .maestro/flows/04-lifecycle-restart.yaml
 ```
@@ -69,7 +70,7 @@ AccountSyncer ─▶ ReadOperationCoordinator ─▶ EndpointPool + ThorNodeClie
 
 `AccountSyncer` is the sole owner of the loop/current request/generation. `AccountStateManager` does not start network operations and does not accept partial values.
 
-`LifecycleCommandBridge` becomes the concrete S1-05 collaborator behind S1-01's synchronized owner and facade dispatcher. It receives only already-linearized, monotonically sequenced effective commands. It neither stores `desiredRunning`, filters idempotent start/stop/refresh calls, nor assigns a second public-command sequence. Its task tail preserves the accepted command order while handing asynchronous actor work across the synchronous facade boundary; `start/stop/start` never create independent unordered `Task {}` instances. Every refresh reaching the bridge was already accepted while running, after which the actor may coalesce redundant network work.
+`LifecycleCommandBridge` becomes the concrete S1-05 collaborator behind S1-01's synchronized owner and facade dispatcher. It receives only already-linearized, monotonically sequenced effective commands. It neither stores `desiredRunning`, filters idempotent start/stop/refresh calls, nor assigns a second public-command sequence. Its task tail preserves the accepted command order while handing asynchronous actor work across the synchronous facade boundary; `start/stop/start` never create independent unordered `Task {}` instances. `AccountSyncer`'s loop/task presence is runtime ownership state, not a defensive idempotence filter: `start` while already running, or `stop`/`refresh` while stopped, is an internal invariant failure with a stable diagnostic marker. `Scripts/test-s1-05-lifecycle-invariants.sh` runs those three impossible actor-command sequences in isolated subprocesses and requires each to terminate nonzero with its exact marker. Every refresh reaching the bridge was already accepted while running; multiple valid running refresh commands may still coalesce network work without dropping or reordering lifecycle commands.
 
 `LifecycleGate` introduces the first post-construction snapshot mutation interface and owns publication-turn admission on the S1-01 facade dispatcher; S1-01 deliberately defines neither. `acceptIfCurrent(generation:snapshot:)` admits the entire publication turn to that dispatcher before any pre-drain, checks the token, drains already-admitted lifecycle commands, sets getters, sends publishers, and drains every command admitted during synchronous delivery before yielding. Admission plus both drains are one dispatcher turn, so a competing publication cannot enter between reentrant command linearization and its drain. An ordinary external `stop()` completes only after its ordered bridge invocation establishes the generation/publication barrier. An effective `start`, `stop`, or `refresh` called synchronously by a subscriber follows S1-01's dispatcher-context append-and-return rule, and the active turn's post-drain completes it before any competing publication begins. A separate storage control row provides transaction-level compare-and-swap.
 
@@ -135,7 +136,7 @@ If the account is nil but balances are non-empty, this is an invariant violation
 
 ### `start()`
 
-- the S1-01 owner has already filtered repeated start; a bridge spy treats any duplicate start command as a test failure;
+- the S1-01 owner has already filtered repeated start; actor receipt while already running is an internal invariant failure, never a no-op or coalesced command, and a bridge spy plus the isolated invariant harness exercise that boundary;
 - atomically advance the persistent generation only for stopped→running;
 - load cached state once; publish `.idle(cached:true)` before network access;
 - create exactly one loop task;
@@ -143,13 +144,14 @@ If the account is nil but balances are non-empty, this is an invariant violation
 
 ### `refresh()`
 
-- if stopped, no-op;
+- actor receipt while stopped is an internal invariant failure because S1-01 never forwards stopped refresh;
 - if a request is running, set `refreshRequested=true` without starting a second full sync in parallel;
 - after completion, perform at most one coalesced refresh;
 - do not clear cached state on failure.
 
 ### `stop()`
 
+- actor receipt while stopped is an internal invariant failure because S1-01 never forwards repeated stop;
 - synchronously close in-memory gate and advance persistent generation in control transaction;
 - cancel loop task, current request and pending sleep;
 - await owned-task completion within the actor path;
@@ -159,7 +161,7 @@ If the account is nil but balances are non-empty, this is an invariant violation
 
 ### Restart
 
-- a new `Kit` receives the same `StorageKey(walletId, network.persistenceKey)`;
+- production composition passes the already-computed S1-01 `persistenceNamespace` into `StorageKey(persistenceNamespace:)`; a new `Kit` with the same S1-01 namespace receives the same key, and S1-05 accepts no wallet/network/preimage initializer for storage identity;
 - the cached snapshot is published as stale/idle before a successful refresh;
 - endpoint URL order does not change the storage key;
 - a network identity change creates a different namespace.
@@ -177,7 +179,7 @@ Clock and sleep are injected. The production default is 60 seconds while foregro
 
 ## Persistence schema
 
-`StorageKey` is an internal wrapper around exactly the 64 lowercase-hex S1-01 `persistenceNamespace` (`SHA256(walletId UTF-8 || 0x00 || network.persistenceKey UTF-8)`). It never stores or reconstructs `walletId`, the preimage, or a `walletId-network` concatenation.
+`StorageKey` is an internal wrapper around exactly the already-computed 64 lowercase-hex S1-01 `persistenceNamespace` (`SHA256(walletId UTF-8 || 0x00 || network.persistenceKey UTF-8)`). Its sole initializer is `StorageKey(persistenceNamespace:)`; it never accepts, stores, or reconstructs `walletId`, `Network`, `network.persistenceKey`, the preimage, or a `walletId-network` concatenation. For `wallet-01` on mainnet, production composition must pass exactly `e2df225b7a00d471b1b09ec2d3344df89a11e9cfe116c05f5290683480623015` from S1-01 into that initializer.
 
 One GRDB transaction saves:
 
@@ -230,7 +232,8 @@ Storage failure policy: the network result is not published as durably `.synced`
 
 `AccountSyncerTests.swift`:
 
-- start/start creates one loop and one immediate request;
+- facade start/start forwards one actor start and creates one loop and one immediate request;
+- the isolated invariant harness proves actor duplicate start, stopped refresh, and duplicate stop each fail nonzero with the exact internal marker rather than no-op/coalescing or masking a bridge defect;
 - concurrent refresh calls coalesce;
 - account and balances use same lease;
 - complete coordinator success emits syncing→synced once;
@@ -257,9 +260,9 @@ Storage failure policy: the network result is not published as durably `.synced`
 - failed transaction leaves previous snapshot intact;
 - `saveIfCurrent` mismatch leaves previous snapshot intact;
 - generation control survives reconstruction and remains monotonic;
-- same wallet/network reloads cache;
+- the fixed S1-01 `wallet-01`/mainnet composition passes `StorageKey(persistenceNamespace: "e2df225b7a00d471b1b09ec2d3344df89a11e9cfe116c05f5290683480623015")`, persists that exact key, and reloads the same cache;
 - different network/wallet isolated;
-- stored `storage_key` is exactly 64 lowercase hex and database bytes plus captured logs contain neither the raw wallet ID nor a concatenated/unhashed namespace preimage;
+- stored `storage_key` is exactly the S1-01 oracle `e2df225b7a00d471b1b09ec2d3344df89a11e9cfe116c05f5290683480623015`; a guarded factory/source mutant that reconstructs from `walletId` plus `network.persistenceKey` fails the same composition test, and database bytes plus captured logs contain neither the raw wallet ID nor a concatenated/unhashed namespace preimage;
 - schema v1 idempotent migration.
 
 `KitLifecycleTests.swift`:
@@ -291,7 +294,7 @@ Storage failure policy: the network result is not published as durably `.synced`
 
 Before acceptance, S1-05 adds `Tests/ThorChainKitTests/Fixtures/S1-05-public-symbols.txt` and `Scripts/verify-s1-05.sh`; its CI job compares the generated public graph exactly with the S1-05 baseline and requires every canonical declaration in S1-01…S1-04 to remain an unchanged subset. New sync projections appear only in the S1-05 exact baseline; prior removal or signature mutation fails. The S1-05 script replaces the S1-01 inert-factory audit with an exact production composition allowlist for endpoint/read/storage/lifecycle components. Construction may create those approved dependencies but must not auto-start, open a request, launch a task, or begin polling; all other networking, database, task, timer, dispatch-source, file, and helper escapes remain forbidden by named temporary-copy canaries.
 
-- One actor owns runtime lifecycle tasks; the bridge receives only S1-01-filtered commands and serializes actor work plus persistent generation barriers without a second desired-running state.
+- One actor owns runtime lifecycle tasks; the bridge receives only S1-01-filtered commands and serializes actor work plus persistent generation barriers without a second desired-running state. Actor-state-inconsistent start/stop/refresh commands are invariant failures proven by the isolated nonzero subprocess harness, not defensive no-ops.
 - Stop/restart/cancellation invariants are proven by deterministic tests.
 - Account, balances, and height are saved/published through generation-CAS; the old generation cannot commit after stop has returned.
 - Cached, stale, missing-account, zero-RUNE, and error states are distinguishable.

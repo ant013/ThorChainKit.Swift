@@ -11,34 +11,34 @@
 
 ## Metrics
 
-- Calls: 32 (success 26, warning 6, error 0, false-success 0)
-- Useful-call rate: 46.9%
-- Response-byte coverage: 22/32; total 86355
-- Duration coverage: 6/32; total 35000 ms
+- Calls: 41 (success 32, warning 8, error 0, false-success 1)
+- Useful-call rate: 53.7%
+- Response-byte coverage: 22/41; total 86355
+- Duration coverage: 6/41; total 35000 ms
 - Gimle agreement: 66.7%
 - Gimle contradiction: 33.3%
 - Location validity: 100.0%; coverage 6/6
 - Freshness coverage: 66.7%
 - Replacement/fallback claims: 2
-- Bugs: 7
+- Bugs: 8
 - Analog slices/candidates: 4/17
 
 ### Calls by tool
 
 | Tool | Success | Warning | Error | False-success |
 |---|---:|---:|---:|---:|
-| palace.code.list_passthrough_projects | 4 | 0 | 0 | 0 |
+| palace.code.list_passthrough_projects | 6 | 0 | 0 | 0 |
 | palace.code.search_code | 2 | 0 | 0 | 0 |
 | palace.code.search_graph | 2 | 1 | 0 | 0 |
 | palace.code.semantic_search | 0 | 2 | 0 | 0 |
-| palace.health.status | 5 | 0 | 0 | 0 |
-| palace.memory.get_project_overview | 7 | 1 | 0 | 0 |
-| palace.memory.health | 4 | 0 | 0 | 0 |
-| palace.memory.list_projects | 2 | 2 | 0 | 0 |
+| palace.health.status | 7 | 0 | 0 | 0 |
+| palace.memory.get_project_overview | 7 | 1 | 0 | 1 |
+| palace.memory.health | 6 | 0 | 0 | 0 |
+| palace.memory.list_projects | 2 | 4 | 0 | 0 |
 
-Bug classes: {'caller_error': 1, 'mapping_bug': 3, 'environment_drift': 2, 'coverage_gap': 1}
-Bug severities: {'low': 2, 'high': 3, 'medium': 2}
-Bug statuses: {'workaround': 7}
+Bug classes: {'caller_error': 1, 'mapping_bug': 3, 'environment_drift': 2, 'coverage_gap': 2}
+Bug severities: {'low': 2, 'high': 3, 'medium': 3}
+Bug statuses: {'workaround': 8}
 
 ## Gimle calls
 
@@ -76,6 +76,15 @@ Bug statuses: {'workaround': 7}
 | E-0030 | adversarial_review | palace.memory.get_project_overview | ok | warning | 1/1 | 1180 | n/a | no | e40d2aa6fdce6b6f | Payload is valid and mirror freshness is current at 8a63bfda, but repo_path and commit differ from the policy-mandated Unstoppable checkout 5b06860e; exact-checkout claims still... |
 | E-0031 | adversarial_review | palace.code.semantic_search | ok | warning | 0/0 | 980 | n/a | no | 5b0a30810b8c66ca | Bounded indexed search returned zero candidates with complete reported symbol coverage, but project roots are not the policy-mandated checkouts; absence must be verified at exac... |
 | E-0032 | adversarial_review | palace.code.semantic_search | ok | warning | 3/3 | 3300 | n/a | no | 03295673f797df04 | Three AdapterFactory/IAdapter hits contain no comparable ordering mechanism, but the indexed mirror is 8a63bfda rather than the mandated 5b06860e checkout. |
+| E-0033 | adversarial_review | palace.health.status | ok | success | n/a/1 | n/a | n/a | yes | 44136fa355b3678a | n/a |
+| E-0034 | adversarial_review | palace.memory.health | ok | success | n/a/1 | n/a | n/a | yes | 44136fa355b3678a | n/a |
+| E-0035 | adversarial_review | palace.memory.list_projects | ok | warning | 18/18 | n/a | n/a | yes | 44136fa355b3678a | No ThorChain project is registered; target freshness and mapping remain unavailable |
+| E-0036 | adversarial_review | palace.code.list_passthrough_projects | ok | success | n/a/7 | n/a | n/a | no | 44136fa355b3678a | n/a |
+| E-0037 | adversarial_review | palace.health.status | ok | success | n/a/1 | n/a | n/a | yes | 44136fa355b3678a | n/a |
+| E-0038 | adversarial_review | palace.memory.health | ok | success | n/a/1 | n/a | n/a | yes | 44136fa355b3678a | n/a |
+| E-0039 | adversarial_review | palace.memory.list_projects | ok | warning | 18/18 | n/a | n/a | yes | 44136fa355b3678a | No ThorChain project is registered; target freshness and mapping remain unavailable |
+| E-0040 | adversarial_review | palace.memory.get_project_overview | ok | false_success | n/a/0 | n/a | n/a | yes | 32a190c78779fbe7 | Outer MCP success wrapped ok=false unknown_project for thorchain; no target overview exists |
+| E-0041 | adversarial_review | palace.code.list_passthrough_projects | ok | success | n/a/7 | n/a | n/a | no | 44136fa355b3678a | n/a |
 
 ## Component analog family
 
@@ -221,41 +230,41 @@ Bug statuses: {'workaround': 7}
 
 ## Adversarial decisions
 
-- D-001@4 ACCEPT: Protocol values and absent-account invariants are now fail-closed
-- D-002@3 ACCEPT: Strict classic-Bech32 construction remains complete
-- D-003@3 ACCEPT: Optional replaying snapshot publishers remain aligned
-- D-004@4 ACCEPT: Revision-3 Maestro and consolidated-plan corrections are resolved
-- D-005@3 ACCEPT: PR-head and post-merge identities remain separated
-- D-006@5 ACCEPT: Effective dispatcher-context reentry no longer self-waits
-- D-007@3 ACCEPT: iOS 13 and BigUInt concurrency claims are now bounded
-- D-008@2 ACCEPT: Hashing non-goal is correctly narrowed
-- D-009@2 ACCEPT: Canonical Gimle identity and Git anchors are corrected
-- D-010@2 ACCEPT: UI evidence is limited to observable behavior
-- D-011@2 REVISE: One-owner rule remains contradicted by the S1-05 start state machine
-- D-012@2 ACCEPT: Revision-5 integrity bindings are mechanically correct
-- D-013@4 REVISE: FIFO mutant lacks an outer executable harness
-- D-014@3 REVISE: Factory inertness audit is blacklist-shaped
-- D-015@3 REVISE: Plan over-defers S1-01 command draining
-- D-016@1 REVISE: S1-05 does not consume the exact frozen S1-01 state/error contract
-- D-017@1 REVISE: Endpoint fail-closed rules exceed the named RED coverage
-- D-018@1 REVISE: Exact-head merge readiness and reviewer-QA sequencing are incomplete
-- D-019@2 REVISE: Artifact containment lacks sibling-prefix and root-symlink canaries
-- D-020@1 REVISE: The committed implementation plan is stale against the canonical Paperclip plan
-- D-021@1 REVISE: The exact Example workspace structure has no named executable gate
-- D-022@1 REVISE: Spec revision metadata is stale
-- D-023@1 REVISE: Decoded address payload lacks an independent known-answer assertion
-- D-024@1 REVISE: Security-sensitive protocol values lack their own verified analog slice
-- D-025@1 REVISE: S1-05 storage key is not explicitly bound to the hashed namespace
-- D-026@2 REVISE: Revision 6 truncated the Maestro digest
-- D-027@1 REVISE: Permanent S1-01 gates conflict with approved later slices
-- D-028@1 REVISE: Committed report leaks operator paths
-- D-029@2 REVISE: SwiftPM xUnit execution evidence is incomplete
-- D-030@1 REVISE: Persistence namespace lacks a fixed oracle
-- D-031@1 REVISE: Plan and test text contain false-green wording
-- D-032@1 REVISE: Novel lifecycle ordering was attributed to a forwarding analog
-- D-033@1 REVISE: BigInt floor and resolved identity are unowned
-- D-034@1 REVISE: Probe callback lock exception is underspecified
-- D-035@1 REVISE: KitConfigurationError has no file owner
+- D-001@5 ACCEPT: Fail-closed protocol values and absent-account invariants are complete
+- D-002@4 ACCEPT: Strict classic-Bech32 construction remains complete
+- D-003@4 ACCEPT: Inert current-value publisher replay remains coherent
+- D-004@5 ACCEPT: Maestro and fixture-only acceptance boundaries remain corrected
+- D-005@4 ACCEPT: PR-head and post-merge identities remain separated
+- D-006@6 REVISE: Dispatcher-context identity is unspecified by the exact allowlist
+- D-007@4 ACCEPT: BigUInt concurrency claims are bounded to the exact floor
+- D-008@3 ACCEPT: Hashing scope remains narrowly internal
+- D-009@3 ACCEPT: Gimle identity limitations remain explicit and non-authoritative
+- D-010@3 ACCEPT: UI evidence is limited to observable public state
+- D-011@3 REVISE: S1-05 still specifies a second lifecycle idempotence filter
+- D-012@3 ACCEPT: Revision-8 integrity bindings are mechanically correct
+- D-013@5 ACCEPT: FIFO mutant now has a nonrecursive executable outer harness
+- D-014@4 REVISE: Factory inertness can escape through authorized Network.persistenceKey
+- D-015@4 ACCEPT: S1-01 retains command draining and defers only publication turns
+- D-016@3 ACCEPT: S1-05 consumes the frozen S1-01 public state/error model
+- D-017@3 ACCEPT: Endpoint fail-closed rules have complete named table coverage
+- D-018@3 ACCEPT: Exact-head reviewer-QA merge sequencing is complete
+- D-019@4 ACCEPT: Artifact containment text covers sibling-prefix and root symlinks
+- D-020@3 ACCEPT: Repository and Paperclip plans are byte-identical
+- D-021@3 ACCEPT: Exact Example workspace structure has a named executable gate
+- D-022@2 REVISE: Downstream revision metadata is stale
+- D-023@3 ACCEPT: Decoded address payload has an independent known-answer assertion
+- D-024@3 ACCEPT: Protocol values retain a verified fail-closed analog slice
+- D-025@2 REVISE: S1-05 does not prove exact consumption of the S1-01 namespace
+- D-026@4 ACCEPT: Maestro digest is complete and consistently pinned
+- D-027@2 REVISE: S1-04 can regress the positive factory audit to a blacklist
+- D-028@3 ACCEPT: Committed Gimle projection is path-sanitized
+- D-029@4 ACCEPT: Serialized SwiftPM xUnit has an independent transcript/status gate
+- D-030@3 ACCEPT: Persistence namespace has a fixed independent oracle
+- D-031@2 REVISE: The copyable xUnit verification command omits pipefail
+- D-032@3 ACCEPT: Greenfield lifecycle ordering is no longer attributed to forwarding analogs
+- D-033@3 ACCEPT: BigInt floor and default resolution are independently owned
+- D-034@3 ACCEPT: Under-lock probe exception is bounded and nonblocking
+- D-035@3 ACCEPT: KitConfigurationError has an exact file owner
 
 ## Verification and acceptance
 
@@ -320,13 +329,13 @@ Bug statuses: {'workaround': 7}
 ### GIM-THR12-RUNTIME-DRIFT: Live Gimle runtime changed after the frozen evidence context
 
 - Class/severity/confidence/status: environment_drift / medium / confirmed / workaround
-- Tool/events/claims: palace.health.status / E-0023 / n/a
-- Reproduction: Compare state.gimle_snapshot.runtime_id with the current palace.health.status git_sha.
-- Expected: The frozen runtime identity remains available or the evidence context can record the current runtime.
-- Actual: Checkpoint freezes 52bb684f while the live runtime reports 0e9cf57c; set-context is correctly rejected after evidence.
-- Impact: Revision-6 discovery calls cannot claim continuity with the frozen runtime identity.
-- Workaround: Treat new Gimle results as discovery-only and base all load-bearing choices on exact Serena plus rg/Git verification at pinned checkouts.
-- Anchors: palace.health.status git_sha=0e9cf57c00ff970f584256126b500166580e7a72
+- Tool/events/claims: palace.health.status / E-0023, E-0033 / n/a
+- Reproduction: Compare the frozen run-state runtime_id with the fresh palace.health.status git_sha
+- Expected: Fresh review runtime matches frozen 52bb684fdd9492519ed7c87b0cae67c7b978810e or supplies a reviewed compatibility binding
+- Actual: Fresh runtime reports native-dev 0e9cf57c00ff970f584256126b500166580e7a72 while the evidence base remains frozen to 52bb684fdd9492519ed7c87b0cae67c7b978810e
+- Impact: Fresh Gimle payload behavior cannot retroactively validate the frozen evidence base
+- Workaround: Retain frozen state and use exact-worktree Serena, rg, Git, and upstream provenance for the review verdict
+- Anchors: frozen-runtime:52bb684fdd9492519ed7c87b0cae67c7b978810e, live-runtime:0e9cf57c00ff970f584256126b500166580e7a72
 
 ### GIM-THR12-VULTISIG-COVERAGE: Vultisig supporting checkout is absent from the Gimle project registry
 
@@ -338,6 +347,17 @@ Bug statuses: {'workaround': 7}
 - Impact: Gimle cannot discover or freshness-check the required THOR-specific supporting candidate.
 - Workaround: Activate the exact local Vultisig checkout in Serena and independently verify a bounded supporting/counterexample candidate with rg and Git.
 - Anchors: vultisig-ios
+
+### GIM-THR12-THORCHAIN-COVERAGE: ThorChain target is absent from the Gimle project registry
+
+- Class/severity/confidence/status: coverage_gap / medium / confirmed / workaround
+- Tool/events/claims: palace.memory.list_projects/palace.memory.get_project_overview / E-0035, E-0039, E-0040 / n/a
+- Reproduction: List registered Palace projects, then request overview for slug thorchain.
+- Expected: A ThorChain target mapping with indexed commit and worktree freshness metadata.
+- Actual: The registry has 18 projects with no ThorChain slug; overview returns an outer-success ok=false unknown_project envelope.
+- Impact: Gimle cannot establish target-repository identity or freshness for revision 9.
+- Workaround: Use codebase-memory project Users-ant013-Data-AI-thorchain plus exact-worktree Serena, rg, and Git verification; do not use Gimle for target facts.
+- Anchors: codebase-memory:Users-ant013-Data-AI-thorchain, git-head:e1a6609f1522aecbcbaba7da37f8231f9ffff605
 
 ## Interpretation
 

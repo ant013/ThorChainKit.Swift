@@ -2,7 +2,7 @@
 
 ## Status
 
-**Architecture review:** S1-01 revision 8 awaits fresh adversarial review; implementation remains blocked until explicit revision-bound user approval.
+**Architecture review:** S1-01 revision 9 awaits fresh adversarial review; implementation remains blocked until explicit revision-bound user approval.
 
 This package divides the first standalone `ThorChainKit` sprint into seven sequential vertical slices. Each slice concludes with an observable result in the evolving `iOS Example`; S1-06 and S1-07 additionally verify the real Unstoppable Wallet integration surface.
 
@@ -84,12 +84,12 @@ SHA-256 pins the exact versions of the seven approved specs and the test plan. V
 <!-- SPEC_HASHES_START -->
 | Artifact | SHA-256 |
 |---|---|
-| `S1-01-package-public-api.md` | `38dc104a8151e3d60c5348cf76851c00a8b7574a72823ae38d59a8ea1f1de8d9` |
-| `S1-02-network-endpoint-policy.md` | `60c988d4652c7634312206452bdb0d6745737c384ef467b572d1ca1c9d7135c5` |
-| `S1-03-derivation-address-codec.md` | `f04bcf2d4817f74ec01f7309491d154fd7c483106285a18e3ab7f73063cdd5c2` |
-| `S1-04-thornode-read-client.md` | `239991cbd05255245e2cfe0ff8de85c01d6033a2815ab74fb637ee73c014fd18` |
-| `S1-05-rune-account-sync.md` | `79fe3355d811e383ec31838bfb0c2d9ddf66e2a88edbd94d3699c7065dc4ae4d` |
+| `S1-01-package-public-api.md` | `0bce07ca01af5f460e8d0be2e2c159adea52a4679fa803821eb24e1ddc6a08f5` |
+| `S1-02-network-endpoint-policy.md` | `1f0cd1fc551f620626a741133a0fb706e40b082267baacc65e1cb422a2831e57` |
+| `S1-03-derivation-address-codec.md` | `35d80d6f177a0ec621df1a534c30771562daaa25cb1fe49e96aa49985a6a7593` |
+| `S1-04-thornode-read-client.md` | `2781beec762103395ca6f34dd63f1655b837d2009a14a4668dc4d362549c37e7` |
+| `S1-05-rune-account-sync.md` | `83b835584051c4f3fa9e7ff2d4171b36d42335af619b1c533b18a7b1620a3ec4` |
 | `S1-06-unstoppable-lifecycle-composition.md` | `012b20e9bb4cc3cca9f6d7261dce1d665d59bc995ad422d458543cd9de44d3e2` |
 | `S1-07-unstoppable-rune-surface.md` | `9da09bfc288bf9e43565f503d2db06b29f57291f0870c1d9729f9d092e2f502c` |
-| `test-plan.md` | `ac03d23babd1734c4d9372e424c3cbe7d8a2f78c76b6d8da06dea379ebe1c1b0` |
+| `test-plan.md` | `c3b724575af29f63138ea623ab5ba25c1569e7f57c6188816c952ce24d5bf892` |
 <!-- SPEC_HASHES_END -->
