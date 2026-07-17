@@ -170,6 +170,8 @@ Requirements:
 - `network.persistenceKey` is internal and exactly `environment.rawValue UTF-8 || 0x00 || expectedChainId UTF-8`; construction rejects control characters, so the delimiter is unambiguous.
 - `address.network` must equal `network`; mismatch throws `KitConfigurationError.addressNetworkMismatch` without rebinding the address or fabricating payload bytes.
 - in S1-01 the public factory creates only the exact nil/idle/zero snapshot plus an internal `NoOpLifecycle`. Construction, `start`, `stop`, and `refresh` create no URL session, storage handle, task, timer, or network request; later sync/storage slices replace this inert dependency through the internal composition root.
+- the auditable factory/no-op composition path is exactly `Core/KitFactory.swift`, `Core/KitDependencies.swift`, and `Core/Kit.swift`. `KitDependencies` exposes only the lifecycle capability in S1-01, and `Kit.instance` may construct only validated values, `NoOpLifecycle`, and `Kit`; it may not delegate through an unaudited helper.
+- `Scripts/verify-s1-01.sh` applies a named forbidden-capability/source audit to that exact path. It rejects networking/request, storage/file/database, `Task`, timer, and dispatch-source construction, and temporary-copy canaries inject representative `URLSession`, `Task`, `Timer`, and file-handle creation to prove each category fails the audit.
 - an internal initializer accepts `KitDependencies` for deterministic lifecycle tests; no dependency type is public.
 - the factory does not start synchronization automatically.
 
@@ -269,7 +271,6 @@ S1-01 owns these immutable values and construction checks: families are non-empt
 ```swift
 public struct Address: Hashable, Sendable, CustomStringConvertible {
     public let raw: String
-    public let payload: Data
     public let network: Network
 
     public init(_ raw: String, network: Network) throws
@@ -277,7 +278,7 @@ public struct Address: Hashable, Sendable, CustomStringConvertible {
 }
 ```
 
-`Address.init` is strict in S1-01. It rejects empty/surrounding-whitespace input, mixed case, invalid characters/separator/length, classic-Bech32 checksum failure, wrong HRP for the supplied `Network`, non-zero or overlong convertBits padding, non-20-byte payloads, and any normalized input that does not equal its canonical re-encoding. All-uppercase valid input is accepted and stored as canonical lowercase. There is no unchecked public, SPI, or Example-only constructor. The minimum decoder and its private re-encode check are owned by S1-01; public payload encoding, public-key derivation, secp256k1 validation, and hashing remain S1-03.
+`Address.init` is strict in S1-01. It rejects empty/surrounding-whitespace input, mixed case, invalid characters/separator/length, classic-Bech32 checksum failure, wrong HRP for the supplied `Network`, non-zero or overlong convertBits padding, non-20-byte payloads, and any normalized input that does not equal its canonical re-encoding. All-uppercase valid input is accepted and stored as canonical lowercase. The decoded 20-byte payload is retained internally for later native operations; no S1-01 consumer requires it to be public. There is no unchecked public, SPI, or Example-only constructor. The minimum decoder and its private re-encode check are owned by S1-01; public payload exposure/encoding, public-key derivation, secp256k1 validation, and hashing remain S1-03.
 
 ```swift
 public enum AddressError: Error, Equatable {
@@ -359,18 +360,19 @@ ThorChainKit → WalletCore / MarketKit / RxSwift / UI
 
 ## Threading Contract
 
-- One internal owner uses one nonrecursive lock for snapshot reads, the single `desiredRunning` value, and monotonically sequenced lifecycle commands; neither the Example nor a host manager owns a second lifecycle state machine.
+- One internal owner uses one nonrecursive lock for snapshot reads, the single `desiredRunning` value, the next lifecycle sequence, and the pending FIFO command array; neither the Example, a host manager, nor a later lifecycle collaborator owns a second desired-running/idempotence state machine.
 - Public getters acquire that lock and return one accepted snapshot.
 - Each publisher has current-value semantics: a new subscriber immediately receives the current value. S1-01 has no post-construction snapshot mutation seam, so its only emissions are exactly `nil`, `.idle(cached: false)`, and `nil` for height, sync state, and account state respectively. S1-02 must separately specify later publication/reset behavior.
-- Combine subscription/delivery, every subject `send`, and every lifecycle collaborator invocation occur with the owner lock released. A subscriber may always synchronously read getters. The required lifecycle-reentry case is a subscriber's repeated `stop()` after an outer stop has already set `desiredRunning = false`; it returns as an immediate no-op while the outer collaborator waits for its publication barrier. Other lifecycle calls from a subscriber are valid only when no lifecycle collaborator is waiting for that delivery.
+- Combine subscription/delivery, every subject `send`, and every lifecycle collaborator invocation occur with the owner lock released. A subscriber may always synchronously read getters. Post-construction publication turns that can synchronously reenter lifecycle run on the same internal serial facade dispatcher as lifecycle collaborators; S1-05 shares that dispatcher and may not insert a synchronous hop to a different queue before subscriber delivery.
 - Publishers do not terminate with an error; errors are represented within `SyncState`.
-- The linearization point for `start()` and `stop()` is the locked inspection/update of `desiredRunning`. Each effective transition receives the next sequence number under that lock, then the lock is released before the command is submitted to one internal FIFO lifecycle dispatcher. The dispatcher invokes collaborators serially in sequence order even if overlapping callers reach it in reverse scheduling order; S1-01's production collaborator is the inert no-op dependency.
-- An effective public lifecycle call returns only after its own ordered collaborator invocation returns; a call that linearizes as a no-op returns immediately. This preserves S1-05's synchronous stop barrier without holding the owner lock.
+- The linearization point for `start()` and `stop()` is the locked inspection/update of `desiredRunning`. Each effective transition receives the next sequence and is appended to the pending FIFO before that same critical section ends. There is no post-sequencing/pre-submission gap to invert. The facade dispatcher drains the array in sequence order and invokes each collaborator only after releasing the owner lock; S1-01's production collaborator is the inert no-op dependency.
+- An effective lifecycle call made outside the facade dispatcher returns only after its own ordered collaborator invocation returns; a test holds each of `start`, `stop`, and running `refresh` and proves the corresponding public call cannot return early. A call that linearizes as a no-op returns immediately.
+- A lifecycle call made from synchronous subscriber delivery on the facade dispatcher must not wait for a command queued behind the active turn. An effective reentrant `start`, `stop`, or running `refresh` still linearizes and appends under the owner lock, but returns after enqueue; the active publication/collaborator turn then unwinds and the dispatcher completes queued commands in sequence. This dispatcher-context rule is the sole exception to synchronous effective-call completion. The current publication turn may finish after the reentrant method returns, but no later dispatcher turn may overtake the queued command.
 - `start()` is an idempotent transition: stopped → running forwards one internal `start`; a call linearized while running is a no-op.
 - `stop()` is an idempotent transition: running → stopped forwards one internal `stop`; a call linearized while stopped is a no-op.
-- The linearization point for `refresh()` is the locked `desiredRunning` read. A call linearized while running receives the next sequence and is submitted once to the same FIFO dispatcher after the lock is released; a call linearized while stopped is a no-op.
+- The linearization point for `refresh()` is the locked `desiredRunning` read. A call linearized while running receives the next sequence and is appended once to the same FIFO before the lock is released; a call linearized while stopped is a no-op.
 - Nonoverlapping calls respect return-before-invocation order. Calls whose intervals overlap may acquire the lock in either order, and the legal result is the corresponding sequential trace: `stop || start` from stopped may end stopped or running; `refresh || start` may no-op then start or start then forward refresh. Two overlapping starts or stops still forward at most one transition.
-- S1-01 tests use barriers/expectations and explicit call-entry control, never sleeps, to exercise both legal overlap orders, FIFO callback order, exact callback counts, and final desired state. A separate barrier-controlled regression holds the S1-05-style stop collaborator on a simulated publication barrier while its subscriber reads a getter and reenters `stop()`; both calls must complete and no callback may run under the owner lock.
+- S1-01 tests use barriers/expectations and explicit call-entry control, never sleeps, to exercise both legal overlap orders, owner-lock FIFO append/callback order, exact callback counts, and final desired state. A barrier-controlled table separately covers every effective dispatcher-context reentry branch: `stop` while running, `start` while stopped, and `refresh` while running. Each reentrant method must return so the active subscriber delivery can unwind; its collaborator then runs at the next legal sequence, and no callback runs under the owner lock. Reentrant no-op branches remain immediate.
 - Internal mutable sync/storage state in later slices remains actor-owned behind this facade; the facade itself is not declared `Sendable` without separately proven synchronization.
 - There are no public callbacks/closures: only Combine values and typed snapshots.
 
@@ -396,10 +398,10 @@ ThorChainKit → WalletCore / MarketKit / RxSwift / UI
 | Analog family | Primary: TronKit `Kit` and `Kit.instance`. Supporting: exact Unstoppable `TronKitManager` consumer and generic `AdapterManager` lifecycle. Rejected: duplicate manager/adapter start ownership in the TronKit demo. |
 | Coverage | Contract, implementation, composition, consumer, lifecycle/error, boundary, dependency, state, and trust dimensions are current-tree verified. No matching Tron/Evm lifecycle contract test exists; the test role is explicitly waived as an analog and added as a required delta. |
 | Invariants to preserve | Public facade, synchronous snapshot access, nonfailing Combine publishers, explicit `start/stop/refresh`, and one composition root. |
-| Required differences | Whitespace-only wallet rejection, address/network equality, collision-resistant internal `persistenceNamespace`, one `desiredRunning` owner, sequenced FIFO lifecycle dispatch with collaborators outside the owner lock, mandatory replaying publishers, idle/nil/zero initial state, no fake account/balance, and an inert no-op factory. |
+| Required differences | Whitespace-only wallet rejection, address/network equality, collision-resistant internal `persistenceNamespace`, internal-only decoded address payload, one `desiredRunning` owner, owner-lock FIFO append, facade-dispatcher reentry without a wait cycle, collaborators outside the owner lock, mandatory replaying publishers, idle/nil/zero initial state, no fake account/balance, and an auditable inert no-op factory. |
 | Rejected differences | Ambiguous `walletId-network` concatenation, public seed/private-key handling, public internal managers/storage, host imports, or two lifecycle owners. |
-| Failure modes | Empty namespace, namespace disclosure, unique-ID collision, address rebinding, lifecycle call amplification/reordering, lock-held collaborator deadlock, auto-start, non-idempotent transitions, absent account with balances, publisher error termination, or fabricated account state. |
-| Tests before code | Invalid wallet/network inputs; factory inertness; both legal concurrent lifecycle orders and FIFO call counts; barrier-controlled outer-stop/subscriber-getter-and-stop reentry; immediate mandatory publisher replay with synchronous getters and lifecycle calls when no collaborator is waiting; idle/nil/zero/no-account snapshot. |
+| Failure modes | Empty namespace, namespace disclosure, unique-ID collision, address rebinding, lifecycle call amplification/reordering, sequence/submission inversion, lock-held collaborator deadlock, effective subscriber reentry waiting behind its active turn, early return for an ordinary effective call, auto-start, hidden factory side effects, non-idempotent transitions, absent account with balances, publisher error termination, or fabricated account state. |
+| Tests before code | Invalid wallet/network inputs; exact-path factory capability/source audit with temporary canaries; both legal concurrent lifecycle orders and FIFO call counts; ordinary effective start/stop/refresh completion barriers; barrier-controlled effective subscriber reentry for start/stop/refresh; immediate mandatory publisher replay with synchronous getters and lifecycle calls when no collaborator is waiting; idle/nil/zero/no-account snapshot. |
 | Verification | `PublicApiTests`, source-import allowlist, API-symbol audit, strict-concurrency compile, and the standalone public-only iOS-13 consumer build. |
 
 ### S1-01C — local-package Example and fixture UI gate
@@ -417,12 +419,12 @@ ThorChainKit → WalletCore / MarketKit / RxSwift / UI
 
 ## Resolved Adversarial Rulings
 
-1. `Address.init(_:, network:)` owns strict minimum classic-Bech32 decode/canonical validation in S1-01. No unchecked fixture path exists. S1-03 owns public payload encoding and public-key derivation only.
+1. `Address.init(_:, network:)` owns strict minimum classic-Bech32 decode/canonical validation in S1-01. No unchecked fixture path exists. S1-03 owns any separately approved public payload exposure/encoding and public-key derivation only.
 2. The implementation PR changes the roadmap marker to contain its real PR number only. Reviewer, QA, and CI evidence bind to one final `headRefOid`; any push invalidates prior review/QA. After squash merge, the CTO records `mergeCommit.oid` in Paperclip, verifies it is on `origin/main`, and verifies the PR-number marker there before closing the slice. No `TBD`, merge-SHA placeholder, head mislabeled as merge, direct push, or roadmap-only follow-up PR is permitted.
 3. The iOS 13 floor remains pinned. Endpoint durations are finite positive `TimeInterval` seconds, not iOS-16-only `Duration`; `Denom` keeps a throwing validator without claiming `RawRepresentable`.
 4. Stagenet and chainnet fix HRPs to `sthor` and `cthor` respectively and use coin type `931`. `AccountState`, `SyncState`, and `SyncError` are owned and tested in S1-01.
-5. The persistence digest is internal. The S1-01 public factory composes only a no-op lifecycle and inert initial snapshot; it creates no network, storage, timer, or task.
-6. Lifecycle calls linearize at the locked `desiredRunning` inspection/update, receive a monotonic sequence, and enter one FIFO dispatcher after the owner lock is released. Collaborators never run under that lock; the barrier-controlled outer-stop/subscriber-stop regression proves the S1-05 publication cycle cannot deadlock.
+5. The persistence digest and decoded address payload are internal. The S1-01 public factory composes only a no-op lifecycle and inert initial snapshot; an exact composition-path capability/source audit proves it creates no network, storage, timer, or task.
+6. Lifecycle calls linearize and append to the FIFO within the same owner-lock critical section; collaborators and publication turns run on one facade dispatcher with that lock released. Ordinary effective calls wait for completion, while effective dispatcher-context subscriber reentry returns after enqueue so the active turn can unwind. Barrier-controlled start/stop/refresh cases prove this rule cannot deadlock or reorder.
 7. The standalone consumer targets iOS 13 under the pinned CI Xcode/Swift identity and a separately named Swift-5 strict-concurrency warnings-as-errors gate. The exact-device runner pins Maestro `2.6.1` and Temurin `17.0.19+10`, exposes every device-bearing argv and resolved artifact path to shim canaries, and OCRs screenshot text before secret/namespace acceptance.
 8. Network chain IDs are `1...50` UTF-8 bytes under CometBFT `v0.38.21`; denoms match Cosmos SDK `v0.53.0`'s `3...128`-byte ASCII grammar; an absent account rejects every nonempty balance set.
 
@@ -451,7 +453,7 @@ The authoritative behavioral XCTest list contains exactly 18 methods. Methods 1�
 17. `testInitialPublishersAllowReentrantSnapshotAndLifecycleAccess()`.
 18. `testPersistenceNamespaceIsDeterministicInternalAndAbsentFromErrors()`.
 
-Method 2 covers 50-byte acceptance, 51-byte rejection, UTF-8 byte counting, blank input, and controls. Method 5 covers hostless HTTPS URLs, non-finite/nonpositive seconds, normalized duplicate IDs, and control-containing family/client IDs. Method 6 covers 3/128-byte boundaries plus 2/129-byte, non-letter-prefix, Unicode, whitespace, and unsupported punctuation rejection. Method 7 covers both valid existence states, mixed/missing account-number/sequence pairs, and absent-account/nonempty-balance rejection. Method 9 is table-driven over empty/surrounding whitespace, invalid charset/separator/length, mixed case, and a fixed checksum-valid-but-noncanonical fixture. Method 10 includes both an ordinary checksum failure and a checksum-valid Bech32m address that classic Bech32 must reject. Method 16 includes the barrier-controlled outer-stop/subscriber-getter-and-stop regression and proves effective external calls wait for their ordered collaborator without holding the owner lock. Method 17 proves mandatory initial replay plus synchronous getter and lifecycle access when no collaborator is waiting on that delivery.
+Method 2 covers 50-byte acceptance, 51-byte rejection, UTF-8 byte counting, blank input, and controls. Method 5 covers hostless HTTPS URLs, non-finite/nonpositive seconds, normalized duplicate IDs, and control-containing family/client IDs. Method 6 covers 3/128-byte boundaries plus 2/129-byte, non-letter-prefix, Unicode, whitespace, and unsupported punctuation rejection. Method 7 covers both valid existence states, mixed/missing account-number/sequence pairs, and absent-account/nonempty-balance rejection. Method 9 is table-driven over empty/surrounding whitespace, invalid charset/separator/length, mixed case, and a fixed checksum-valid-but-noncanonical fixture. Method 10 includes both an ordinary checksum failure and a checksum-valid Bech32m address that classic Bech32 must reject. Method 16 proves owner-lock FIFO append, holds each ordinary effective start/stop/running-refresh collaborator to prove the public call cannot return early, and uses barrier-controlled dispatcher deliveries to cover effective reentrant start/stop/refresh without deadlock or reordering. Method 17 proves mandatory initial replay plus synchronous getter and lifecycle access when no collaborator is waiting on that delivery.
 
 Manifest topology, source-import allowlist, generated public symbol graph, exact test discovery, and the external consumer are not XCTest methods. `Scripts/verify-s1-01.sh` executes them as distinct gates:
 
@@ -460,6 +462,8 @@ Manifest topology, source-import allowlist, generated public symbol graph, exact
 - compare source imports to the system/BigInt allowlist;
 - run `swift package dump-symbol-graph`, canonicalize public declarations, and compare them with `Tests/ThorChainKitTests/Fixtures/S1-01-public-symbols.txt`;
 - run `swift test list` and compare the discovered `PublicApiTests` names/count with `Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt`;
+- audit the exact factory/no-op composition path and its `KitDependencies` capability allowlist for forbidden networking/request, storage/file/database, task, timer, and dispatch-source construction; temporary-copy canaries inject one representative of each category and must fail this named subgate;
+- require Git mode `100755`, `test -x`, and a valid shell shebang for every directly invoked shell script (`verify-s1-01.sh`, `run-maestro.sh`, and `test-run-maestro.sh`); non-executable Swift helpers are invoked explicitly through `xcrun swift`;
 - run `swift build -Xswiftc -swift-version -Xswiftc 5 -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors` as its own named subgate;
 - create a `mktemp -d` Swift-tools-5.10 package with `platforms: [.iOS(.v13)]` that depends on the local root, uses only public `import ThorChainKit`, constructs the public value/factory surface, and build it with `xcodebuild -scheme ThorChainKitConsumer -destination 'generic/platform=iOS Simulator' IPHONEOS_DEPLOYMENT_TARGET=13.0 SWIFT_VERSION=5 SWIFT_STRICT_CONCURRENCY=complete SWIFT_TREAT_WARNINGS_AS_ERRORS=YES CODE_SIGNING_ALLOWED=NO build`.
 
@@ -500,7 +504,7 @@ THORCHAIN_SIMULATOR_UDID=<exact-udid> Scripts/run-maestro.sh
 
 - The package builds independently and contains one `ThorChainKit` library product.
 - `ThorChainKitTests` exists and all 18 authoritative behavioral methods are discovered and pass.
-- Public symbols and signatures match the spec, or the change is separately approved.
+- Public symbols and signatures exactly match the committed S1-01 symbol baseline. Later slices must diff against this baseline and separately approve any removal or signature mutation; that later-slice compatibility rule is not claimed as an S1-01 runtime result.
 - Network and denom construction enforce the pinned CometBFT/Cosmos byte/grammar bounds; Address construction is fail-closed and network-bound; the public factory rejects whitespace-only wallet IDs and address/network mismatch.
 - The factory does not start network/sync.
 - Initial getters and mandatory replaying publishers are exactly nil/idle/zero/no-account, without a fabricated account/balance or zero-as-height shortcut.
@@ -508,7 +512,7 @@ THORCHAIN_SIMULATOR_UDID=<exact-udid> Scripts/run-maestro.sh
 - Parsed manifest topology, pinned Xcode/Swift identity, Swift-5 strict-concurrency warnings-as-errors, import allowlist, public symbol graph, exact test discovery, and temporary public-only iOS-13 consumer gates are green.
 - The Example app launches from the shared workspace/scheme and uses the local package root.
 - The sole exact-UDID Maestro runner uses pinned Maestro/Temurin identities and repo-root-absolute output paths, reports one test with zero failures/errors/skips, and scans the separate JUnit plus all raw/Vision-OCR artifacts; argv/path canaries prove one device and one artifact root end-to-end.
-- S1-02…S1-05 can be added without changing the base public facade, except through additive API.
+- The committed S1-01 public-symbol baseline exists and is the input to the separately enforced S1-02…S1-05 compatibility invariant.
 - Reviewer, QA, and CI cite the same final `headRefOid`; the same PR carries the real PR-number roadmap marker, and post-merge evidence verifies `mergeCommit.oid` on `origin/main`.
 
 ## Pinned Decision

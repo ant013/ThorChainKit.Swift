@@ -51,7 +51,10 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 - pagination cycle and partial-page failure;
 - storage transaction failure;
 - stop followed by late completion;
-- outer stop waiting on the publication barrier while a subscriber reads a getter and reenters stop;
+- an ordinary external effective start, stop, or running refresh returning before its held lifecycle collaborator completes;
+- a subscriber on the shared facade dispatcher making an effective reentrant start, stop, or running refresh that waits behind the active publication/collaborator turn;
+- lifecycle sequence assignment and FIFO append becoming separable so a later sequence can overtake an earlier one;
+- public factory/no-op composition creating a URL session/request, storage/file/database handle, task, timer, dispatch source, or unaudited helper capability;
 - offline cold/relaunch with cached state;
 - wrong HRP/checksum/mixed-case/address payload length;
 - MarketKit metadata unavailable on reconstruction.
@@ -61,6 +64,8 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 - Inject transport, node probe, clock, sleeper, storage and lifecycle dependencies.
 - Fixed `sleep` delays are prohibited.
 - Async tests wait on continuations/expectations tied to observed events.
+- S1-01 is the sole `desiredRunning`/idempotence owner. It assigns a sequence and appends the effective command to its pending FIFO in the same owner-lock critical section, then invokes collaborators on the shared facade dispatcher with that lock released. S1-05's bridge preserves accepted actor-command order but owns no duplicate desired-running filter.
+- Outside the facade dispatcher, every effective start/stop/running-refresh call waits for its held collaborator; on dispatcher-context subscriber delivery, an effective reentrant start/stop/refresh returns after enqueue so the active turn can unwind. Barrier-controlled tests cover all six effective completion/reentry cases and use no sleeps.
 - Retry count and requested URLs assert exact sequence.
 - Random/property tests log seed on failure.
 - Network live tests excluded from default CI and never make deterministic suite flaky.
@@ -73,6 +78,8 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 - The S1-01 launcher requires one configured flow and JUnit `tests=1`, `failures=0`, `errors=0`, and `skipped=0`; detecting zero, extra, failed, errored, or skipped tests fails the gate.
 - All Maestro rules apply only to `ThorChainKit/iOS Example`; the Unstoppable repository receives no Maestro YAML, runner, DEBUG transport, or acceptance launch arguments.
 - Tracked inputs and generated logs/JUnit/screenshots pass a secret and namespace scan before publication. Positive canaries are injected only in a temporary copy, never in the working tree.
+- The exact S1-01 factory/no-op source and dependency-capability path is audited for forbidden network/request, storage/file/database, task, timer, and dispatch-source construction. Temporary-copy canaries prove representative forbidden constructors fail; moving factory composition through an unlisted helper also fails.
+- Directly invoked shell scripts have Git mode `100755`, pass `test -x`, and use a valid shell shebang. Non-executable Swift helpers are called through `xcrun swift`.
 
 ## Verification order per slice
 

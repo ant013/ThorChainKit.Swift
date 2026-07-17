@@ -58,10 +58,10 @@ iOS Example/Sources/Controllers/LifecycleController.swift
 
 ```text
 Kit synchronous facade
-  ├─ lifecycle commands ───────▶ FIFO LifecycleCommandBridge ─▶ AccountSyncer actor
-  └─ getters/publishers ◀────── AccountStateManager
-                                  ▲
-                                  │ accepted snapshot only
+  ├─ sole desired-running owner ─▶ S1-01 facade dispatcher ─▶ LifecycleCommandBridge ─▶ AccountSyncer actor
+  └─ getters/publishers ◀──────── shared facade dispatcher ◀── AccountStateManager
+                                                               ▲
+                                                               │ accepted snapshot only
 AccountSyncer ─▶ ReadOperationCoordinator ─▶ EndpointPool + ThorNodeClient
       │
       └──────── atomic save ───▶ AccountStateStorage
@@ -69,7 +69,9 @@ AccountSyncer ─▶ ReadOperationCoordinator ─▶ EndpointPool + ThorNodeClie
 
 `AccountSyncer` is the sole owner of the loop/current request/generation. `AccountStateManager` does not start network operations and does not accept partial values.
 
-`LifecycleCommandBridge` becomes the concrete S1-05 implementation behind S1-01's single synchronized lifecycle owner; it does not introduce a second facade state machine. It serializes synchronous public commands into one FIFO task chain. It stores the desired running state for idempotence; `start/stop/start` never create independent unordered `Task {}` instances. Every running public refresh reaches the bridge once, after which the actor may coalesce redundant network work. `LifecycleGate` uses one serial publication queue: `acceptIfCurrent(generation:snapshot:)` checks the token, sets getters, and sends publishers in one queued block; `stop()` performs a queue barrier, so all earlier sends complete and later ones are rejected. A reentrant stop from a subscriber is detected by a queue-specific key and invalidates the token inline without deadlock. A separate storage control row provides transaction-level compare-and-swap.
+`LifecycleCommandBridge` becomes the concrete S1-05 collaborator behind S1-01's synchronized owner and facade dispatcher. It receives only already-linearized, monotonically sequenced effective commands. It neither stores `desiredRunning`, filters idempotent start/stop/refresh calls, nor assigns a second public-command sequence. Its task tail preserves the accepted command order while handing asynchronous actor work across the synchronous facade boundary; `start/stop/start` never create independent unordered `Task {}` instances. Every refresh reaching the bridge was already accepted while running, after which the actor may coalesce redundant network work.
+
+`LifecycleGate` uses the exact S1-01 facade dispatcher rather than a second serial publication queue. `acceptIfCurrent(generation:snapshot:)` checks the token, sets getters, and sends publishers in one dispatcher turn. An ordinary external `stop()` completes only after its ordered bridge invocation establishes the generation/publication barrier. An effective `start`, `stop`, or `refresh` called synchronously by a subscriber on that dispatcher follows S1-01's reentry rule: it appends and returns without waiting behind the active turn; the current turn may finish, then the queued command completes before any later dispatcher turn can overtake it. A separate storage control row provides transaction-level compare-and-swap.
 
 ## Contracts
 
@@ -98,7 +100,7 @@ protocol AccountStateStorage: Sendable {
 }
 ```
 
-Public `Kit.start/stop/refresh` preserve the synchronous host contract. Under the serial bridge, `start/stop` synchronously invoke the short GRDB control transaction `advanceGeneration`, update the in-memory gate, and then append the actor command to the preceding command task. `refresh` while stopped is a no-op; while running, it is enqueued/coalesced in FIFO order.
+Public `Kit.start/stop/refresh` preserve synchronous completion for effective calls made outside the facade dispatcher. The S1-01 owner filters no-ops and establishes command order before invoking the bridge. `start/stop` synchronously invoke the short GRDB control transaction `advanceGeneration`, update the in-memory gate, and then append the actor command to the preceding command task. Stopped refresh never reaches the bridge; an accepted running refresh is appended/coalesced in established order. Dispatcher-context reentry uses the explicitly documented enqueue-and-return exception so subscriber delivery cannot wait on itself.
 
 `stop()` may briefly block on the local GRDB writer, but after it returns, the old generation cannot commit/publish. Actor `stop()` cancels and awaits the owned task before the next FIFO `start()`.
 
@@ -215,9 +217,9 @@ Storage failure policy: the network result is not published as durably `.synced`
 ## State publication
 
 - `AccountStateManager.accept(_:)` is called only through `LifecycleGate.acceptIfCurrent` and accepts complete state.
-- Synchronous getters and Combine subjects are updated on one serial publication queue.
+- Synchronous getters and Combine subjects are updated on the shared S1-01 facade dispatcher.
 - Order: internal snapshot set → publishers send. A consumer invoked by a publisher already sees the new getter value.
-- The `stop()` publication barrier guarantees that no publisher sends occur after it returns; a reentrant stop does not deadlock.
+- An ordinary external `stop()` guarantees that no later publication turn sends after it returns. A dispatcher-context reentrant stop returns after enqueue so the current turn can unwind; its queued bridge completion is the barrier, and no later turn may overtake it.
 - A repeated identical snapshot may not be published; the height/fetchedAt change policy must be pinned by a test.
 - The external scheduler is not hardcoded to main; the UW adapter performs its own bridge to Rx/UI.
 
@@ -247,7 +249,8 @@ Storage failure policy: the network result is not published as durably `.synced`
 - stop racing an already-started GRDB transaction returns only after save+generation invalidation and permits no later write/publication;
 - immediate start/stop/start is processed in exact FIFO order with one final loop;
 - publication queued before stop completes before stop returns; publication queued after invalidation is rejected;
-- subscriber calling stop reentrantly does not deadlock and receives no later generation values;
+- with the real bridge/gate, subscriber delivery reenters effective `start`, `stop`, and `refresh` in separate barrier-controlled cases; each method returns so the current turn unwinds, its command then completes in the S1-01 sequence, and no later dispatcher turn overtakes it;
+- ordinary external effective start/stop/refresh calls cannot return before the corresponding bridge invocation completes;
 - stop→start creates new generation and works;
 - backoff clock deterministic; no fixed sleep.
 
