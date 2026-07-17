@@ -210,6 +210,14 @@ Bug statuses: {'workaround': 7}
   - Serena: AdapterManager._initAdapters directly starts/stops adapters; refreshAdapters stops then reconstructs; TronKitManager directly starts the new kit before publishing creation.
   - rg: At 5b06860e, targeted manager/adapter searches found DispatchQueue and direct lifecycle calls but no FIFO, desiredRunning, sequence+append, lock, or reentrant ordering mechanism.
   - Anchors: unstoppable-wallet-ios@5b06860e:packages/WalletCore/Sources/WalletCore/Core/Managers/AdapterManager.swift:74, unstoppable-wallet-ios@5b06860e:packages/WalletCore/Sources/WalletCore/Core/Managers/TronKitManager.swift:58
+| F-VERIFICATION-SWIFTPM-XUNIT | 1 | yes | MATCH | yes | rg | n/a | valid | known_current | SwiftPM 6.2.4 generates XCTest xUnit only through its parallel runner, and that XML generator records tests/failures but has no skipped representation; serialized parallel execu... |
+  - Serena: n/a
+  - rg: Exact swift-6.2.4-RELEASE SwiftTestCommand.swift lines 296-345 place xUnit generation only in shouldRunInParallel; XUnitGenerator records tests/failures and explicitly notes limited XCTest reporting. Local swift test --help confirms --parallel, --num-workers, and --xunit-output.
+  - Anchors: swift-package-manager@swift-6.2.4-RELEASE:Sources/Commands/SwiftTestCommand.swift:296
+| F-DEPENDENCY-BIGINT-FLOOR | 1 | yes | MATCH | yes | rg | n/a | valid | known_current | BigInt v5.0.0 lacks BigUInt Sendable while v5.7.0 adds it; a manifest range from 5.0.0 currently resolves 5.7.0 and cannot by itself prove minimum-version compatibility. |
+  - Serena: n/a
+  - rg: Exact tags resolve to 19f5e8a48be155e34abb98a2bcf4a343316f0343 and e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe; targeted BigUInt declarations show no Sendable at v5.0.0 and Sendable at v5.7.0. Swift package resolve exposes an exact --version option.
+  - Anchors: BigInt@v5.0.0:Sources/BigInt/BigUInt.swift; BigInt@v5.7.0:Sources/BigInt/BigUInt.swift
 
 ## Adversarial decisions
 
@@ -225,13 +233,13 @@ Bug statuses: {'workaround': 7}
 - D-010@2 ACCEPT: UI evidence is limited to observable behavior
 - D-011@2 REVISE: One-owner rule remains contradicted by the S1-05 start state machine
 - D-012@2 ACCEPT: Revision-5 integrity bindings are mechanically correct
-- D-013@3 REVISE: Admission mutation can still false-green
-- D-014@2 REVISE: Factory inertness audit still lacks category-complete canaries
-- D-015@2 REVISE: S1-01 has no legal P0/P1 publication surface
+- D-013@4 REVISE: FIFO mutant lacks an outer executable harness
+- D-014@3 REVISE: Factory inertness audit is blacklist-shaped
+- D-015@3 REVISE: Plan over-defers S1-01 command draining
 - D-016@1 REVISE: S1-05 does not consume the exact frozen S1-01 state/error contract
 - D-017@1 REVISE: Endpoint fail-closed rules exceed the named RED coverage
 - D-018@1 REVISE: Exact-head merge readiness and reviewer-QA sequencing are incomplete
-- D-019@1 REVISE: OCR all-files and fail-closed behavior are not mechanically proven
+- D-019@2 REVISE: Artifact containment lacks sibling-prefix and root-symlink canaries
 - D-020@1 REVISE: The committed implementation plan is stale against the canonical Paperclip plan
 - D-021@1 REVISE: The exact Example workspace structure has no named executable gate
 - D-022@1 REVISE: Spec revision metadata is stale
@@ -241,10 +249,13 @@ Bug statuses: {'workaround': 7}
 - D-026@2 REVISE: Revision 6 truncated the Maestro digest
 - D-027@1 REVISE: Permanent S1-01 gates conflict with approved later slices
 - D-028@1 REVISE: Committed report leaks operator paths
-- D-029@1 REVISE: Discovery count does not prove test execution
+- D-029@2 REVISE: SwiftPM xUnit execution evidence is incomplete
 - D-030@1 REVISE: Persistence namespace lacks a fixed oracle
 - D-031@1 REVISE: Plan and test text contain false-green wording
 - D-032@1 REVISE: Novel lifecycle ordering was attributed to a forwarding analog
+- D-033@1 REVISE: BigInt floor and resolved identity are unowned
+- D-034@1 REVISE: Probe callback lock exception is underspecified
+- D-035@1 REVISE: KitConfigurationError has no file owner
 
 ## Verification and acceptance
 
