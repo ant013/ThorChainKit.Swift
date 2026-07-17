@@ -22,7 +22,7 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 
 | Criterion | Unit/controlled | Integration/live |
 |---|---|---|
-| Package API isolated from host | exact 18-method PublicApiTests list + optional publisher replay | parsed manifest/import/symbol/discovery gates + temporary public-only Swift 5.10/iOS 17 `xcodebuild` consumer |
+| Package API isolated from host | exact 18-method PublicApiTests list + mandatory current-value publisher replay | parsed manifest/import/symbol/discovery gates + temporary public-only Swift 5.10/iOS 13 `xcodebuild` consumer |
 | Atomic mainnet identity | NetworkTests | mainnet status/node-info exact `thorchain-1` |
 | Address derivation | DerivationTests independent vectors | imported mnemonic full address match |
 | Strict address validation | AddressCodecTests/fuzz | Receive/parser real UI |
@@ -37,6 +37,8 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 ## Mandatory failure scenarios
 
 - wrong chain ID;
+- chain ID at 50 UTF-8 bytes accepted and 51 bytes rejected;
+- denom outside the pinned 3...128-byte ASCII grammar;
 - mixed endpoint identities;
 - catching-up/stale endpoint, including fresh Comet + stale Cosmos REST;
 - missing/mismatched `x-cosmos-block-height` on account or any balance page;
@@ -45,9 +47,11 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 - cancellation during probe, first page, later page, account request and sleep;
 - malformed JSON and invalid decimal string;
 - account not found versus unknown account type;
+- absent account paired with any nonempty balance set;
 - pagination cycle and partial-page failure;
 - storage transaction failure;
 - stop followed by late completion;
+- outer stop waiting on the publication barrier while a subscriber reads a getter and reenters stop;
 - offline cold/relaunch with cached state;
 - wrong HRP/checksum/mixed-case/address payload length;
 - MarketKit metadata unavailable on reconstruction.
@@ -64,6 +68,8 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 - Committed Maestro YAML contains no mnemonic, API key or endpoint credential; runtime values arrive via environment.
 - Fixture and live modes expose an explicit `data-source` badge so fixture success cannot masquerade as live evidence.
 - S1-01's sole UI gate is `THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh`; raw `maestro test` is not accepted. Boot, build, install, launch, and Maestro use that same UDID.
+- S1-01 default CI pins Maestro `2.6.1` and Temurin `17.0.19+10`; both identities are asserted before the fixture flow.
+- S1-01 resolves JUnit, test-output, and debug-output to absolute paths under one repository-root `build/maestro-results` tree. The runner and shims reject workspace-relative or outside-root artifacts, and the scanner covers the separate JUnit file plus both Maestro output trees.
 - The S1-01 launcher requires one configured flow and JUnit `tests=1`, `failures=0`, `errors=0`, and `skipped=0`; detecting zero, extra, failed, errored, or skipped tests fails the gate.
 - All Maestro rules apply only to `ThorChainKit/iOS Example`; the Unstoppable repository receives no Maestro YAML, runner, DEBUG transport, or acceptance launch arguments.
 - Tracked inputs and generated logs/JUnit/screenshots pass a secret and namespace scan before publication. Positive canaries are injected only in a temporary copy, never in the working tree.

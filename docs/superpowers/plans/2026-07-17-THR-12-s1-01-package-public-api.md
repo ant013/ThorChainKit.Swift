@@ -6,20 +6,22 @@ Implement only S1-01: a standalone Swift package with a constructible fail-close
 
 Implementation may begin only after the revised slice spec, this plan, the Gimle report, and a fresh adversarial review are pushed and the explicit revision-bound Paperclip confirmation is accepted.
 
+The cross-slice verification authority remains `docs/specs/sprint-01-foundation/test-plan.md`; its S1-01 iOS floor, publisher replay, lifecycle, protocol-boundary, and Maestro requirements must stay identical to this plan.
+
 ## Acceptance Criteria
 
 - Parsed `swift package dump-package` JSON shows exactly one `ThorChainKit` library product, one library target, and one `ThorChainKitTests` target.
 - The authoritative 18 `PublicApiTests` methods are staged with their owning implementation, then locked by an exact discovery allowlist after all 18 exist.
-- Network constants, finite `TimeInterval` endpoint values, throwing `Denom`, and state-model invariants are constructible and validated; `Address` performs strict classic-Bech32 network-bound decoding with structural/canonical and Bech32m rejection coverage.
+- Network chain IDs enforce the pinned CometBFT `1...50` UTF-8-byte bound; `Denom` enforces the pinned Cosmos `3...128`-byte ASCII grammar; finite `TimeInterval` endpoint values and state-model invariants are constructible and validated; `Address` performs strict classic-Bech32 network-bound decoding with structural/canonical and Bech32m rejection coverage.
 - Whitespace-only wallet IDs and address/network mismatch fail with stable typed errors; the persistence namespace remains internal; factory construction and lifecycle create no network, storage, timer, or task.
-- One lock defines lifecycle linearization and legal overlap traces; start/stop are idempotent, running refresh forwards once, stopped refresh no-ops, and publisher delivery permits synchronous getter/lifecycle reentry.
-- Initial/replayed state is exactly nil/idle/zero/no-account; S1-01 promises no later snapshot mutation.
+- One lock owns `desiredRunning` and command sequencing; one FIFO dispatcher invokes lifecycle collaborators with that lock released; start/stop are idempotent, running refresh forwards once, stopped refresh no-ops, and a barrier-controlled outer-stop/subscriber-stop reentry cannot deadlock.
+- Initial/current-value replay is mandatory and exactly nil/idle/zero/no-account; an absent account rejects every nonempty balance set; S1-01 promises no later snapshot mutation.
 - Public source/API contains no seed/private key and no MarketKit, RxSwift, SwiftUI, or WalletCore import; BigUInt-containing types make no unproven `Sendable` claim.
 - CI asserts Xcode 26.3 (`17C529`) and Apple Swift 6.2.4, compiles in Swift 5 mode, and promotes complete strict-concurrency warnings to errors.
 - A temporary Swift-tools-5.10/iOS-13 public-only consumer builds with the pinned Xcode for generic iOS Simulator.
 - The shared Example workspace builds against `group:..` on one exact simulator destination and launches in visibly labeled `FIXTURE` mode.
-- `THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh` uses that UDID for boot/build/install/launch/`maestro --device` and reports JUnit `tests=1`, `failures=0`, `errors=0`, `skipped=0`.
-- Command-shim canaries prove device argv consistency; secret/namespace scanning covers tracked inputs, raw generated artifacts, and Vision-OCR text from every PNG. Canaries run only in a temporary copy.
+- `THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh` pins Maestro `2.6.1` on Temurin `17.0.19+10`, uses that UDID for boot/build/install/launch/`maestro --device`, resolves every output to one repo-root-absolute artifact tree, and reports JUnit `tests=1`, `failures=0`, `errors=0`, `skipped=0`.
+- Command-shim canaries prove device argv, CLI/Java identity, and resolved artifact-path consistency; secret/namespace scanning covers tracked inputs, the separate JUnit report, raw generated artifacts, and Vision-OCR text from every PNG. Canaries run only in a temporary copy.
 - Reviewer, QA, and CI cite the same final `headRefOid`; the implementation PR stores only its real PR number in the roadmap marker, and the CTO separately verifies `mergeCommit.oid` on `origin/main` after merge.
 
 ## Execution Steps
@@ -42,9 +44,9 @@ Implementation may begin only after the revised slice spec, this plan, the Gimle
 - Suggested owner: ThorChainSwiftEngineer.
 - Dependencies: step 1.
 - Affected paths: `Models/Network.swift`, `Models/EndpointConfiguration.swift`, `Network/EndpointFamilyDescriptor.swift`, `Network/EndpointPolicy.swift`, `Models/Denom.swift`, `Models/Address.swift`, `Models/AccountState.swift`, `Models/SyncState.swift`, `Models/SyncError.swift`, `Address/AddressError.swift`, `Address/Bech32Codec.swift`, `Address/BitConversion.swift`, and `PublicApiTests.swift`.
-- Test first: add only authoritative methods 1–12. Cover `thor/sthor/cthor` plus coin type 931, invalid chain IDs, normalized/control-safe endpoint fields, hostless URL and finite-positive seconds rejection, throwing Denom validation, both directions of the AccountState existence invariant, stable SyncError cases, and table-driven Address structure/canonical/classic-checksum/Bech32m/HRP/padding/payload failures.
-- Implementation: add exactly the public signatures and validation in the spec. `TimeInterval` is measured in seconds; `Denom` does not conform to `RawRepresentable`; strict `Address.init` performs classic checksum, exact HRP, canonical lowercase re-encoding, strict padding, and exact 20-byte payload checks.
-- Acceptance: mainnet is `thorchain-1`/`thor`/`931`; stagenet is `sthor`/`931`; chainnet is `cthor`/`931`; persistence identity includes environment plus exact chain ID; no fake payload, unchecked initializer, probe, HTTP, failover, hashing, or public payload encoder appears.
+- Test first: add only authoritative methods 1–12. Cover `thor/sthor/cthor` plus coin type 931; chain-ID 50-byte acceptance/51-byte rejection with UTF-8 byte counting; denom 3/128-byte acceptance and 2/129-byte, Unicode, non-letter-prefix, whitespace, and unsupported-punctuation rejection; normalized/control-safe endpoint fields; hostless URL and finite-positive seconds rejection; both directions of the AccountState existence invariant including absent-account/nonempty-balances; stable SyncError cases; and table-driven Address structure/canonical/classic-checksum/Bech32m/HRP/padding/payload failures.
+- Implementation: add exactly the public signatures and validation in the spec. `TimeInterval` is measured in seconds; `Denom` matches `[A-Za-z][A-Za-z0-9/:._-]{2,127}` and does not conform to `RawRepresentable`; strict `Address.init` performs classic checksum, exact HRP, canonical lowercase re-encoding, strict padding, and exact 20-byte payload checks.
+- Acceptance: mainnet is `thorchain-1`/`thor`/`931`; stagenet is `sthor`/`931`; chainnet is `cthor`/`931`; persistence identity includes environment plus exact chain ID; no fake payload, unchecked initializer, probe, HTTP, failover, address/public-payload hashing, or public payload encoder appears. The internal persistence-namespace SHA-256 remains required.
 - Check: `swift test --filter PublicApiTests` with exactly methods 1–12 present, plus `swift build -Xswiftc -swift-version -Xswiftc 5 -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors`.
 - Commit: `feat: add S1-01 public value contracts`.
 
@@ -54,10 +56,10 @@ Implementation may begin only after the revised slice spec, this plan, the Gimle
 - Suggested owner: ThorChainSwiftEngineer.
 - Dependencies: step 2.
 - Affected paths: `Sources/ThorChainKit/Core/Kit.swift`, `KitFactory.swift`, `KitDependencies.swift`, and `PublicApiTests.swift`.
-- Test first: add only methods 13–18: whitespace-only wallet ID, address/network mismatch, no-work inert factory, both legal overlap orders with exact lifecycle call counts, initial current-value replay with a subscriber that reads getters and invokes lifecycle synchronously, and deterministic internal namespace absent from errors/public API.
-- Implementation: create one nonrecursive lock owner, exact linearization points, internal test dependencies, the internal persistence namespace, current-value initial publishers, and a public factory backed only by `NoOpLifecycle` and the nil/idle/zero snapshot.
-- Acceptance: start/stop transition once, repeated calls no-op, overlapping calls match one documented sequential trace, every running refresh forwards once, stopped refresh no-ops, subscriber reentry does not deadlock, and no URL session/storage/task/timer is created.
-- Check: `swift test --filter PublicApiTests` with expectation/barrier/call-entry synchronization and no sleeps.
+- Test first: add only methods 13–18: whitespace-only wallet ID, address/network mismatch, no-work inert factory, both legal overlap orders with exact FIFO lifecycle call counts, a barrier-controlled S1-05-style outer stop whose subscriber reads a getter and reenters stop, mandatory initial current-value replay, and deterministic internal namespace absent from errors/public API.
+- Implementation: create one nonrecursive owner lock for snapshots/`desiredRunning`/monotonic command sequence, one internal FIFO dispatcher that invokes collaborators only after that lock is released, internal test dependencies, the internal persistence namespace, current-value initial publishers, and a public factory backed only by `NoOpLifecycle` and the nil/idle/zero snapshot.
+- Acceptance: start/stop transition once, repeated calls no-op, overlapping calls match one documented sequential trace and FIFO callback order, every running refresh forwards once, stopped refresh no-ops, the outer-stop/subscriber-stop barrier regression completes without deadlock, and no URL session/storage/task/timer is created.
+- Check: `swift test --filter PublicApiTests` with expectation/barrier/call-entry synchronization, explicit assertion that no collaborator runs under the owner lock, and no sleeps.
 - Commit: `feat: add inert ThorChainKit facade`.
 
 ### 4. Lock the complete public, test, platform, and toolchain surface
@@ -89,10 +91,10 @@ Implementation may begin only after the revised slice spec, this plan, the Gimle
 - [ ] Completion evidence recorded in this plan and the implementation commit.
 - Suggested owner: ThorChainSwiftEngineer.
 - Dependencies: step 5; exact simulator UDID and Maestro CLI for live execution.
-- Affected paths: `.maestro/config.yaml`, `.maestro/flows/00-launch-foundation.yaml`, `Scripts/run-maestro.sh`, `Scripts/test-run-maestro.sh`, `Scripts/scan-s1-01-artifacts.swift`, and ignore rules only for generated artifacts.
-- Test first: in a temporary copy, use PATH shims that record `xcrun`/`xcodebuild`/`maestro` argv and prove failure for a substituted UDID, empty/extra manifest entries, zero/mismatched/skipped/error/failure JUnit attributes, raw secret/namespace text, and a rendered PNG canary recognized by Vision OCR.
-- Implementation: require one UUID, use it for simctl boot/bootstatus/install/launch, the xcodebuild destination, and `maestro --device`; pass explicit JUnit/test-output/debug-output paths; capture logs; OCR every PNG through `VNRecognizeTextRequest`; scan normalized OCR text and raw artifacts.
-- Acceptance: exactly one fixture flow and one passing/non-skipped JUnit test; the success screenshot is scanned; no unqualified `maestro test` gate and no S1-01 live branch exist.
+- Affected paths: `.maestro/config.yaml`, `.maestro/flows/00-launch-foundation.yaml`, `Scripts/run-maestro.sh`, `Scripts/test-run-maestro.sh`, `Scripts/scan-s1-01-artifacts.swift`, `.github/workflows/ci.yml`, and ignore rules only for generated artifacts.
+- Test first: in a temporary copy, use PATH shims that record `java`/`xcrun`/`xcodebuild`/`maestro` argv and prove failure for wrong Maestro/Temurin identity, a substituted UDID, any non-absolute or outside-root output path, empty/extra manifest entries, zero/mismatched/skipped/error/failure JUnit attributes, raw secret/namespace text, and a rendered PNG canary recognized by Vision OCR.
+- Implementation: install/assert Maestro `2.6.1` with `MAESTRO_VERSION=2.6.1` and `actions/setup-java` Temurin `17.0.19+10`; require one UUID and use it for simctl boot/bootstatus/install/launch, the xcodebuild destination, and `maestro --device`; resolve `REPO_ROOT` and pass absolute JUnit/test-output/debug-output paths under `$REPO_ROOT/build/maestro-results`; capture logs; OCR every PNG through `VNRecognizeTextRequest`; scan the separate JUnit, normalized OCR text, and raw artifact/debug trees.
+- Acceptance: exactly one fixture flow and one passing/non-skipped JUnit test; the success screenshot is scanned; Maestro's workspace-relative path rules cannot move an artifact outside the asserted root; no unqualified `maestro test` gate and no S1-01 live branch exist.
 - Check: `Scripts/test-run-maestro.sh`, then `THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh`; unavailable CLI/device is recorded as unrun, never green.
 - Commit: `test: add guarded foundation Maestro flow`.
 
