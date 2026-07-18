@@ -20,7 +20,7 @@
 - Location validity: 100.0%; coverage 6/6
 - Freshness coverage: 66.7%
 - Replacement/fallback claims: 2
-- Bugs: 10
+- Bugs: 11
 - Analog slices/candidates: 4/17
 
 ### Calls by tool
@@ -36,9 +36,9 @@
 | palace.memory.health | 7 | 0 | 0 | 0 |
 | palace.memory.list_projects | 3 | 4 | 0 | 0 |
 
-Bug classes: {'caller_error': 2, 'mapping_bug': 3, 'environment_drift': 3, 'coverage_gap': 2}
-Bug severities: {'low': 4, 'high': 3, 'medium': 3}
-Bug statuses: {'workaround': 9, 'fixed': 1}
+Bug classes: {'caller_error': 3, 'mapping_bug': 3, 'environment_drift': 3, 'coverage_gap': 2}
+Bug severities: {'low': 4, 'high': 3, 'medium': 4}
+Bug statuses: {'workaround': 9, 'fixed': 2}
 
 ## Gimle calls
 
@@ -229,10 +229,14 @@ Bug statuses: {'workaround': 9, 'fixed': 1}
   - Serena: n/a
   - rg: Exact swift-6.2.4-RELEASE SwiftTestCommand.swift lines 296-345 place xUnit generation only in shouldRunInParallel; XUnitGenerator records tests/failures and explicitly notes limited XCTest reporting. Local swift test --help confirms --parallel, --num-workers, and --xunit-output.
   - Anchors: swift-package-manager@swift-6.2.4-RELEASE:Sources/Commands/SwiftTestCommand.swift:296
-| F-DEPENDENCY-BIGINT-FLOOR | 1 | yes | MATCH | yes | rg | n/a | valid | known_current | BigInt v5.0.0 lacks BigUInt Sendable while v5.7.0 adds it; a manifest range from 5.0.0 currently resolves 5.7.0 and cannot by itself prove minimum-version compatibility. |
+| F-DEPENDENCY-BIGINT-FLOOR | 2 | yes | MATCH | yes | rg | n/a | valid | known_current | BigInt v5.0.0 lacks BigUInt Sendable while v5.7.0 adds it; a manifest range from 5.0.0 currently resolves 5.7.0 and cannot by itself prove minimum-version compatibility. |
   - Serena: n/a
-  - rg: Exact tags resolve to 19f5e8a48be155e34abb98a2bcf4a343316f0343 and e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe; targeted BigUInt declarations show no Sendable at v5.0.0 and Sendable at v5.7.0. Swift package resolve exposes an exact --version option.
-  - Anchors: BigInt@v5.0.0:Sources/BigInt/BigUInt.swift; BigInt@v5.7.0:Sources/BigInt/BigUInt.swift
+  - rg: git rev-parse confirms v5.0.0=19f5e8a48be155e34abb98a2bcf4a343316f0343 and v5.7.0=e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe. git show at Sources/BigUInt.swift:16 shows no Sendable in v5.0.0 and Sendable in v5.7.0; git cat-file confirms Sources/BigInt/BigUInt.swift is absent in both tags.
+  - Anchors: BigInt@v5.0.0:Sources/BigUInt.swift:16, BigInt@v5.7.0:Sources/BigUInt.swift:16
+| F-COSMOS-MATH-MAX-BIT-LEN | 1 | yes | MATCH | yes | rg | n/a | valid | known_current | The pinned THORNode head resolves cosmossdk.io/math v1.5.3, whose Uint validation rejects bit lengths above MaxBitLen=256. |
+  - Serena: n/a
+  - rg: THORNode a759cb4f go.mod line 46 pins cosmossdk.io/math v1.5.3. The Go module origin resolves tag math/v1.5.3 at 2c6117e8; int.go:16 defines MaxBitLen=256 and uint.go:233 rejects BitLen greater than that bound.
+  - Anchors: THORNode@a759cb4f:go.mod:46, cosmossdk.io/math@v1.5.3:int.go:16, cosmossdk.io/math@v1.5.3:uint.go:233
 
 ## Adversarial decisions
 
@@ -275,6 +279,14 @@ Bug statuses: {'workaround': 9, 'fixed': 1}
 - D-037@1 REVISE: S1-04 SPI composition root and audit closure are not enumerated
 - D-038@1 REVISE: CoinBalance has no approved public consumer
 - D-039@1 REVISE: Public value construction is outside the positive no-work audit
+- D-040@1 REVISE: S1-04 UI projection lacks an executable read path
+- D-041@1 REVISE: Public construction closure omits executable roots
+- D-042@1 REVISE: Cosmos decimal amounts lack the 256-bit bound
+- D-043@1 REVISE: Cached state is not bound to the active address and chain
+- D-044@1 REVISE: BigInt load-bearing claim uses impossible source anchors
+- D-045@1 REVISE: Address positives cover only the mainnet HRP
+- D-046@1 REVISE: Kit.instance has two network authorities
+- D-047@1 REVISE: Concurrency design omits the smaller serial-owner alternative
 
 ## Verification and acceptance
 
@@ -390,6 +402,17 @@ Bug statuses: {'workaround': 9, 'fixed': 1}
 - Impact: A stale session could be mistaken for graph or data failure
 - Workaround: Recreate the MCP session and retry before any local-only fallback; this run needed no fallback
 - Anchors: Paperclip Board comment 9bda4006 at 2026-07-17T23:50:21Z
+
+### GIM-THR12-BIGINT-ANCHOR: BigInt claim used impossible tag paths
+
+- Class/severity/confidence/status: caller_error / medium / confirmed / fixed
+- Tool/events/claims: run_state.py record-claim / n/a / F-DEPENDENCY-BIGINT-FLOOR
+- Reproduction: For each tag, run git cat-file -e tag:Sources/BigInt/BigUInt.swift and git show tag:Sources/BigUInt.swift at line 16.
+- Expected: The accepted load-bearing claim anchors both declarations at Sources/BigUInt.swift:16.
+- Actual: Revision 1 anchored both tags at nonexistent Sources/BigInt/BigUInt.swift while marking location_validity valid.
+- Impact: The rendered report overstated location validity for the minimum-version Sendable decision.
+- Workaround: Revision 2 uses independently verified Sources/BigUInt.swift:16 anchors and preserves the original tag SHAs and behavior verdict.
+- Anchors: BigInt@v5.0.0:Sources/BigUInt.swift:16, BigInt@v5.7.0:Sources/BigUInt.swift:16
 
 ## Interpretation
 

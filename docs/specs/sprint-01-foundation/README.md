@@ -2,7 +2,7 @@
 
 ## Status
 
-**Architecture review:** S1-01 revision 10 awaits fresh adversarial review; implementation remains blocked until explicit revision-bound user approval.
+**Architecture review:** S1-01 revision 11 awaits fresh adversarial review; implementation remains blocked until explicit revision-bound user approval.
 
 This package divides the first standalone `ThorChainKit` sprint into seven sequential vertical slices. Each slice concludes with an observable result in the evolving `iOS Example`; S1-06 and S1-07 additionally verify the real Unstoppable Wallet integration surface.
 

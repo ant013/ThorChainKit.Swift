@@ -1,6 +1,6 @@
 # S1-05 — RUNE account sync lifecycle
 
-**Status:** synchronized to S1-01 revision 10 after revision-9 adversarial REVISE; implementation blocked pending fresh review and approval.
+**Status:** synchronized to S1-01 revision 11 after revision-10 adversarial REVISE; implementation blocked pending fresh review and approval.
 **Risk:** high/concurrency, persistence, stale-state semantics.
 **Observable outcome:** `Kit.start/refresh/stop` create one managed sync lifecycle; account/balances/height are published as a single snapshot, cached state survives reconstruction, and a cancelled/old generation cannot overwrite the new state.
 
@@ -74,7 +74,7 @@ AccountSyncer ─▶ ReadOperationCoordinator ─▶ EndpointPool + ThorNodeClie
 
 `LifecycleCommandBridge` becomes the concrete S1-05 collaborator behind S1-01's synchronized owner and facade dispatcher. It receives only already-linearized, monotonically sequenced effective commands. It neither stores `desiredRunning`, filters idempotent start/stop/refresh calls, nor assigns a second public-command sequence. Its task tail preserves the accepted command order while handing asynchronous actor work across the synchronous facade boundary; `start/stop/start` never create independent unordered `Task {}` instances. `AccountSyncer`'s loop/task presence is runtime ownership state, not a defensive idempotence filter: `start` while already running, or `stop`/`refresh` while stopped, is an internal invariant failure with a stable diagnostic marker. `Scripts/test-s1-05-lifecycle-invariants.sh` runs those three impossible actor-command sequences in isolated subprocesses and requires each to terminate nonzero with its exact marker. Every refresh reaching the bridge was already accepted while running; multiple valid running refresh commands may still coalesce network work without dropping or reordering lifecycle commands.
 
-`LifecycleGate` introduces the first post-construction snapshot mutation interface and owns publication-turn admission on the S1-01 facade dispatcher; S1-01 deliberately defines neither. `acceptIfCurrent(generation:record:)` admits the entire `Sendable` record and publication turn to that dispatcher before any pre-drain, checks the token, reconstructs the public snapshot there, drains already-admitted lifecycle commands, sets getters, sends publishers, and drains every command admitted during synchronous delivery before yielding. Admission plus both drains are one dispatcher turn, so a competing publication cannot enter between reentrant command linearization and its drain. An ordinary external `stop()` completes only after its ordered bridge invocation establishes the generation/publication barrier. An effective `start`, `stop`, or `refresh` called synchronously by a subscriber follows S1-01's dispatcher-context append-and-return rule, and the active turn's post-drain completes it before any competing publication begins. A separate storage control row provides transaction-level compare-and-swap.
+`LifecycleGate` introduces the first post-construction snapshot mutation interface and owns publication-turn admission on the S1-01 facade dispatcher; S1-01 deliberately defines neither. It is initialized with the immutable active address string and `address.network.expectedChainId`. `acceptIfCurrent(generation:record:)` admits the entire `Sendable` record and publication turn to that dispatcher before any pre-drain, checks the token and exact active identity, reconstructs the public snapshot there, drains already-admitted lifecycle commands, sets getters, sends publishers, and drains every command admitted during synchronous delivery before yielding. Admission plus both drains are one dispatcher turn, so a competing publication cannot enter between reentrant command linearization and its drain. An ordinary external `stop()` completes only after its ordered bridge invocation establishes the generation/publication barrier. An effective `start`, `stop`, or `refresh` called synchronously by a subscriber follows S1-01's dispatcher-context append-and-return rule, and the active turn's post-drain completes it before any competing publication begins. A separate storage control row provides transaction-level compare-and-swap.
 
 ## Contracts
 
@@ -105,9 +105,9 @@ protocol AccountStateStorage: Sendable {
 
 ### Isolation transfer contract
 
-`AccountSyncer` receives only S1-04's `AccountReadTransport`, whose balances contain canonical decimal strings, and converts it to `StorageRecord`. `StorageRecord` is an internal `Sendable` value containing only `String`, integer, Boolean, `Date`, and arrays of the internal `Sendable` decimal balance record; it never stores `BigUInt`, `AccountState`, or `SyncState`. `AccountStateStorage.load/saveIfCurrent` cross async boundaries only with this record.
+`AccountSyncer` receives only S1-04's `AccountReadTransport`, whose balances contain canonical decimal strings, and converts it to `StorageRecord`. `StorageRecord` is an internal `Sendable` value containing the exact validated address string, exact expected network chain ID, and only other `String`, integer, Boolean, `Date`, and arrays of the internal `Sendable` decimal balance record; it never stores `BigUInt`, `AccountState`, or `SyncState`. `AccountStateStorage.load/saveIfCurrent` cross async boundaries only with this record.
 
-After a generation-valid save or cache load, `LifecycleGate.acceptIfCurrent(generation:record:)` carries that `Sendable` record to the S1-01 facade dispatcher. Inside that dispatcher turn it validates each canonical decimal string, constructs `BigUInt` values and the frozen public `AccountState`, then passes the result directly to `AccountStateManager` before publisher delivery. The BigUInt-backed value never leaves the dispatcher through an actor/async/storage boundary. Invalid persisted decimal data is a storage failure and is neither published nor coerced to zero. `@unchecked Sendable` is forbidden.
+After a generation-valid save or cache load, `LifecycleGate.acceptIfCurrent(generation:record:)` carries that `Sendable` record to the S1-01 facade dispatcher. Before any cache or fresh record can become public, the gate requires `record.address == activeAddress.raw` and `record.networkChainId == activeAddress.network.expectedChainId`. Inside that dispatcher turn it also validates each canonical decimal string and its exact 256-bit Cosmos bound, constructs `BigUInt` values and the frozen public `AccountState`, then passes the result directly to `AccountStateManager` before publisher delivery. A different-address row under the same wallet/network key, a tampered chain ID, an amount of `2^256`, or other invalid persisted data is a storage failure and is neither published nor coerced to zero. Cache identity failure maps to `.storageUnavailable`, publishes no cached snapshot, and does not prevent the running lifecycle from attempting a fresh read whose valid record may atomically replace the row. The BigUInt-backed value never leaves the dispatcher through an actor/async/storage boundary. `@unchecked Sendable` is forbidden.
 
 Public `Kit.start/stop/refresh` preserve synchronous completion for effective calls made outside the facade dispatcher. The S1-01 owner filters no-ops and establishes command order before invoking the bridge. `start/stop` synchronously invoke the short GRDB control transaction `advanceGeneration`, update the in-memory gate, and then append the actor command to the preceding command task. Stopped refresh never reaches the bridge; an accepted running refresh is appended/coalesced in established order. Dispatcher-context reentry uses the explicitly documented enqueue-and-return exception so subscriber delivery cannot wait on itself.
 
@@ -170,6 +170,7 @@ If the account is nil but balances are non-empty, this is an invariant violation
 ### Restart
 
 - production composition passes the already-computed S1-01 `persistenceNamespace` into `StorageKey(persistenceNamespace:)`; a new `Kit` with the same S1-01 namespace receives the same key, and S1-05 accepts no wallet/network/preimage initializer for storage identity;
+- cache publication additionally requires the stored address and chain ID to equal the active `Address`; namespace equality alone is never sufficient;
 - the cached snapshot is published as stale/idle before a successful refresh;
 - endpoint URL order does not change the storage key;
 - a network identity change creates a different namespace.
@@ -214,7 +215,7 @@ balances
   PRIMARY KEY(storage_key, denom)
 ```
 
-Within one GRDB write transaction, `saveIfCurrent` first compares `sync_control.generation`; on mismatch, it returns `false` without changing account/balances. On match, it replaces the account and the entire balance set. If the save transaction acquires the writer first, `stop()` waits for it, then increments the generation and only then returns; if stop wins, the CAS save fails. Therefore, a write after stop has returned is impossible. BigUInt is stored as a canonical decimal string. Migration `v1` is idempotent.
+Within one GRDB write transaction, `saveIfCurrent` first compares `sync_control.generation`; on mismatch, it returns `false` without changing account/balances. On match, it replaces the account and the entire balance set. If the save transaction acquires the writer first, `stop()` waits for it, then increments the generation and only then returns; if stop wins, the CAS save fails. Therefore, a write after stop has returned is impossible. BigUInt is stored as a canonical decimal string bounded to 256 bits. Stored address and `network_chain_id` are integrity fields that must exactly match the active Address before publication; they are not informational metadata. Migration `v1` is idempotent.
 
 Storage failure policy: the network result is not published as durably `.synced` when saving is mandatory. `.notSynced(.storageUnavailable, cached: previous)` is required; this prevents a UI success state that would disappear on relaunch.
 
@@ -270,6 +271,9 @@ Storage failure policy: the network result is not published as durably `.synced`
 - generation control survives reconstruction and remains monotonic;
 - the fixed S1-01 `wallet-01`/mainnet composition passes `StorageKey(persistenceNamespace: "e2df225b7a00d471b1b09ec2d3344df89a11e9cfe116c05f5290683480623015")`, persists that exact key, and reloads the same cache;
 - different network/wallet isolated;
+- reconstructing the same wallet/network key with a different valid address rejects the old row before any cached publication, reports `.storageUnavailable`, then permits a fresh valid record to replace it;
+- a row whose `network_chain_id` differs from `activeAddress.network.expectedChainId` is rejected before publication even when its storage key and address match;
+- cached amount `2^256 - 1` is accepted, while exact `2^256` is rejected before public BigUInt reconstruction;
 - stored `storage_key` is exactly the S1-01 oracle `e2df225b7a00d471b1b09ec2d3344df89a11e9cfe116c05f5290683480623015`; a guarded factory/source mutant that reconstructs from `walletId` plus `network.persistenceKey` fails the same composition test, and database bytes plus captured logs contain neither the raw wallet ID nor a concatenated/unhashed namespace preimage;
 - schema v1 idempotent migration.
 
@@ -308,6 +312,7 @@ Before acceptance, S1-05 adds `Tests/ThorChainKitTests/Fixtures/S1-05-public-sym
 - Stop/restart/cancellation invariants are proven by deterministic tests.
 - Account, balances, and height are saved/published through generation-CAS; the old generation cannot commit after stop has returned.
 - Cached, stale, missing-account, zero-RUNE, and error states are distinguishable.
+- A cache row is publishable only when its address and chain ID exactly match the active Address; different-address and tampered-chain rows are rejected before snapshot reconstruction.
 - One refresh performs one complete bank fetch, regardless of the number of denoms.
 - The public facade remains byte-for-byte compatible with S1-01's frozen public models; chain identity stays internal and storage failures use `.storageUnavailable`.
 - Reader, synchronizer, and storage isolation boundaries carry only the exact internal `Sendable` decimal-string records; BigUInt-backed `AccountState` is reconstructed on the facade dispatcher, and the actual-source baseline plus both non-`Sendable` boundary mutants prove the transition under the declared compiler flags and BigInt floor.
