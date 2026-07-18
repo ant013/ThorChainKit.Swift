@@ -2,13 +2,57 @@
 
 ## Conclusion
 
-**Trust: RED.** Gimle was used only for discovery. The architectural decisions are based on Serena/`rg` verification of the exact local trees mapped by Gimle and on the pinned Vultisig clone.
+**Current Trust: YELLOW (rechecked July 18, 2026).** The two remaining
+RED blockers from the July 17 check have been fixed: semantic rows now carry
+authoritative project freshness, and the multi-project pagination envelope is
+computed from the post-filter result set. Gimle may again be used for bounded
+discovery and freshness evidence, with the standing Serena/targeted-`rg`
+verification required by the evidence policy.
 
-RED does not mean that the design is unsubstantiated. It means that Gimle cannot independently confirm the currentness and completeness of the selected analogs.
+YELLOW is retained for two operational limitations that do not invalidate the
+refreshed indexes: an MCP client session opened before a Palace restart does not
+reconnect automatically, and the open-schema `search_code` passthrough cannot
+prove that guessed `limit`/`file_pattern` arguments were enforced. The typed
+`semantic_search` endpoint is bounded and is the accepted discovery path.
+
+## July 18 final recheck
+
+- A newly established MCP session returned `palace.health.status` in about
+  0.2 seconds: Neo4j reachable, runtime commit `0e9cf57c`, clean serving tree,
+  and no project-integrity warnings. Older Codex sessions continued to hang
+  because the Palace restart invalidated their StreamableHTTP session. This is
+  client-session drift, not a Palace outage.
+- `tron-kit` now maps to
+  `<gimle-source-root>/HorizontalSystems/TronKit.Swift` at
+  `aa691bcd`; `indexed_commit`, `tree_head`, `dominant_symbol_commit`, and the
+  exact local `origin/master` ref all agree. The overview reports
+  `current_local_tree`, zero lag, `identity_check=ok`, 58,864 symbols, 839 files,
+  and two modules.
+- `uw-ios-app` now maps to
+  `<gimle-source-root>/HorizontalSystems/unstoppable-wallet-ios` at
+  `8a63bfda`; `indexed_commit`, `tree_head`, `dominant_symbol_commit`, and the
+  exact local `origin/version/0.50` ref all agree. The completed ingest reports
+  `current_local_tree`, zero lag, `identity_check=ok`, 250,199 symbols, 28,460
+  files, and four modules.
+- Bounded semantic searches for the Sprint 2 send path returned per-result
+  `indexed_commit`, `commits_behind_head=0`, `stale=false`, and
+  `freshness_state=current_local_tree`. TronKit results were independently
+  confirmed in `TransactionSender.swift`, `TransactionManager.swift`, and
+  `Kit.swift` with Serena and targeted `rg`; Unstoppable results were confirmed
+  in `Core/Protocols.swift` and `SendNew/EvmSendHandler.swift` with targeted
+  `rg` after Serena timed out on the newly indexed large app tree.
+- The old underfill reproduction now returns `returned=1`, `total=1`,
+  `has_more=false`, `next_offset=null`, `truncated=false`, and no warnings. The
+  separate `scope_excluded_count=37` remains visible. The original impossible
+  `returned=0`/`has_more=true` envelope is therefore fixed; low recall for a
+  particular query remains a search-quality concern, not pagination corruption.
 
 ## Post-fix verification — PR #508
 
-The live verification was repeated after the merge/deployment on July 17, 2026. Result: **five of the seven original defects have been fixed; Trust remains RED**, because `SEMANTIC-ROW-FRESHNESS` has not been fixed and `SEMANTIC-UNDERFILL` remains reproducible.
+The first live verification was repeated after the merge/deployment on July 17,
+2026. At that time five of seven defects were fixed and Trust remained RED. The
+July 18 final recheck above supersedes that intermediate verdict: **all seven
+original defects are now fixed and current Trust is YELLOW**.
 
 ### Merge and deployment
 
@@ -26,15 +70,25 @@ The live verification was repeated after the merge/deployment on July 17, 2026. 
 | `EVM-LAG` | **FIXED** | authoritative `indexed_commit=be028631`; `dominant_symbol_commit=27f125be` is diagnostic only; lag 0 to the exact mapped HEAD |
 | `TRON-FRESHNESS` | **FIXED for the declared mapped tree** | repo path exists, `indexed_commit=tree_head=f8ce0c00`, `identity_check=ok`; separate dev checkout `aa691bcd` is explicitly different |
 | `HDWALLET-MAPPING` | **FIXED** | mapped path/HEAD/indexed commit agree on `1bc214b2`; the commit exists |
-| `SEMANTIC-ROW-FRESHNESS` | **OPEN, claimed fix not reproduced** | 12 rows checked with `include_context=false/true` have `indexed_commit=null`, `commits_behind_head=null`, `stale=null` |
-| `SEMANTIC-UNDERFILL` | **OPEN** | multi-project query: `returned=0`, `scope_excluded_count=42`, `total=74997`, `has_more=true`, `next_offset=null` |
+| `SEMANTIC-ROW-FRESHNESS` | **FIXED on July 18** | bounded TronKit and UW rows carry the authoritative commit and current-tree freshness fields |
+| `SEMANTIC-UNDERFILL` | **FIXED on July 18** | regression query returns a coherent post-filter envelope: `1/1`, terminal page, no warning |
 
-### Additional results
+### Additional results from the July 17 intermediate check
 
 - `tron-kit`, `eip20-kit`, and `uniswap-kit` now have absolute, existing `repo_path` values; all three have `identity_check=ok` in the project overview.
-- The backfill is not NULL-free: `12/18` project rows still have `indexed_commit=null`; `uniswap-kit` correctly returns `freshness_state=unknown` and `indexed_commit_unpopulated_reingest_required`.
-- The cause of row freshness was found in the deployed source: `semantic_search` passes the per-hit `_commit_sha` to `_load_freshness` instead of the authoritative `Project.indexed_commit`. This preserves the load-bearing defect and necessarily keeps Trust `RED`.
-- The team's proposed cause of underfill was confirmed: after `_filter_by_scope`, the response still builds `expected_rows` and `pagination_envelope(total=total_candidates)` from the pre-filter total.
+- At that point the backfill was not NULL-free: `12/18` project rows still had
+  `indexed_commit=null`; `uniswap-kit` correctly returned
+  `freshness_state=unknown` and
+  `indexed_commit_unpopulated_reingest_required`. The July 18 conclusion is
+  scoped to the reverified `tron-kit` and `uw-ios-app` projects; it does not
+  assert freshness for every registered project.
+- The then-deployed semantic code passed per-hit `_commit_sha` to
+  `_load_freshness` instead of the authoritative `Project.indexed_commit`.
+  July 18 response evidence confirms that this result-level defect is now
+  corrected for the two reverified projects.
+- The proposed underfill cause was confirmed in the intermediate deployment:
+  pagination used the pre-filter total. The July 18 regression proves the
+  response now exposes a coherent post-filter total and terminal state.
 - The built-in Codex Palace connector hung without a payload after restart. A fresh direct Streamable HTTP MCP session to the same server works; this is a separate connector/session drift, not a failure of the live Palace server.
 
 ## Context loading
@@ -44,7 +98,7 @@ The live verification was repeated after the merge/deployment on July 17, 2026. 
 - Serena was used for the registered exact projects.
 - Where activation could have created metadata in a read-only source tree, targeted `rg`/`git` was used.
 
-## Confirmed defects
+## Historical defect catalogue
 
 | ID | Severity | Defect | Impact | Workaround |
 |---|---|---|---|---|
@@ -53,8 +107,8 @@ The live verification was repeated after the merge/deployment on July 17, 2026. 
 | GIM-EVM-LAG | medium | EvmKit index is 3 commits behind | new consumer-owned syncer composition is not visible | exact tree `be028631` |
 | GIM-TRON-FRESHNESS | high, forces RED | overview reports lag 0, while the mapped tree is 2 commits newer | primary analog is incorrectly marked current | exact tree `aa691bcd` |
 | GIM-HDWALLET-MAPPING | high, forces RED | indexed commit is absent from the mapped repo despite lag 0 | derivation cannot be substantiated through Gimle | local tree + authoritative vectors |
-| GIM-SEMANTIC-ROW-FRESHNESS | high, forces RED | semantic rows have null commit/lag, but `stale=false` | row currentness cannot be substantiated | discovery-only + Serena/rg |
-| GIM-SEMANTIC-UNDERFILL | medium | scoped query returns 0/few rows while `has_more=true` | absence claims cannot be made | bounded graph/text/local searches |
+| GIM-SEMANTIC-ROW-FRESHNESS | high, formerly forced RED; **fixed July 18** | semantic rows had null commit/lag, but `stale=false` | row currentness could not be substantiated | fixed response + continuing Serena/rg verification |
+| GIM-SEMANTIC-UNDERFILL | medium; **fixed July 18** | scoped query returned 0/few rows while `has_more=true` | absence claims could not be made | coherent post-filter envelope now verified |
 | GIM-EXAMPLE-DISCOVERY | medium | bounded semantic search does not find the existing TronKit/EvmKit Example apps | one could incorrectly conclude that the runnable harness is absent | inspect current Xcode targets/workspaces + Serena/rg |
 
 Additionally, the subagent confirmed the false-success envelope `phase2_required`, dependency/legacy path pollution, and discrepancies between project-list and overview commits. These observations were not used as load-bearing facts, but should be fixed in Gimle.
@@ -65,7 +119,9 @@ Additionally, the subagent confirmed the false-success envelope `phase2_required
 - 24 latest claims were accepted as independent current-tree `MATCH`; a separate Gimle Example-coverage claim remains unaccepted as `PARTIAL`.
 - A primary, supporting, and rejected counterexample is recorded for each of the 7 slices.
 - High-risk slices have at least two independent accepted facts and an explicit lifecycle/trust counterexample.
-- The analog family gate passed in `verified` mode; trust intentionally remains `RED`.
+- The analog family gate passed in `verified` mode. Design-time Trust was
+  intentionally RED; the July 18 operational recheck raises current Trust to
+  YELLOW without weakening the independent-verification requirement.
 
 ## Source integrity
 
