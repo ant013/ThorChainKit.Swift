@@ -84,12 +84,12 @@ SHA-256 pins the exact versions of the seven approved specs and the test plan. V
 <!-- SPEC_HASHES_START -->
 | Artifact | SHA-256 |
 |---|---|
-| `S1-01-package-public-api.md` | `9c42bb75fc5f8cbcb8f658db470d09ae500e8871ac60b155d913ad6d429d76de` |
-| `S1-02-network-endpoint-policy.md` | `fa459987d8596746ca9068c9bd4be1a687691d89c610f845488710cf814f55c7` |
-| `S1-03-derivation-address-codec.md` | `f1301dc6cbab531572585f66bcce3431b7c106c27286fceb2b2035869eb60715` |
-| `S1-04-thornode-read-client.md` | `041e1cb8906751a9a287a4eb4e74122f6dea6422a0230395d364a223b0f89361` |
-| `S1-05-rune-account-sync.md` | `d1b255b568e0d8662f80a50dd50d0596ddf7c61880e023d03f0474c103fe3842` |
-| `S1-06-unstoppable-lifecycle-composition.md` | `012b20e9bb4cc3cca9f6d7261dce1d665d59bc995ad422d458543cd9de44d3e2` |
+| `S1-01-package-public-api.md` | `3c42cf77364c6ca27388ec56a1573395ca7fba9b48ddb89f4ae371af79bbd53a` |
+| `S1-02-network-endpoint-policy.md` | `641fa0320d313c8134b8b748f3e451842eb882653b7c849e8fd0301884307585` |
+| `S1-03-derivation-address-codec.md` | `bb06bdfeae3f6b5dfa54b7b49c689ade3fc6454b7666f158e1c59b5e2554d58a` |
+| `S1-04-thornode-read-client.md` | `c2d51c8be3a19fdd96ea21e6501aed3d27489a675ef455defa444118a0db9595` |
+| `S1-05-rune-account-sync.md` | `9ce0432cc1bb75f47dd803d9db8c57f5cd24c87d86a9d7bc61ffe33a215ce305` |
+| `S1-06-unstoppable-lifecycle-composition.md` | `fc6bc88fa09aa18223e52edf22a35f129f871b5c4a9d9c59a370c91604854827` |
 | `S1-07-unstoppable-rune-surface.md` | `9da09bfc288bf9e43565f503d2db06b29f57291f0870c1d9729f9d092e2f502c` |
-| `test-plan.md` | `5a4f8c4587119c3530885a1a4f8db1f300ad4074c1a2b6caa82ef9104fdca898` |
+| `test-plan.md` | `b038715f2fee6287cc12013c8b135f0dddc4adf3970797a5a141d69be40043fb` |
 <!-- SPEC_HASHES_END -->
