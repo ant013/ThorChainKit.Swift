@@ -20,13 +20,13 @@ Protocol fact
 | Sprint | In-app outcome | Core capabilities | Live gate |
 |---|---|---|---|
 | 1. Foundation + read-only RUNE | The user enables RUNE and sees the correct `thor1…` address and balance after restart | package, evolving `iOS Example`, Maestro acceptance, network identity, derivation/address, THORNode reads, account sync, UW manager/adapter/parser, MarketKit metadata | Example Maestro fixture suite + Unstoppable AppTests/manual create/import → enable RUNE → address/balance → terminate/relaunch/App Status → repeat sync |
-| 2. Native RUNE send | The user sends RUNE and receives a tx hash | account number/sequence, fee, protobuf sign doc, signer boundary, broadcast, preflight validation | mainnet transfer between controlled accounts and inclusion confirmation |
+| 2. Native RUNE send | The user sends exact or Max RUNE and receives an honest local tx hash/state | coherent H0/H1/H2 preflight, dynamic fee/halt, protobuf sign doc, host signer, durable sequence reservation, broadcast/unknown retry | controlled mainnet CheckTx acceptance plus later independent observation, without claiming Sprint 3 reconciliation |
 | 3. Transaction history and status | The wallet displays inbound/outbound RUNE transactions and their statuses | Cosmos tx search, pagination, normalized transaction model, pending reconciliation, explorer | the transaction sent in Sprint 2 transitions from pending → success after relaunch |
 | 4. Native THOR actions | The THOR-native deposit/memo operations required by the wallet are supported | `MsgDeposit`, memo validation, dynamic native fee, halt/Mimir/inbound checks, refund semantics | safe minimal mainnet action with outcome confirmation |
 | 5. THOR assets and token model | The wallet correctly displays permitted THORChain denoms beyond native RUNE | opaque/slash denoms, metadata resolution, pagination, decimals, synth/trade-asset policy | one confirmed non-RUNE denom syncs and survives relaunch |
 | 6. Provider reliability | User-supplied and public nodes work predictably | custom endpoints, health/identity probe, failover, rate limiting, backoff, telemetry, privacy policy | controlled wrong-chain/stale/429/503 scenarios and recovery without state loss |
 | 7. Native swap v2 | The existing multichain swap provider gains an internal THOR-native implementation | quote/inbound/memo/streaming swap, no allowance for the native path, action tracking/refund | real small swap with quote → broadcast → Midgard final state |
-| 8. Release hardening | The kit is ready for a separate public repository and release | API stability, migrations, fuzz/fixtures, performance, security review, final docs/demo polish, CI matrix | clean install, cold start, long-running sync, upgrade from prior cache schema |
+| 8. Release hardening | The existing standalone kit repository is ready for a public release | API stability, migrations, fuzz/fixtures, performance, security review, final docs/demo polish, CI matrix | clean install, cold start, long-running sync, upgrade from prior cache schema |
 
 ## Version Boundaries
 
