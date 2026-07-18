@@ -1,6 +1,6 @@
 # S1-05 — RUNE account sync lifecycle
 
-**Status:** synchronized to S1-01 revision 9 after revision-8 adversarial REVISE; implementation blocked pending fresh review and approval.
+**Status:** synchronized to S1-01 revision 10 after revision-9 adversarial REVISE; implementation blocked pending fresh review and approval.
 **Risk:** high/concurrency, persistence, stale-state semantics.
 **Observable outcome:** `Kit.start/refresh/stop` create one managed sync lifecycle; account/balances/height are published as a single snapshot, cached state survives reconstruction, and a cancelled/old generation cannot overwrite the new state.
 
@@ -51,6 +51,7 @@ Tests/ThorChainKitTests/AccountSyncerTests.swift
 Tests/ThorChainKitTests/AccountStateStorageTests.swift
 Tests/ThorChainKitTests/KitLifecycleTests.swift
 Scripts/test-s1-05-lifecycle-invariants.sh
+Scripts/test-s1-04-s1-05-isolation.sh
 iOS Example/Sources/Controllers/LifecycleController.swift
 .maestro/flows/04-lifecycle-restart.yaml
 ```
@@ -62,7 +63,8 @@ Kit synchronous facade
   ├─ sole desired-running owner ─▶ S1-01 facade dispatcher ─▶ LifecycleCommandBridge ─▶ AccountSyncer actor
   └─ getters/publishers ◀──────── shared facade dispatcher ◀── AccountStateManager
                                                                ▲
-                                                               │ accepted snapshot only
+                                                               │ AccountState reconstructed here
+                                                               │ from Sendable StorageRecord
 AccountSyncer ─▶ ReadOperationCoordinator ─▶ EndpointPool + ThorNodeClient
       │
       └──────── atomic save ───▶ AccountStateStorage
@@ -72,7 +74,7 @@ AccountSyncer ─▶ ReadOperationCoordinator ─▶ EndpointPool + ThorNodeClie
 
 `LifecycleCommandBridge` becomes the concrete S1-05 collaborator behind S1-01's synchronized owner and facade dispatcher. It receives only already-linearized, monotonically sequenced effective commands. It neither stores `desiredRunning`, filters idempotent start/stop/refresh calls, nor assigns a second public-command sequence. Its task tail preserves the accepted command order while handing asynchronous actor work across the synchronous facade boundary; `start/stop/start` never create independent unordered `Task {}` instances. `AccountSyncer`'s loop/task presence is runtime ownership state, not a defensive idempotence filter: `start` while already running, or `stop`/`refresh` while stopped, is an internal invariant failure with a stable diagnostic marker. `Scripts/test-s1-05-lifecycle-invariants.sh` runs those three impossible actor-command sequences in isolated subprocesses and requires each to terminate nonzero with its exact marker. Every refresh reaching the bridge was already accepted while running; multiple valid running refresh commands may still coalesce network work without dropping or reordering lifecycle commands.
 
-`LifecycleGate` introduces the first post-construction snapshot mutation interface and owns publication-turn admission on the S1-01 facade dispatcher; S1-01 deliberately defines neither. `acceptIfCurrent(generation:snapshot:)` admits the entire publication turn to that dispatcher before any pre-drain, checks the token, drains already-admitted lifecycle commands, sets getters, sends publishers, and drains every command admitted during synchronous delivery before yielding. Admission plus both drains are one dispatcher turn, so a competing publication cannot enter between reentrant command linearization and its drain. An ordinary external `stop()` completes only after its ordered bridge invocation establishes the generation/publication barrier. An effective `start`, `stop`, or `refresh` called synchronously by a subscriber follows S1-01's dispatcher-context append-and-return rule, and the active turn's post-drain completes it before any competing publication begins. A separate storage control row provides transaction-level compare-and-swap.
+`LifecycleGate` introduces the first post-construction snapshot mutation interface and owns publication-turn admission on the S1-01 facade dispatcher; S1-01 deliberately defines neither. `acceptIfCurrent(generation:record:)` admits the entire `Sendable` record and publication turn to that dispatcher before any pre-drain, checks the token, reconstructs the public snapshot there, drains already-admitted lifecycle commands, sets getters, sends publishers, and drains every command admitted during synchronous delivery before yielding. Admission plus both drains are one dispatcher turn, so a competing publication cannot enter between reentrant command linearization and its drain. An ordinary external `stop()` completes only after its ordered bridge invocation establishes the generation/publication barrier. An effective `start`, `stop`, or `refresh` called synchronously by a subscriber follows S1-01's dispatcher-context append-and-return rule, and the active turn's post-drain completes it before any competing publication begins. A separate storage control row provides transaction-level compare-and-swap.
 
 ## Contracts
 
@@ -90,16 +92,22 @@ actor AccountSyncer: AccountSyncing {
 }
 
 protocol AccountStateStorage: Sendable {
-    func load(key: StorageKey) async throws -> AccountState?
+    func load(key: StorageKey) async throws -> StorageRecord?
     func advanceGeneration(key: StorageKey) throws -> UInt64
     func saveIfCurrent(
-        _ state: AccountState,
+        _ record: StorageRecord,
         key: StorageKey,
         expectedGeneration: UInt64
     ) async throws -> Bool
     func clear(key: StorageKey) async throws
 }
 ```
+
+### Isolation transfer contract
+
+`AccountSyncer` receives only S1-04's `AccountReadTransport`, whose balances contain canonical decimal strings, and converts it to `StorageRecord`. `StorageRecord` is an internal `Sendable` value containing only `String`, integer, Boolean, `Date`, and arrays of the internal `Sendable` decimal balance record; it never stores `BigUInt`, `AccountState`, or `SyncState`. `AccountStateStorage.load/saveIfCurrent` cross async boundaries only with this record.
+
+After a generation-valid save or cache load, `LifecycleGate.acceptIfCurrent(generation:record:)` carries that `Sendable` record to the S1-01 facade dispatcher. Inside that dispatcher turn it validates each canonical decimal string, constructs `BigUInt` values and the frozen public `AccountState`, then passes the result directly to `AccountStateManager` before publisher delivery. The BigUInt-backed value never leaves the dispatcher through an actor/async/storage boundary. Invalid persisted decimal data is a storage failure and is neither published nor coerced to zero. `@unchecked Sendable` is forbidden.
 
 Public `Kit.start/stop/refresh` preserve synchronous completion for effective calls made outside the facade dispatcher. The S1-01 owner filters no-ops and establishes command order before invoking the bridge. `start/stop` synchronously invoke the short GRDB control transaction `advanceGeneration`, update the in-memory gate, and then append the actor command to the preceding command task. Stopped refresh never reaches the bridge; an accepted running refresh is appended/coalesced in established order. Dispatcher-context reentry uses the explicitly documented enqueue-and-return exception so subscriber delivery cannot wait on itself.
 
@@ -120,12 +128,12 @@ A transport/decode failure never creates a zero state.
 ```text
 generation = FIFO bridge generation
 publish .syncing(previous)
-read = ReadOperationCoordinator.read(address)
+readTransport = ReadOperationCoordinator.read(address)
 check cancellation + generation
-construct full AccountState from complete read
-committed = storage.saveIfCurrent(state, expectedGeneration: generation)
+construct Sendable StorageRecord from complete readTransport
+committed = storage.saveIfCurrent(record, expectedGeneration: generation)
 guard committed
-LifecycleGate.acceptIfCurrent(generation, .synced(state))
+LifecycleGate.acceptIfCurrent(generation, record)
 ```
 
 If the account is nil but balances are non-empty, this is an invariant violation: do not publish a contradictory snapshot. An empty/no account is valid `exists=false`, zero RUNE, and nil number/sequence.
@@ -212,7 +220,7 @@ Storage failure policy: the network result is not published as durably `.synced`
 
 ## State publication
 
-- `AccountStateManager.accept(_:)` is called only through `LifecycleGate.acceptIfCurrent` and accepts complete state.
+- `AccountStateManager.accept(_:)` is called only inside `LifecycleGate.acceptIfCurrent`'s facade-dispatcher turn, after that turn reconstructs one complete `AccountState` from a validated `StorageRecord`.
 - Synchronous getters and Combine subjects are updated on the shared S1-01 facade dispatcher.
 - Order: internal snapshot set → publishers send. A consumer invoked by a publisher already sees the new getter value.
 - An ordinary external `stop()` guarantees that no later publication turn sends after it returns. A dispatcher-context reentrant stop returns after enqueue so the current turn can unwind; its queued bridge completion is the barrier, and no later turn may overtake it.
@@ -265,6 +273,8 @@ Storage failure policy: the network result is not published as durably `.synced`
 - stored `storage_key` is exactly the S1-01 oracle `e2df225b7a00d471b1b09ec2d3344df89a11e9cfe116c05f5290683480623015`; a guarded factory/source mutant that reconstructs from `walletId` plus `network.persistenceKey` fails the same composition test, and database bytes plus captured logs contain neither the raw wallet ID nor a concatenated/unhashed namespace preimage;
 - schema v1 idempotent migration.
 
+`Scripts/test-s1-04-s1-05-isolation.sh` first runs the actual package sources under `-swift-version 5 -strict-concurrency=complete -warnings-as-errors`, including the exact BigInt `5.0.0` temporary-resolution floor. It then makes independent guarded temporary copies: one changes the actual `AccountReading`/`ReadOperationCoordinator` result from `AccountReadTransport` to the frozen non-`Sendable` `AccountState`, and one changes the actual `AccountStateStorage` load/save boundary from `StorageRecord` to `AccountState`. Each mutant must fail compilation with a non-`Sendable` isolation diagnostic. The harness requires one baseline pass and exactly one guarded source transform per copy; a text-only grep does not satisfy this compiler regression.
+
 `KitLifecycleTests.swift`:
 
 - facade getter updated before publisher callback;
@@ -300,6 +310,7 @@ Before acceptance, S1-05 adds `Tests/ThorChainKitTests/Fixtures/S1-05-public-sym
 - Cached, stale, missing-account, zero-RUNE, and error states are distinguishable.
 - One refresh performs one complete bank fetch, regardless of the number of denoms.
 - The public facade remains byte-for-byte compatible with S1-01's frozen public models; chain identity stays internal and storage failures use `.storageUnavailable`.
+- Reader, synchronizer, and storage isolation boundaries carry only the exact internal `Sendable` decimal-string records; BigUInt-backed `AccountState` is reconstructed on the facade dispatcher, and the actual-source baseline plus both non-`Sendable` boundary mutants prove the transition under the declared compiler flags and BigInt floor.
 - Persistence/relaunch and the controlled live read pass.
 
 ## Recorded decisions

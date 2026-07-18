@@ -1,6 +1,6 @@
 # S1-03 — Account Derivation and Address Codec
 
-**Status:** synchronized to S1-01 revision 9 after revision-8 adversarial REVISE; implementation blocked pending fresh review and approval.
+**Status:** synchronized to S1-01 revision 10 after revision-9 adversarial REVISE; implementation blocked pending fresh review and approval.
 **Risk:** high/cryptographic boundary.
 **Observable outcome:** an independent seed/public-key vector produces the expected THORChain address; checksum, payload length, mixed case, and wrong-network HRP are rejected before any network/signing call.
 

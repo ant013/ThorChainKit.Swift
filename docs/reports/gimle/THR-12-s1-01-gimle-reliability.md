@@ -11,16 +11,16 @@
 
 ## Metrics
 
-- Calls: 41 (success 32, warning 8, error 0, false-success 1)
-- Useful-call rate: 53.7%
-- Response-byte coverage: 22/41; total 86355
-- Duration coverage: 6/41; total 35000 ms
+- Calls: 47 (success 37, warning 8, error 0, false-success 2)
+- Useful-call rate: 57.4%
+- Response-byte coverage: 22/47; total 86355
+- Duration coverage: 12/47; total 66400 ms
 - Gimle agreement: 66.7%
 - Gimle contradiction: 33.3%
 - Location validity: 100.0%; coverage 6/6
 - Freshness coverage: 66.7%
 - Replacement/fallback claims: 2
-- Bugs: 8
+- Bugs: 10
 - Analog slices/candidates: 4/17
 
 ### Calls by tool
@@ -30,15 +30,15 @@
 | palace.code.list_passthrough_projects | 6 | 0 | 0 | 0 |
 | palace.code.search_code | 2 | 0 | 0 | 0 |
 | palace.code.search_graph | 2 | 1 | 0 | 0 |
-| palace.code.semantic_search | 0 | 2 | 0 | 0 |
-| palace.health.status | 7 | 0 | 0 | 0 |
+| palace.code.semantic_search | 2 | 2 | 0 | 1 |
+| palace.health.status | 8 | 0 | 0 | 0 |
 | palace.memory.get_project_overview | 7 | 1 | 0 | 1 |
-| palace.memory.health | 6 | 0 | 0 | 0 |
-| palace.memory.list_projects | 2 | 4 | 0 | 0 |
+| palace.memory.health | 7 | 0 | 0 | 0 |
+| palace.memory.list_projects | 3 | 4 | 0 | 0 |
 
-Bug classes: {'caller_error': 1, 'mapping_bug': 3, 'environment_drift': 2, 'coverage_gap': 2}
-Bug severities: {'low': 2, 'high': 3, 'medium': 3}
-Bug statuses: {'workaround': 8}
+Bug classes: {'caller_error': 2, 'mapping_bug': 3, 'environment_drift': 3, 'coverage_gap': 2}
+Bug severities: {'low': 4, 'high': 3, 'medium': 3}
+Bug statuses: {'workaround': 9, 'fixed': 1}
 
 ## Gimle calls
 
@@ -85,6 +85,12 @@ Bug statuses: {'workaround': 8}
 | E-0039 | adversarial_review | palace.memory.list_projects | ok | warning | 18/18 | n/a | n/a | yes | 44136fa355b3678a | No ThorChain project is registered; target freshness and mapping remain unavailable |
 | E-0040 | adversarial_review | palace.memory.get_project_overview | ok | false_success | n/a/0 | n/a | n/a | yes | 32a190c78779fbe7 | Outer MCP success wrapped ok=false unknown_project for thorchain; no target overview exists |
 | E-0041 | adversarial_review | palace.code.list_passthrough_projects | ok | success | n/a/7 | n/a | n/a | no | 44136fa355b3678a | n/a |
+| E-0042 | adversarial_review | palace.health.status | ok | success | n/a/n/a | n/a | 200 | yes | 44136fa355b3678a | n/a |
+| E-0043 | adversarial_review | palace.memory.health | ok | success | 777562/n/a | n/a | 200 | yes | 44136fa355b3678a | n/a |
+| E-0044 | adversarial_review | palace.memory.list_projects | ok | success | 18/18 | n/a | 15100 | yes | 44136fa355b3678a | n/a |
+| E-0045 | adversarial_review | palace.code.semantic_search | ok | false_success | n/a/n/a | n/a | 100 | no | 281cc908d73d7011 | Top-level ok=false invalid_context_limit was wrapped in MCP success |
+| E-0046 | adversarial_review | palace.code.semantic_search | ok | success | 0/0 | n/a | 10000 | yes | 2ac445eb6cb07a33 | n/a |
+| E-0047 | adversarial_review | palace.code.semantic_search | ok | success | 0/0 | n/a | 5800 | yes | 7874f3fb7a9e27c2 | n/a |
 
 ## Component analog family
 
@@ -235,15 +241,15 @@ Bug statuses: {'workaround': 8}
 - D-003@4 ACCEPT: Inert current-value publisher replay remains coherent
 - D-004@5 ACCEPT: Maestro and fixture-only acceptance boundaries remain corrected
 - D-005@4 ACCEPT: PR-head and post-merge identities remain separated
-- D-006@6 REVISE: Dispatcher-context identity is unspecified by the exact allowlist
+- D-006@7 ACCEPT: Revision-8 finding independently closed at exact revision-9 head
 - D-007@4 ACCEPT: BigUInt concurrency claims are bounded to the exact floor
 - D-008@3 ACCEPT: Hashing scope remains narrowly internal
 - D-009@3 ACCEPT: Gimle identity limitations remain explicit and non-authoritative
 - D-010@3 ACCEPT: UI evidence is limited to observable public state
-- D-011@3 REVISE: S1-05 still specifies a second lifecycle idempotence filter
+- D-011@4 ACCEPT: Revision-8 finding independently closed at exact revision-9 head
 - D-012@3 ACCEPT: Revision-8 integrity bindings are mechanically correct
 - D-013@5 ACCEPT: FIFO mutant now has a nonrecursive executable outer harness
-- D-014@4 REVISE: Factory inertness can escape through authorized Network.persistenceKey
+- D-014@5 ACCEPT: Revision-8 finding independently closed at exact revision-9 head
 - D-015@4 ACCEPT: S1-01 retains command draining and defers only publication turns
 - D-016@3 ACCEPT: S1-05 consumes the frozen S1-01 public state/error model
 - D-017@3 ACCEPT: Endpoint fail-closed rules have complete named table coverage
@@ -251,20 +257,24 @@ Bug statuses: {'workaround': 8}
 - D-019@4 ACCEPT: Artifact containment text covers sibling-prefix and root symlinks
 - D-020@3 ACCEPT: Repository and Paperclip plans are byte-identical
 - D-021@3 ACCEPT: Exact Example workspace structure has a named executable gate
-- D-022@2 REVISE: Downstream revision metadata is stale
+- D-022@3 ACCEPT: Revision-8 finding independently closed at exact revision-9 head
 - D-023@3 ACCEPT: Decoded address payload has an independent known-answer assertion
 - D-024@3 ACCEPT: Protocol values retain a verified fail-closed analog slice
-- D-025@2 REVISE: S1-05 does not prove exact consumption of the S1-01 namespace
+- D-025@3 ACCEPT: Revision-8 finding independently closed at exact revision-9 head
 - D-026@4 ACCEPT: Maestro digest is complete and consistently pinned
-- D-027@2 REVISE: S1-04 can regress the positive factory audit to a blacklist
+- D-027@3 ACCEPT: Revision-8 finding independently closed at exact revision-9 head
 - D-028@3 ACCEPT: Committed Gimle projection is path-sanitized
 - D-029@4 ACCEPT: Serialized SwiftPM xUnit has an independent transcript/status gate
 - D-030@3 ACCEPT: Persistence namespace has a fixed independent oracle
-- D-031@2 REVISE: The copyable xUnit verification command omits pipefail
+- D-031@3 ACCEPT: Revision-8 finding independently closed at exact revision-9 head
 - D-032@3 ACCEPT: Greenfield lifecycle ordering is no longer attributed to forwarding analogs
 - D-033@3 ACCEPT: BigInt floor and default resolution are independently owned
 - D-034@3 ACCEPT: Under-lock probe exception is bounded and nonblocking
 - D-035@3 ACCEPT: KitConfigurationError has an exact file owner
+- D-036@1 REVISE: Non-Sendable public snapshots cross the S1-04/S1-05 actor design
+- D-037@1 REVISE: S1-04 SPI composition root and audit closure are not enumerated
+- D-038@1 REVISE: CoinBalance has no approved public consumer
+- D-039@1 REVISE: Public value construction is outside the positive no-work audit
 
 ## Verification and acceptance
 
@@ -288,7 +298,7 @@ Bug statuses: {'workaround': 8}
 - Tool/events/claims: palace.memory.get_project_overview / E-0005 / n/a
 - Reproduction: Compare tron-kit overview repo_path/tree_head with git -C TronKit.Swift rev-parse HEAD
 - Expected: The indexed primary analog maps to the exact assigned checkout and HEAD aa691bcd8c79d57a554d72a4996bec4d7e1afce5
-- Actual: Gimle maps GimleMirror/tron-kit at f8ce0c00d788a4e06ddfe07ce2a5d6be783dcce4
+- Actual: Gimle maps Gimle-Repos/TronKit.Swift at f8ce0c00d788a4e06ddfe07ce2a5d6be783dcce4
 - Impact: Gimle facade/package findings cannot establish the current policy analog
 - Workaround: Use Gimle only for candidate discovery and verify every selected TronKit fact in TronKit.Swift with Serena, rg, and Git
 - Anchors: TronKit.Swift@aa691bcd8c79d57a554d72a4996bec4d7e1afce5
@@ -358,6 +368,28 @@ Bug statuses: {'workaround': 8}
 - Impact: Gimle cannot establish target-repository identity or freshness for revision 9.
 - Workaround: Use codebase-memory project Users-ant013-Data-AI-thorchain plus exact-worktree Serena, rg, and Git verification; do not use Gimle for target facts.
 - Anchors: codebase-memory:Users-ant013-Data-AI-thorchain, git-head:e1a6609f1522aecbcbaba7da37f8231f9ffff605
+
+### GIM-THR12-CONTEXT-LIMIT: Semantic-search context limit was above the deployed bound
+
+- Class/severity/confidence/status: caller_error / low / confirmed / fixed
+- Tool/events/claims: palace.code.semantic_search / E-0045 / n/a
+- Reproduction: Call the typed semantic-search tool with include_context=true and context_limit=800
+- Expected: Use the deployed integer bound of 0...10
+- Actual: Outer MCP success wrapped ok=false invalid_context_limit
+- Impact: The first revision-10 discovery call returned no evidence
+- Workaround: Retried once with context_limit=4; the bounded call completed normally
+- Anchors: palace.code.semantic_search invalid_context_limit
+
+### GIM-THR12-STALE-SESSION: Pre-restart StreamableHTTP session could hang while fresh sessions are healthy
+
+- Class/severity/confidence/status: environment_drift / low / confirmed / workaround
+- Tool/events/claims: palace.health.status / E-0042 / n/a
+- Reproduction: Board transport verification observed the long-lived connector hanging over 20 seconds after the 23:38 Palace restart
+- Expected: Connector sessions recover cleanly across a Palace restart
+- Actual: The old session was stale; this fresh revision-10 call returned reachable in about 0.2 seconds
+- Impact: A stale session could be mistaken for graph or data failure
+- Workaround: Recreate the MCP session and retry before any local-only fallback; this run needed no fallback
+- Anchors: Paperclip Board comment 9bda4006 at 2026-07-17T23:50:21Z
 
 ## Interpretation
 

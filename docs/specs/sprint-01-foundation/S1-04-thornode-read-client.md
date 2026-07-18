@@ -1,6 +1,6 @@
 # S1-04 — THORChain read client, coordinated failover, and freshness
 
-**Status:** synchronized to S1-01 revision 9 after revision-8 adversarial REVISE; implementation blocked pending fresh review and approval.
+**Status:** synchronized to S1-01 revision 10 after revision-9 adversarial REVISE; implementation blocked pending fresh review and approval.
 **Risk:** high/network and data-integrity boundary.
 **Observable outcome:** fixtures and a controlled mainnet test return one complete typed account read; retry repeats the entire operation on another verified family, while malformed/partial/wrong-network/cancelled results do not become zeros or partial successes.
 
@@ -27,9 +27,11 @@ Sources/ThorChainKit/Network/ThorNodeClient.swift
 Sources/ThorChainKit/Network/LiveThorNodeClient.swift
 Sources/ThorChainKit/Network/ReadOperationCoordinator.swift
 Sources/ThorChainKit/Network/AccountReading.swift
-Sources/ThorChainKit/Network/AccountReadResult.swift
+Sources/ThorChainKit/Network/AccountReadTransport.swift
+Sources/ThorChainKit/Network/BalanceTransport.swift
 Sources/ThorChainKit/Network/HttpTransport.swift
 Sources/ThorChainKit/Network/URLSessionHttpTransport.swift
+Sources/ThorChainKit/Network/TestingHttpTransportAdapter.swift
 Sources/ThorChainKit/Network/CancellationClassifier.swift
 Sources/ThorChainKit/Network/RequestBuilder.swift
 Sources/ThorChainKit/Network/ApiError.swift
@@ -39,12 +41,15 @@ Sources/ThorChainKit/Network/DTO/AccountResponse.swift
 Sources/ThorChainKit/Network/DTO/BankBalancesResponse.swift
 Sources/ThorChainKit/Models/NodeStatus.swift
 Sources/ThorChainKit/Models/Account.swift
-Sources/ThorChainKit/Models/CoinBalance.swift
+Sources/ThorChainKit/Core/TestingKitFactory.swift
 Tests/ThorChainKitTests/LiveThorNodeClientTests.swift
 Tests/ThorChainKitTests/ReadOperationCoordinatorTests.swift
 Tests/ThorChainKitTests/FixtureDecodingTests.swift
 Tests/ThorChainKitTests/Fixtures/*.json
+Tests/ThorChainKitTests/Fixtures/S1-04-public-symbols.txt
+Tests/ThorChainKitTests/Fixtures/S1-04-spi-factory-syntax.txt
 Tests/ThorChainKitLiveTests/MainnetReadTests.swift
+Scripts/verify-s1-04.sh
 iOS Example/Sources/Controllers/AccountReadController.swift
 .maestro/flows/03-account-read-fixture.yaml
 .maestro/flows-live/03-account-read-mainnet.yaml
@@ -59,15 +64,15 @@ protocol ThorNodeClient: Sendable {
     func status(using lease: EndpointLease) async throws -> NodeStatus
     func nodeInfo(using lease: EndpointLease) async throws -> NodeInfo
     func account(address: Address, using lease: EndpointLease) async throws -> Account?
-    func balances(address: Address, using lease: EndpointLease) async throws -> [CoinBalance]
+    func balances(address: Address, using lease: EndpointLease) async throws -> [BalanceTransport]
 }
 
 protocol AccountReading: Sendable {
-    func read(address: Address) async throws -> AccountReadResult
+    func read(address: Address) async throws -> AccountReadTransport
 }
 
 actor ReadOperationCoordinator: AccountReading {
-    func read(address: Address) async throws -> AccountReadResult
+    func read(address: Address) async throws -> AccountReadTransport
 }
 
 protocol HttpTransport: Sendable {
@@ -76,6 +81,8 @@ protocol HttpTransport: Sendable {
 ```
 
 All contracts are internal; the public consumer sees `Kit`, config, snapshots, and the sanitized `SyncError`.
+
+Every value returned from an async `ThorNodeClient` or `AccountReading` requirement—`NodeStatus`, `NodeInfo`, `Account`, `BalanceTransport`, and `AccountReadTransport`—is an immutable `Sendable` value whose stored fields are themselves `Sendable`. Only the balance/public-snapshot conversion needs BigInt, and that conversion follows the decimal-record boundary below.
 
 ### Example-only acceptance SPI
 
@@ -101,6 +108,8 @@ public extension Kit {
 
 Production `Kit.instance` does not accept a transport and never activates fixtures. Only the Example fixture target imports `@_spi(Testing) ThorChainKit`; Unstoppable does not import this SPI in either production or tests. A separate public API compile check proves that a normal `import ThorChainKit` cannot see `TestingHttpTransport/testingInstance`.
 
+`Sources/ThorChainKit/Core/TestingKitFactory.swift` is the sole SPI composition root and owns both the SPI declarations and `Kit.testingInstance`. Its executed composition closure is limited to the initializer bodies of `TestingHttpTransportAdapter`, `EndpointPool`, `RequestBuilder`, `LiveThorNodeClient`, `ReadOperationCoordinator`, `KitDependencies`, and `Kit`, plus the already-pinned `Network.persistenceKey` getter. The `S1-04-spi-factory-syntax.txt` partition contains exactly that root and those initializer/getter bodies; it excludes request execution, retry, storage, lifecycle-start, and every production `Kit.instance` body. A helper, wrapper, initializer, import, identifier/member reference, or call outside this list fails the SPI positive audit. The production partition independently reruns the unchanged S1-01 inert `Kit.instance` baseline.
+
 ## Sole failover algorithm
 
 ```text
@@ -117,7 +126,13 @@ for attempt in 1...configuration.effectiveMaximumAttempts
     async let account = client.account(address, lease)
     async let balances = client.balances(address, lease)
     await both completely
-    return AccountReadResult(status, account, balances, familyId)
+    return AccountReadTransport(
+      acceptedHeight: lease.cosmosReadHeight,
+      account: account,
+      balances: balances,
+      familyId: lease.familyId,
+      observedAt: clock.now
+    )
   catch
     normalized = CancellationClassifier.normalize(error)
     if cancellation → throw immediately
@@ -133,32 +148,30 @@ A retry creates a new lease and retrieves status/account/all balance pages again
 ## Domain models
 
 ```swift
-public struct CoinBalance: Equatable {
-    public let denom: Denom
-    public let amount: BigUInt
-    public init(denom: Denom, amount: BigUInt)
-}
-
 struct Account: Equatable, Sendable {
     let accountNumber: UInt64
     let sequence: UInt64
 }
 
-struct AccountReadResult: Equatable {
-    let status: NodeStatus
+struct BalanceTransport: Equatable, Sendable {
+    let denom: Denom
+    let amountDecimal: String
+}
+
+struct AccountReadTransport: Equatable, Sendable {
     let acceptedHeight: Int64
     let account: Account?
-    let balances: [CoinBalance]
+    let balances: [BalanceTransport]
     let familyId: String
     let observedAt: Date
 }
 ```
 
-S1-01 owns `Denom`; S1-04 consumes it without redeclaration. `CoinBalance` becomes public because the read layer exposes typed balances internally to the kit snapshot; low-level account/status remain internal.
+S1-01 owns `Denom`; S1-04 consumes it without redeclaration. `CoinBalance` is not introduced: there is no approved public consumer beyond `AccountState.balances`. Low-level account/status and both transport records remain internal.
 
 `Denom`: non-empty, no whitespace/control; opaque/case-sensitive; `/` allowed; native only exact `rune`.
 
-`CoinBalance` and `AccountReadResult` are intentionally not `Sendable` under the minimum BigInt `v5.0.0`, whose `BigUInt` has no such conformance. S1-04 must pass the strict-concurrency build without `@unchecked Sendable`; changing the dependency or isolation design requires separate review.
+`BalanceTransport.amountDecimal` is a canonical unsigned decimal string (`"0"` or a nonzero digit followed by digits). `LiveThorNodeClient` validates it by constructing a local `BigUInt` and requiring that value's decimal description to equal the input, but never stores `BigUInt` in either transport. The genuinely `Sendable` transport crosses the actor boundary; S1-05 reconstructs the public BigUInt-backed snapshot only on the S1-01 facade dispatcher. S1-04 must pass the strict-concurrency build without `@unchecked Sendable`.
 
 ## Request construction
 
@@ -233,7 +246,7 @@ Unsolicited `.cancelled` while task is not cancelled remains a transport failure
 - Family probe S1-02 decides lease freshness.
 - Coordinator revalidates Comet status/Cosmos node-info identities on attempt.
 - Account and every balance page are queried at one explicit Cosmos height and must echo that exact response height.
-- `AccountReadResult.acceptedHeight = lease.cosmosReadHeight`; Comet height remains diagnostic and is never persisted as account observation height.
+- `AccountReadTransport.acceptedHeight = lease.cosmosReadHeight`; Comet height remains diagnostic and is never persisted as account observation height.
 - REST response without exact height evidence fails closed; no invented height and no publication using another host's height.
 
 ## Analog delta
@@ -264,7 +277,7 @@ Each fixture records source class, capture date, chain ID/height and redaction n
 - zero/max BigUInt, invalid amount never zero;
 - full pagination, cycle, max pages, duplicate denom, later-page failure;
 - account/all pages exact pinned height; missing/mismatched `x-cosmos-block-height` rejects whole attempt;
-- strict-concurrency compile checks for immutable DTOs, with no BigUInt-containing `Sendable` or `@unchecked Sendable` claim.
+- strict-concurrency compile checks over the actual `BalanceTransport`, `AccountReadTransport`, `AccountReading`, and actor witness, with no BigUInt-containing transport or `@unchecked Sendable` claim.
 
 ### Coordinator
 
@@ -293,7 +306,7 @@ Current research environment DNS failure is recorded as unrun, not success.
 
 ## Slice-versioned contract gates
 
-S1-04 adds `Tests/ThorChainKitTests/Fixtures/S1-04-public-symbols.txt`, `Tests/ThorChainKitTests/Fixtures/S1-04-spi-factory-syntax.txt`, and `Scripts/verify-s1-04.sh`; its CI job compares the generated public graph exactly with the S1-04 baseline and requires every canonical declaration in S1-01…S1-03 to remain an unchanged subset. New read/SPI declarations appear only in the S1-04 exact baseline; prior removal or signature mutation fails. The script owns two independent positive normalized syntax/callee paths: production `Kit.instance` must still match the exact S1-01 inert baseline, including its transitive `Network.persistenceKey` getter and dispatcher-context key operations, while only the enumerated `@_spi(Testing)` fixture composition may match the separate S1-04 SPI baseline and accept `TestingHttpTransport`. A missing or extra declaration/import/identifier/member/call shape fails its owning path; production imports or reachability to the SPI, and SPI capabilities beyond the enumerated transport fixture, fail named temporary-copy canaries. No blacklist-only audit substitutes for either positive baseline.
+S1-04 adds `Tests/ThorChainKitTests/Fixtures/S1-04-public-symbols.txt`, `Tests/ThorChainKitTests/Fixtures/S1-04-spi-factory-syntax.txt`, and `Scripts/verify-s1-04.sh`; its CI job compares the generated public graph exactly with the S1-04 baseline and requires every canonical declaration in S1-01…S1-03 to remain an unchanged subset. The exact public baseline adds only the declared SPI surface and does not contain `CoinBalance`. Prior removal or signature mutation fails. The script owns two independent positive normalized syntax/callee paths: production `Kit.instance` must still match the exact S1-01 inert baseline, including its transitive `Network.persistenceKey` getter and dispatcher-context key operations; the SPI partition starts only at `Core/TestingKitFactory.swift` and includes exactly the transitive initializer/getter bodies enumerated above. A missing or extra declaration/import/identifier/member/call shape fails its owning path; production imports or reachability to the SPI, and SPI capabilities beyond the enumerated transport fixture, fail named temporary-copy canaries. No blacklist-only audit substitutes for either positive baseline.
 
 ## Acceptance criteria
 
@@ -305,4 +318,5 @@ S1-04 adds `Tests/ThorChainKitTests/Fixtures/S1-04-public-symbols.txt`, `Tests/T
 - Published `acceptedHeight` is proven by Cosmos REST pinned response headers, never borrowed from Comet.
 - Cancellation normalized and never retried.
 - Client owns neither lifecycle nor persistence.
+- Only internal `Sendable` decimal-string transport records cross the reader actor boundary; `CoinBalance` is absent from the public surface and the actual-source strict-concurrency gate passes without `@unchecked Sendable`.
 - Deterministic suite and controlled live read/failover pass.

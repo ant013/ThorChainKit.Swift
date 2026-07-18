@@ -1,6 +1,6 @@
 # S1-02 — Network and Endpoint Policy
 
-**Status:** synchronized to S1-01 revision 9 after revision-8 adversarial REVISE; implementation blocked pending fresh review and approval.
+**Status:** synchronized to S1-01 revision 10 after revision-9 adversarial REVISE; implementation blocked pending fresh review and approval.
 **Risk:** high/security boundary.
 **Observable outcome:** the kit accepts only provider families consistent with `Network`; wrong-chain, stale, mixed-family, retryable, terminal, and cancelled operations have deterministic, distinct outcomes.
 
