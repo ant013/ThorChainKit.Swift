@@ -29,7 +29,7 @@ The cross-slice verification authority remains `docs/specs/sprint-01-foundation/
 
 ### 1. Establish executable package topology
 
-- [ ] Completion evidence recorded in this plan and the implementation commit.
+- [x] Completion evidence recorded in this plan and the implementation commit.
 - Suggested owner: ThorChainSwiftEngineer.
 - Dependencies: accepted plan confirmation.
 - Affected paths: `Package.swift`, `Package.resolved`, `Sources/ThorChainKit/ThorChainKit.swift`, `Tests/ThorChainKitTests/PublicApiTests.swift`, `Scripts/verify-bigint-floor.sh`, and the topology/dependency subgates in `Scripts/verify-s1-01.sh`.
@@ -41,7 +41,7 @@ The cross-slice verification authority remains `docs/specs/sprint-01-foundation/
 
 ### 2. Add the complete immutable value layer and methods 1–12
 
-- [ ] Completion evidence recorded in this plan and the implementation commit.
+- [x] Completion evidence recorded in this plan and the implementation commit.
 - Suggested owner: ThorChainSwiftEngineer.
 - Dependencies: step 1.
 - Affected paths: `Models/Network.swift`, `Models/EndpointConfiguration.swift`, `Network/EndpointFamilyDescriptor.swift`, `Network/EndpointPolicy.swift`, `Models/Denom.swift`, `Models/Address.swift`, `Models/AccountState.swift`, `Models/SyncState.swift`, `Models/SyncError.swift`, `Core/KitConfigurationError.swift`, `Address/AddressError.swift`, `Address/Bech32Codec.swift`, `Address/BitConversion.swift`, and `PublicApiTests.swift`.
@@ -53,7 +53,7 @@ The cross-slice verification authority remains `docs/specs/sprint-01-foundation/
 
 ### 3. Add the inert synchronized facade and methods 13–18
 
-- [ ] Completion evidence recorded in this plan and the implementation commit.
+- [x] Completion evidence recorded in this plan and the implementation commit.
 - Suggested owner: ThorChainSwiftEngineer.
 - Dependencies: step 2.
 - Affected paths: `Sources/ThorChainKit/Core/Kit.swift`, `KitFactory.swift`, `KitDependencies.swift`, `Tests/ThorChainKitTests/PublicApiTests.swift`, and `Scripts/test-s1-01-mutants.sh`.
@@ -65,7 +65,7 @@ The cross-slice verification authority remains `docs/specs/sprint-01-foundation/
 
 ### 4. Lock the complete public, test, platform, and toolchain surface
 
-- [ ] Completion evidence recorded in this plan and the implementation commit.
+- [x] Completion evidence recorded in this plan and the implementation commit.
 - Suggested owner: ThorChainSwiftEngineer.
 - Dependencies: step 3.
 - Affected paths: `Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt`, `Tests/ThorChainKitTests/Fixtures/S1-01-public-symbols.txt`, `Tests/ThorChainKitTests/Fixtures/S1-01-factory-syntax.txt`, `Tests/ThorChainKitTests/Fixtures/S1-01-value-syntax.txt`, `Scripts/verify-s1-01.sh`, `Scripts/verify-s1-01-factory.swift`, `Scripts/verify-s1-01-values.swift`, `Scripts/verify-s1-01-xunit.swift`, `.github/workflows/ci.yml`, and public documentation only as required by the approved gates.

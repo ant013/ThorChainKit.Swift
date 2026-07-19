@@ -12,6 +12,10 @@ let package = Package(
     ],
     targets: [
         .target(name: "ThorChainKit", dependencies: ["BigInt"]),
-        .testTarget(name: "ThorChainKitTests", dependencies: ["ThorChainKit"]),
+        .testTarget(
+            name: "ThorChainKitTests",
+            dependencies: ["ThorChainKit"],
+            exclude: ["Fixtures"]
+        ),
     ]
 )
