@@ -97,7 +97,7 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 
 ## S1-02 endpoint-policy gate
 
-Revision 15 adds the following local-first obligations before implementation may be considered complete. They run routinely on the operator MacBook; GitHub-hosted macOS runs them only once through the manual final exact-PR-head gate.
+Revision 16 adds the following local-first obligations before implementation may be considered complete. They run routinely on the operator MacBook; GitHub-hosted macOS runs them only once through the manual final exact-PR-head gate.
 
 | Behavior | Deterministic evidence |
 |---|---|
@@ -114,7 +114,7 @@ Revision 15 adds the following local-first obligations before implementation may
 | Example execution | The sole Testing SPI session calls the real pool while production `Kit` stays inert; source/syntax gates reject duplicated classification, static outcomes, or SPI imports outside tests/Example. |
 | Slice-exact Maestro | Runner tests prove `s1-01` and `s1-02` each execute exactly one different allowlisted YAML and retain all provenance, containment, JUnit, OCR, and secret canaries. |
 | Live separation | Exact schema-v1 keys/types/literals/arithmetic, source/path/head binding, duplicate/unknown-key rejection, and distinct fixture/live roots prevent fixture substitution. The validator recomputes the greatest-Comet-height/configuration-order winner; lower-height selection and later-equal-height-tie mutants must fail. |
-| Hosted CI bootstrap/budget | Bootstrap mode compares pre-bootstrap `main` with a two-path CI-policy PR, proving its merge-ref has no `pull_request` trigger and its merged commit has no `push` trigger; GitHub runs-API evidence records zero runs for both events. Steady-state mode proves `workflow_dispatch` only, required PR/head/confirmation inputs, exact-head checkout, and no merge-time rerun. The bootstrap PR is recorded separately; Reviewer/QA cite local product outputs and the one final hosted product run. |
+| Hosted CI bootstrap/budget | Bootstrap mode compares pre-bootstrap `main` with a two-path CI-policy PR, proving its merge refs have no `pull_request` trigger and its merged commit has no `push` trigger. Exact `event=pull_request&head_sha=<merge-ref-sha>&per_page=1` and `event=push&head_sha=<merge-commit-sha>&per_page=1` API evidence must return HTTP 200 and `total_count == 0`. Steady-state mode proves `workflow_dispatch` only and binds `github.workflow_sha`, `github.sha`, same-repository PR `headRefOid`, `expected_head_sha`, checkout SHA, and run `head_sha` to one product head. A local stale-default-workflow mutant must fail before product verification. The bootstrap PR is recorded separately; Reviewer/QA cite local product outputs and the one final hosted product run. |
 
 The narrow-to-broad command order is:
 
@@ -133,7 +133,9 @@ THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh s1-02
 
 The opt-in live command in the S1-02 spec runs locally only after deterministic gates pass. It validates two families and all three identity sources against the exact implementation head. Absence is `UNRUN`, an attempted unavailable/invalid run is nonzero failure, and its sanitized JSON cannot be replaced by fixture evidence.
 
-Before the product branch exists, the separately reviewed bootstrap PR runs `Scripts/verify-s1-02-ci-policy.sh bootstrap --base-ref <pre-bootstrap-main> --candidate-ref <bootstrap-head>` locally. Mutants must fail for every automatic trigger, any third changed path, trigger-unrelated job-command drift, missing dispatch input, mutable checkout, head mismatch, or duplicate `main` suite. Read-only GitHub runs-API checks after PR open/update and after merge must find no run attributable to the bootstrap PR merge ref or merge commit.
+Before the product branch exists, the separately reviewed bootstrap PR runs `Scripts/verify-s1-02-ci-policy.sh bootstrap --base-ref <pre-bootstrap-main> --candidate-ref <bootstrap-head>` locally. Mutants must fail for every automatic trigger, any third changed path, trigger-unrelated job-command drift, missing dispatch input, mutable checkout, head mismatch, or duplicate `main` suite. After PR creation and every update, retain the current merge-ref SHA and query the workflow-runs API with `event=pull_request`, that exact `head_sha`, and `per_page=1`; after merge, query `event=push` with the exact merge-commit SHA and `per_page=1`. Record filters, UTC observation time, HTTP 200, and the bounded response, and require `total_count == 0` for every tuple.
+
+The steady-state verifier locally mutates the event context so the bootstrap/default-`main` workflow definition is used while checkout still targets the correct product SHA. That mutant must fail on workflow-definition/event-head binding before any product command or verification credit. The sole real dispatch names the same-repository PR head branch; preflight and retained run evidence require `github.workflow_sha == github.sha == headRefOid == expected_head_sha == checkout SHA == run head_sha` and record `github.workflow_ref`.
 
 ## Verification order per slice
 
@@ -147,7 +149,7 @@ Before the product branch exists, the separately reviewed bootstrap PR runs `Scr
 8. Opt-in live API gate.
 9. Unstoppable manual create/import/relaunch/App Status checklist for S1-07.
 10. Diff audit confirms that no Maestro/acceptance-only host files were added.
-11. Before merge, Reviewer and QA first produce exact local command outputs at the same `headRefOid`; the CTO/operator then dispatches the sole GitHub-hosted macOS gate with that PR/head. Once green, QA and CodeReviewer append attestations citing their unchanged local evidence and its run URL/status/SHA. The CTO verifies `mergeStateStatus` is `CLEAN`, the conflict-marker diff scan is empty, and the PR-linked plan exists. Any push invalidates all evidence; merge/push to `main` does not rerun the suite.
+11. Before merge, Reviewer and QA first produce exact local command outputs at the same `headRefOid`; the CTO/operator then dispatches the sole GitHub-hosted macOS gate against that same-repository PR head branch. Before product commands it requires `github.workflow_sha`, `github.sha`, `headRefOid`, and `expected_head_sha` to equal the exact product head; retained checkout and run `head_sha` must match too. Once green, QA and CodeReviewer append attestations citing their unchanged local evidence and its workflow ref/SHA/run URL/status/head SHA. The CTO verifies `mergeStateStatus` is `CLEAN`, the conflict-marker diff scan is empty, and the PR-linked plan exists. Any push invalidates all evidence; merge/push to `main` does not rerun the suite.
 
 ## Live evidence record
 

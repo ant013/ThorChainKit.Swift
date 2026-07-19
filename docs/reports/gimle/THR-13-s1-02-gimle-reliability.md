@@ -1,7 +1,7 @@
-# Gimle reliability report: THR-13 S1-02 revision 15
+# Gimle reliability report: THR-13 S1-02 revision 16
 
 - Task: THR-13
-- Workflow/phase: `analog_change` / `design` rework after closure 1/5
+- Workflow/phase: `analog_change` / `design` rework after closure 2/5
 - Trust: **YELLOW**
 - Repository/base: `ThorChainKit.Swift@f7da1ce7b0b16c9a44b339d9bdfc5e2c9404dfc9`
 - Branch: `docs/THR-13-network-endpoint-policy`
@@ -19,7 +19,7 @@ This committed report is the redacted repository view. The canonical machine sta
 - Analog slices/candidates: 2/10.
 - Defects/limitations: 4 — target and lifecycle coverage gaps, one fixed caller query, and one historical Serena environment drift.
 
-`YELLOW` is required because Palace has no ThorChainKit or ZcashLightClientKit mapping, and MarketKit has no explicit indexed commit even though its identity and dominant symbol commit match. Current target and lifecycle truth therefore comes from codebase-memory plus exact Git, Serena, and targeted `rg`. Current TronKit and EvmKit mappings agree with their exact checkouts; pinned Vultisig evidence was verified directly. Target Serena resolves the exact Swift workspace. Revision 15 changes no analog selection: it narrowly makes live winner validation consistent with the already-approved deterministic selection rule.
+`YELLOW` is required because Palace has no ThorChainKit or ZcashLightClientKit mapping, and MarketKit has no explicit indexed commit even though its identity and dominant symbol commit match. Current target and lifecycle truth therefore comes from codebase-memory plus exact Git, Serena, and targeted `rg`. Current TronKit and EvmKit mappings agree with their exact checkouts; pinned Vultisig evidence was verified directly. Target Serena resolves the exact Swift workspace. Revision 16 changes no analog selection: it narrowly binds the final CI workflow definition and zero-run API proof to exact revisions.
 
 ## Evidence calls
 
@@ -105,10 +105,12 @@ Independent closure 1/5 at exact head `4dd51c36eda2495a5cfb84ec6fd382be131ff187`
 
 The operator's CI transition clarification adds no analog claim. Current GitHub documentation establishes that `workflow_dispatch` must exist on the default branch, workflow runs use the version at the event SHA/ref, and open pull-request events use a merge ref. Revision 15 therefore specifies a separately recorded two-path CI-policy bootstrap whose candidate merge ref has no PR trigger and whose merged commit has no push trigger, verified locally and through read-only zero-run evidence before the product branch is created.
 
+Independent closure 2/5 at exact head `af6b16bd9f9883eb2644dfd0c4ceb5bf8fcc021a` closed `VOP-S02-04` and retained `OP-S02-CI-BOOTSTRAP`. A legal default-`main` dispatch could execute the older bootstrap workflow while checking out the exact product SHA, so checkout/head binding alone did not prove that S1-02 commands ran. Revision 16 requires the same-repository product branch as dispatch ref, exact equality among workflow-definition SHA, event SHA, PR head, expected head, checkout, and run head, plus a stale-default-workflow mutant. It also binds each bootstrap no-run query to the exact event and merge-ref/merge-commit SHA with a bounded HTTP-200 response and `total_count == 0`.
+
 Pre-approval checks:
 
 - `git diff --check` — pass.
-- `swift test` — pass at the revision-14 review head, 18 tests and 0 failures; revision-15 documentation re-verification is recorded at its pushed head.
+- `swift test` — pass at the revision-14 review head, 18 tests and 0 failures; revision-16 documentation re-verification is recorded at its pushed head.
 - Absolute-path/credential scan of the changed design files — pass; no new operator path or secret was added.
 
-No implementation-specific S1-02 test, Maestro, hosted workflow, or live probe was run because implementation remains blocked pending independent closure review and explicit approval of revision 15.
+No implementation-specific S1-02 test, Maestro, hosted workflow, or live probe was run because implementation remains blocked pending independent closure review and explicit approval of revision 16.

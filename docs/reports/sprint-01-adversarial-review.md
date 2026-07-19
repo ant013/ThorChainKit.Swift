@@ -2,7 +2,7 @@
 
 ## Conclusion
 
-**Current S1-02 decision: REVISE pending closure 2/5.** Discovery is exhausted at 2/2. Closure 1/5 closed four of five frozen High blockers and retained only deterministic live-winner validation under `VOP-S02-04`; revision 15 addresses that gap together with the frozen zero-run CI-bootstrap clarification. It may not be presented for approval or implementation until an independent exact-head closure review ACCEPTs both.
+**Current S1-02 decision: REVISE pending closure 3/5.** Discovery is exhausted at 2/2. Closure 2/5 closed deterministic live-winner validation under `VOP-S02-04` and retained only the frozen `OP-S02-CI-BOOTSTRAP` requirement. Revision 16 binds the executing workflow definition to the product head and makes zero-run proof exact-tuple mechanical. It may not be presented for approval or implementation until independent exact-head closure ACCEPTs that correction.
 
 The review was performed against the current versions of the seven slice specs and the consolidated test plan. The ThorChainKit, Unstoppable Wallet, and reference-kit source code was not changed.
 
@@ -135,10 +135,20 @@ The operator clarified the already-accepted local-first policy before revision 1
 
 Result: **REVISE remains active** until CodeReviewer closure 2/5 verifies the exact pushed revision-15 head.
 
+## S1-02 closure 2/5 — REVISE
+
+The CodeReviewer reproduced all revision-15 digests and reviewed exact pushed head `af6b16bd9f9883eb2644dfd0c4ceb5bf8fcc021a`. `VOP-S02-04` closed: the validator now independently recomputes greatest Comet height and first configuration-order winner, and the lower-height/later-on-tie mutants are explicit.
+
+`OP-S02-CI-BOOTSTRAP` remained open because a dispatch against default `main` could execute the older bootstrap/S1-01-only workflow definition while checking out the correct product SHA. That could appear green without executing the S1-02 commands. Revision 16 requires dispatch against the same-repository PR head branch and equality among `github.workflow_sha`, `github.sha`, PR `headRefOid`, `expected_head_sha`, checkout SHA, and Actions run `head_sha`; it also records `github.workflow_ref`. A local stale-default-workflow mutant must fail before product verification is credited.
+
+Revision 16 also makes the no-run bootstrap evidence mechanical. It retains every observed bootstrap merge-ref SHA and the final merge commit, performs bounded workflow-runs queries with exact event/SHA filters, and requires HTTP 200 with `total_count == 0`, retaining the filters and observation time.
+
+Result: **REVISE remains active** until CodeReviewer closure 3/5 verifies the exact pushed revision-16 head, limited to `OP-S02-CI-BOOTSTRAP` and direct Critical/High regressions.
+
 ## Decision constraints
 
 - Gimle trust remains `RED`; all load-bearing conclusions were reverified in the exact current trees through Serena and targeted `rg`.
 - Maestro CLI is not installed on the current machine, so the Example YAML and runner currently exist only as an asserted design contract and apply exclusively to the future `ThorChainKit/iOS Example`.
 - The user's term `Meteora` was interpreted as Maestro. If it refers to another internal tool, the UI layer must be rebound to its actual contract before implementation.
 - Implementation remains blocked pending independent S1-02 closure ACCEPT and explicit revision-bound user approval.
-- For S1-02 revision 15 specifically, Gimle trust is `YELLOW`, not the earlier Sprint-wide `RED`: current Tron/Evm mappings agree with exact checkouts; ThorChainKit and Zcash lifecycle evidence lack Palace mappings, and MarketKit has no explicit indexed commit. Codebase-memory plus exact Git/Serena/`rg` provides the recorded fallback basis.
+- For S1-02 revision 16 specifically, Gimle trust is `YELLOW`, not the earlier Sprint-wide `RED`: current Tron/Evm mappings agree with exact checkouts; ThorChainKit and Zcash lifecycle evidence lack Palace mappings, and MarketKit has no explicit indexed commit. Codebase-memory plus exact Git/Serena/`rg` provides the recorded fallback basis.
