@@ -2,6 +2,7 @@
 .serena/
 .build/
 DerivedData/
+build/
 *.xcuserstate
 xcuserdata/
 .env

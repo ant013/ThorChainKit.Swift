@@ -81,9 +81,9 @@ protocol IThorChainKit: AnyObject {
     var runeBalance: BigUInt { get }
     var accountExists: Bool { get }
 
-    var lastBlockHeightPublisher: AnyPublisher<Int64, Never> { get }
+    var lastBlockHeightPublisher: AnyPublisher<Int64?, Never> { get }
     var syncStatePublisher: AnyPublisher<ThorChainKit.SyncState, Never> { get }
-    var accountStatePublisher: AnyPublisher<ThorChainKit.AccountState, Never> { get }
+    var accountStatePublisher: AnyPublisher<ThorChainKit.AccountState?, Never> { get }
 
     func start()
     func stop()
@@ -95,7 +95,6 @@ extension ThorChainKit.Kit: IThorChainKit {}
 protocol IThorChainKitFactory {
     func kit(
         address: ThorChainKit.Address,
-        network: ThorChainKit.Network,
         walletId: String,
         endpoints: ThorChainKit.EndpointConfiguration
     ) throws -> any IThorChainKit
@@ -114,7 +113,7 @@ final class ThorChainKitFactory: IThorChainKitFactory {
 2. Guard `.mnemonic` and available seed; other account types throw `.unsupportedAccount`.
 3. `AccountAddress.thorChainAddress(account:)` derives canonical mainnet address.
 4. Resolve production `EndpointConfiguration` from an injected provider/config, not global string concatenation.
-5. Call injected `kitFactory.kit(address: address, network: .mainnet, walletId: account.id, endpoints: endpoints)`; production factory delegates to `ThorChainKit.Kit.instance`.
+5. Call injected `kitFactory.kit(address: address, walletId: account.id, endpoints: endpoints)`; production factory delegates to `ThorChainKit.Kit.instance`, which derives its sole network from `address.network`.
 6. Construct wrapper, cache weak wrapper + account.
 7. **Do not call `thorChainKit.start()`**.
 

@@ -1,12 +1,12 @@
 # S1-02 — Network and Endpoint Policy
 
-**Status:** revised after adversarial review; implementation blocked pending approval.
+**Status:** synchronized to S1-01 revision 11 after revision-10 adversarial REVISE; implementation blocked pending fresh review and approval.
 **Risk:** high/security boundary.
 **Observable outcome:** the kit accepts only provider families consistent with `Network`; wrong-chain, stale, mixed-family, retryable, terminal, and cancelled operations have deterministic, distinct outcomes.
 
 ## Goal
 
-Make network identity a cohesive object and prevent the Vultisig-class error `{mainnet HRP + foreign chain ID + foreign node}`. Define the policy and endpoint-family model on which S1-04 implements a single explicit owner of read failover.
+Consume S1-01's cohesive network and endpoint-family values to prevent the Vultisig-class error `{mainnet HRP + foreign chain ID + foreign node}`. Add probing, health, selection, and leasing on which S1-04 implements a single explicit owner of read failover.
 
 ## Scope
 
@@ -31,10 +31,6 @@ Out of scope:
 ## Files
 
 ```text
-Sources/ThorChainKit/Models/Network.swift
-Sources/ThorChainKit/Models/EndpointConfiguration.swift
-Sources/ThorChainKit/Network/EndpointFamilyDescriptor.swift
-Sources/ThorChainKit/Network/EndpointPolicy.swift
 Sources/ThorChainKit/Network/EndpointHealth.swift
 Sources/ThorChainKit/Network/EndpointLease.swift
 Sources/ThorChainKit/Network/EndpointPool.swift
@@ -42,85 +38,13 @@ Sources/ThorChainKit/Network/ProviderError.swift
 Sources/ThorChainKit/Network/NodeProbing.swift
 Sources/ThorChainKit/Network/LiveNodeProbe.swift
 Tests/ThorChainKitTests/EndpointPoolTests.swift
-Tests/ThorChainKitTests/NetworkTests.swift
 iOS Example/Sources/Controllers/EndpointsController.swift
 .maestro/flows/01-endpoint-policy.yaml
 ```
 
-## Complete Public Configuration Surface
+## Inherited Public Configuration Surface
 
-```swift
-public struct Network: Hashable, Sendable {
-    public enum Environment: String, Hashable, Sendable {
-        case mainnet
-        case stagenet
-        case chainnet
-    }
-
-    public let environment: Environment
-    public let expectedChainId: String
-    public let accountHrp: String
-    public let coinType: UInt32
-
-    public static let mainnet: Network
-    public static func stagenet(expectedChainId: String) throws -> Network
-    public static func chainnet(expectedChainId: String) throws -> Network
-}
-
-public struct EndpointFamilyDescriptor: Hashable, Sendable {
-    public let id: String
-    public let cosmosRestURL: URL
-    public let cometBftURL: URL
-
-    public init(id: String, cosmosRestURL: URL, cometBftURL: URL) throws
-}
-
-public struct EndpointPolicy: Hashable, Sendable {
-    public let maximumHeightLag: Int64
-    public let identityRevalidationInterval: Duration
-    public let retryableStatusCodes: Set<Int>
-    public let maximumAttempts: Int?
-    public let maximumBalancePageCount: Int
-
-    public init(
-        maximumHeightLag: Int64 = 5,
-        identityRevalidationInterval: Duration = .seconds(300),
-        retryableStatusCodes: Set<Int> = [408, 429, 502, 503, 504],
-        maximumAttempts: Int? = nil,
-        maximumBalancePageCount: Int = 100
-    ) throws
-
-    public static let `default`: EndpointPolicy
-}
-
-public struct EndpointConfiguration: Sendable {
-    public let families: [EndpointFamilyDescriptor]
-    public let clientId: String?
-    public let requestTimeout: Duration
-    public let policy: EndpointPolicy
-    public var effectiveMaximumAttempts: Int { get }
-
-    public init(
-        families: [EndpointFamilyDescriptor],
-        clientId: String? = nil,
-        requestTimeout: Duration = .seconds(15),
-        policy: EndpointPolicy = .default
-    ) throws
-}
-
-public enum EndpointConfigurationError: Error, Equatable {
-    case emptyFamilies
-    case duplicateFamilyId(String)
-    case invalidFamilyId
-    case insecureURL
-    case urlContainsCredentialsQueryOrFragment
-    case invalidPolicyField(String)
-}
-```
-
-There is no arbitrary `Network` initializer: the HRP cannot be separated from the environment. `mainnet = thorchain-1/thor/931`; the caller explicitly supplies a non-mainnet chain ID.
-
-Mainnet convenience endpoints exist only as a separate versioned preset. `Network` contains no URLs.
+S1-01 owns the exact public declarations and construction validation for `Network.Environment`, `Network`, `EndpointFamilyDescriptor`, `EndpointPolicy`, `EndpointConfiguration`, and `EndpointConfigurationError`. S1-02 consumes them without redeclaration or semantic change. `Network` still contains no URLs, and mainnet convenience endpoints remain a separate versioned preset.
 
 ## Internal Contracts
 
@@ -187,18 +111,9 @@ The probe always uses both URLs from one family and obtains freshness separately
 
 `EndpointLease` is internal, immutable, and contains one complete family, verified identity, reference height, and pool generation. Account, balances, and status for one attempt never mix families.
 
-## Construction Validation
+## Construction Validation Ownership
 
-- families are non-empty, with trimmed/non-empty/unique IDs;
-- both URLs are required for each family;
-- production URLs use `https` and contain no user/password/query/fragment;
-- URLs may use distinct hosts only when explicitly grouped by caller/provider configuration;
-- `clientId` is trimmed; empty → nil;
-- timeout/interval are positive, `maximumHeightLag >= 0`;
-- retryable statuses are a subset of `{408, 429, 502, 503, 504}`;
-- `maximumAttempts == nil` means “each configured family at most once”; `effectiveMaximumAttempts = families.count`;
-- explicit `maximumAttempts` must be within `1...families.count`; the value is not silently clamped;
-- `maximumBalancePageCount` is in `1...1000`.
+S1-01 validates families, IDs, URL safety, client ID, timeouts, lag, retryable codes, attempts, and page-count bounds before S1-02 receives a configuration. S1-02 adds no alternate initializer and never silently clamps or repairs invalid input. Distinct hosts remain valid only as one explicitly caller-grouped family; S1-02 independently proves identity and freshness for both roles before leasing it.
 
 ## Probe and Selection
 
@@ -266,14 +181,6 @@ Sensitive URL credentials/query are prohibited during construction; diagnostics 
 
 ## Tests Before Implementation
 
-`NetworkTests`:
-
-- exact mainnet constants;
-- explicit non-empty stagenet/chainnet IDs;
-- no arbitrary HRP initializer;
-- family requires both roles, safe URLs, and unique IDs;
-- public defaults and all invalid policy bounds.
-
 `EndpointPoolTests`:
 
 - same identity/healthy height → lease;
@@ -308,9 +215,13 @@ Sensitive URL credentials/query are prohibited during construction; diagnostics 
 4. With two providers, compare lag and select the expected family.
 5. Record family IDs/heights only, without credentials.
 
+## Slice-versioned contract gates
+
+S1-02 adds `Tests/ThorChainKitTests/Fixtures/S1-02-public-symbols.txt` and `Scripts/verify-s1-02.sh`; the S1-02 CI job compares the generated public graph exactly with that current-slice baseline and also requires every canonical declaration in `S1-01-public-symbols.txt` to remain an unchanged subset. New S1-02 declarations appear only in the S1-02 exact baseline; removal or signature mutation of an S1-01 declaration fails. The S1-02 script repeats S1-01's exact production factory capability audit because this slice does not compose probing or networking into `Kit.instance`.
+
 ## Acceptance Criteria
 
-- The public configuration surface is fully declared and compile-tested.
+- The S1-01 public configuration surface is consumed unchanged and compile-tested with the pool.
 - HRP/chain ID are atomic.
 - A family binds Cosmos+Comet attempts; roles are not mixed.
 - Role-specific probes prove the identity + freshness of each role; the published account height is never borrowed from another host.

@@ -35,10 +35,10 @@ if active child exists:
 
 fetch integration branch
 read roadmap from origin/integration
-for heading in document order:
-    if valid Status ✅ marker is within next 3 lines:
+for slice row in document order:
+    if status cell is exactly a valid ✅ Implemented marker:
         continue
-    next_slice = heading
+    next_slice = slice row
     break
 
 if no next_slice:
@@ -56,7 +56,7 @@ stop
 
 Every child contains:
 
-- stable slice ID and exact roadmap heading;
+- stable slice ID and exact roadmap row;
 - goal and non-goals;
 - linked detailed-spec path;
 - deliverables;
@@ -66,7 +66,7 @@ Every child contains:
 - Example app/Maestro surface, where applicable;
 - Unstoppable adapter/AppTests surface, where applicable;
 - Gimle/Serena/current-tree evidence requirements;
-- requirement to add the exact status marker in the same feature PR;
+- requirement to add the exact PR-number status marker in the same feature PR;
 - parent walker ID, project/workspace, and integration branch.
 
 ## 5. Child state machine
@@ -138,19 +138,19 @@ The CTO merge is permitted only when all of the following are true:
 - required CI/local checks have completed according to the slice spec;
 - no approval/blocker remains open;
 - the status marker contains the actual PR and will be merged by that PR;
+- Reviewer, QA, and CI evidence cite the same final `headRefOid`; any push invalidates earlier evidence;
 - merge is performed using squash without co-author trailers;
-- after merge, the marker is verified on the integration branch;
+- after merge, the CTO records `mergeCommit.oid`, verifies it is on the integration branch, and verifies the PR-number marker there;
 - only then is the child moved to `done`.
 
 The Reviewer and QA do not merge or close the child.
 
 ## 9. Status marker
 
-Canonical form:
+Canonical S1-01 row form:
 
 ```markdown
-### S1.01 Package Public API
-**Status:** ✅ Implemented — PR #42 — merge `abc1234` — 2026-07-17
+| S1-01 | Package and public API | standalone package builds; local-package `iOS Example` and the first Maestro fixture flow run | — | ✅ Implemented — PR #42 — 2026-07-17 |
 ```
 
 Prohibited:
@@ -159,8 +159,10 @@ Prohibited:
 - roadmap-only PR;
 - direct-push marker on the integration branch;
 - marker before acceptance;
-- link to the implementation commit instead of the merge commit;
+- any head/merge placeholder or a PR head mislabeled as the merge commit;
 - manually closing a child without a marker on the integration branch.
+
+The repository marker deliberately contains no commit SHA because a squash merge commit does not exist until after the feature branch contents are fixed. The exact reviewed PR head and the post-merge commit remain durable Paperclip/GitHub evidence, not self-referential repository text.
 
 ## 10. Stop/resume
 
@@ -178,7 +180,7 @@ Prohibited:
 - Deferred comments cannot reopen a `done` issue without explicit operator action.
 - Reviewer/QA API permissions do not permit merge/close.
 - The CEO bundle has its own role, not a copy of the CTO role craft.
-- Roadmap lint checks the heading, marker, real PR number, and absence of duplicates.
+- Roadmap lint checks the exact slice row, PR-number-only status cell, real PR number, date, and absence of duplicate IDs.
 - The watchdog reports a violation, but is not the normal handoff mechanism.
 
 ## 12. ThorChain acceptance boundary

@@ -2,7 +2,7 @@
 
 ## Status
 
-**Architecture review: ACCEPT after revision of the Maestro boundary. Implementation: blocked until explicit user approval.**
+**Architecture review:** S1-01 revision 11 awaits fresh adversarial review; implementation remains blocked until explicit revision-bound user approval.
 
 This package divides the first standalone `ThorChainKit` sprint into seven sequential vertical slices. Each slice concludes with an observable result in the evolving `iOS Example`; S1-06 and S1-07 additionally verify the real Unstoppable Wallet integration surface.
 
@@ -41,8 +41,8 @@ Consolidated verification: [`test-plan.md`](test-plan.md).
 
 ## Assumptions
 
-- The kit will be created in a separate future repository, not inside Unstoppable Wallet.
-- The current folder contains only design/research/report artifacts.
+- This repository is the product authority for the standalone kit; Unstoppable Wallet is a separate future consumer.
+- The repository remains documentation-only until S1-01 receives explicit revision-bound approval.
 - `iOS Example` uses the verified TronKit project/workspace structure, but does not copy its hardcoded mnemonic, plaintext persistence, or demo lifecycle ownership.
 - Vultisig is used only as a THORChain-specific supporting reference and a source of missing protocol details.
 - Production integration follows the exact current-tree Unstoppable contracts; similar names do not constitute evidence.
@@ -57,7 +57,7 @@ Out of scope: send/sign/broadcast, transaction history, native swap, THORName, p
 
 ## Areas Affected by Future Implementation
 
-- new `ThorChainKit.Swift`: package sources, tests, Example app, Maestro workspace;
+- this `ThorChainKit.Swift` repository: package sources, tests, Example app, Maestro workspace;
 - MarketKit: THORChain blockchain/native RUNE metadata and tests;
 - Unstoppable WalletCore: address factory, kit manager/factory, adapter, parser, and Core wiring;
 - Unstoppable host: only existing `AppTests` and manual product acceptance; no acceptance-only runtime is added.
@@ -84,12 +84,12 @@ SHA-256 pins the exact versions of the seven approved specs and the test plan. V
 <!-- SPEC_HASHES_START -->
 | Artifact | SHA-256 |
 |---|---|
-| `S1-01-package-public-api.md` | `402c50b13aba482579b93d54b9a656815908d08d68b5f1b51536034bad5b816d` |
-| `S1-02-network-endpoint-policy.md` | `586c88d968c9a21ff072ba42ea44f6b25eca82aff718a7a179a5e200acafda78` |
-| `S1-03-derivation-address-codec.md` | `348a9e76565a2bca23353e11f33d71102bcdc0b73d98adff6d2ef19d2e4422f0` |
-| `S1-04-thornode-read-client.md` | `6b0db70a01cbe816040461961d839ab12247ab377fba727431f683c5836eebe3` |
-| `S1-05-rune-account-sync.md` | `c042b20d9c2264ad7bcfe271c0b221bfaff06b16a6e3ce56bf84c4a7c8950972` |
-| `S1-06-unstoppable-lifecycle-composition.md` | `4252d1cdeaf672998e4c733f0da5f875202ff4c9a2fc93d8823a7cdee275e7f6` |
-| `S1-07-unstoppable-rune-surface.md` | `4694f0a5b67607dd552a1887b03998b7b182bb7451055f863dff66ffe01940ba` |
-| `test-plan.md` | `4c08ea814da8a8ba6a6426dea61a21a21b8bf3bfd4653714503c49c1d0849a45` |
+| `S1-01-package-public-api.md` | `3c42cf77364c6ca27388ec56a1573395ca7fba9b48ddb89f4ae371af79bbd53a` |
+| `S1-02-network-endpoint-policy.md` | `641fa0320d313c8134b8b748f3e451842eb882653b7c849e8fd0301884307585` |
+| `S1-03-derivation-address-codec.md` | `bb06bdfeae3f6b5dfa54b7b49c689ade3fc6454b7666f158e1c59b5e2554d58a` |
+| `S1-04-thornode-read-client.md` | `c2d51c8be3a19fdd96ea21e6501aed3d27489a675ef455defa444118a0db9595` |
+| `S1-05-rune-account-sync.md` | `9ce0432cc1bb75f47dd803d9db8c57f5cd24c87d86a9d7bc61ffe33a215ce305` |
+| `S1-06-unstoppable-lifecycle-composition.md` | `fc6bc88fa09aa18223e52edf22a35f129f871b5c4a9d9c59a370c91604854827` |
+| `S1-07-unstoppable-rune-surface.md` | `9da09bfc288bf9e43565f503d2db06b29f57291f0870c1d9729f9d092e2f502c` |
+| `test-plan.md` | `b038715f2fee6287cc12013c8b135f0dddc4adf3970797a5a141d69be40043fb` |
 <!-- SPEC_HASHES_END -->

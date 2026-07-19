@@ -1,6 +1,6 @@
 # S1-03 — Account Derivation and Address Codec
 
-**Status:** design ready, implementation blocked pending approval.
+**Status:** synchronized to S1-01 revision 11 after revision-10 adversarial REVISE; implementation blocked pending fresh review and approval.
 **Risk:** high/cryptographic boundary.
 **Observable outcome:** an independent seed/public-key vector produces the expected THORChain address; checksum, payload length, mixed case, and wrong-network HRP are rejected before any network/signing call.
 
@@ -30,8 +30,8 @@ In scope:
 - default derivation path;
 - documented default path and host derivation contract through the existing HdWalletKit;
 - address derivation from a compressed public key;
-- self-contained Cosmos-compatible Bech32 encode/decode/convertBits;
-- strict network-aware parser/normalizer;
+- public Cosmos-compatible Bech32 payload encoding built on the S1-01 decoder/convertBits implementation;
+- reuse of S1-01's strict network-aware parser/normalizer;
 - official, cross-library, and negative vectors;
 - zeroization/retention rules for temporary private material.
 
@@ -52,11 +52,7 @@ Sources/ThorChainKit/Crypto/AccountAddressDeriving.swift
 Sources/ThorChainKit/Crypto/AccountAddressFactory.swift
 Sources/ThorChainKit/Crypto/CosmosAccountAddressDeriver.swift
 Sources/ThorChainKit/Crypto/Secp256k1PublicKeyValidator.swift
-Sources/ThorChainKit/Address/Bech32Codec.swift
-Sources/ThorChainKit/Address/BitConversion.swift
 Sources/ThorChainKit/Address/AddressCodec.swift
-Sources/ThorChainKit/Address/AddressError.swift
-Sources/ThorChainKit/Models/Address.swift
 Tests/ThorChainKitTests/DerivationTests.swift
 Tests/ThorChainKitTests/AddressCodecTests.swift
 Tests/ThorChainKitTests/Fixtures/AddressVectors.json
@@ -94,6 +90,8 @@ public struct AddressCodec: Sendable {
 }
 ```
 
+`AddressCodec.decode` delegates to the fail-closed `Address.init(_:, network:)` delivered in S1-01. S1-03 adds the public payload-to-address encoder plus derivation; it does not add a second parser, unchecked initializer, or alternate network-binding rule.
+
 `AccountAddressDeriving` remains an internal DI seam. The only public derivation boundary is `AccountAddressFactory.address(compressedPublicKey:network:)`; the parameter name is exactly `compressedPublicKey` everywhere so the caller cannot assume support for the uncompressed form.
 
 Mnemonic/seed and HdWalletKit remain in the WalletCore account layer; `Kit.instance` receives an already constructed `Address`. ThorChainKit adds HsCryptoKit `1.3.2` for HASH160 primitives and a direct dependency on the `secp256k1` product from `secp256k1.swift` `0.10.0`. The direct dependency is mandatory: a Swift module cannot be imported as an accidental transitive dependency of HsCryptoKit. HdWalletKit does not become a kit dependency. This makes the read-only kit suitable for future watch-only support without changing the sync layer.
@@ -116,17 +114,11 @@ S1-03 changes `Package.swift`:
 
 In S1-06, private derivation is performed in `AccountAddress.thorChainAddress(account:)` through the existing HdWalletKit, after which the compressed public key is passed to `ThorChainKit`.
 
-## `Address` Invariants
+## Inherited `Address` Invariants and S1-03 Additions
 
-- input is non-empty and contains no surrounding whitespace;
-- the entire string is lowercase or the entire string is uppercase; mixed case is prohibited;
-- the encoder always returns the canonical lowercase form;
-- classic Bech32 checksum is valid;
-- HRP is an exact case-insensitive match for `network.accountHrp`, canonicalized to lowercase;
-- decoded payload is exactly 20 bytes;
-- convertBits leaves no non-zero padding;
-- after canonical re-encoding, the string matches the normalized input;
-- `Address.network` stores validated identity rather than deriving it from the prefix later;
+S1-01 already owns non-empty/whitespace, case, classic checksum, exact HRP, strict padding, 20-byte payload, canonical re-encode, and stored-network validation. S1-03 preserves those rules and adds:
+
+- the public encoder always returns the same canonical lowercase representation accepted by S1-01;
 - the compressed public key is exactly 33 bytes and has prefix `0x02` or `0x03`;
 - `secp256k1_ec_pubkey_parse` successfully parses the entire input: length and prefix are insufficient because the x-coordinate may not represent a point on the curve.
 
@@ -135,16 +127,7 @@ In S1-06, private derivation is performed in `AccountAddress.thorChainAddress(ac
 ## Errors
 
 ```swift
-public enum AddressError: Error, Equatable {
-    case empty
-    case invalidCharacter(Character)
-    case mixedCase
-    case tooLong
-    case missingSeparator
-    case invalidChecksum
-    case invalidPadding
-    case wrongHrp(expected: String, actual: String)
-    case invalidPayloadLength(expected: Int, actual: Int)
+public enum AccountAddressError: Error, Equatable {
     case invalidCompressedPublicKeyLength(Int)
     case invalidCompressedPublicKeyPrefix(UInt8)
     case invalidSecp256k1Point
@@ -152,7 +135,7 @@ public enum AddressError: Error, Equatable {
 }
 ```
 
-No `return ""`, `try?`, `Bool isDerived`, or string-only errors. `Secp256k1PublicKeyValidator` performs C parsing through `secp256k1.Context.raw`; it does not accept a key merely because its length looks correct.
+S1-01's `AddressError` remains the public codec/validation error surface. `AccountAddressError` is limited to S1-03 public-key derivation. No `return ""`, `try?`, `Bool isDerived`, or string-only errors. `Secp256k1PublicKeyValidator` performs C parsing through `secp256k1.Context.raw`; it does not accept a key merely because its length looks correct.
 
 ## Secret-Handling Rules
 
@@ -216,11 +199,7 @@ The fixture mnemonic must be an explicitly public test mnemonic with no funds.
 
 - encode/decode mainnet round trip;
 - valid uppercase input is canonicalized to lowercase;
-- mixed case is rejected;
-- one-character checksum corruption is rejected;
-- valid `sthor`/`cthor` is rejected by mainnet;
-- 19/21/32-byte payloads are rejected;
-- invalid charset/separator/padding/length is rejected;
+- S1-01 negative vectors are rerun through the public `AddressCodec.decode` wrapper to prove there is no divergent parser;
 - BIP173 generic valid/invalid checksum vectors;
 - fuzz/property: random 20-byte payload `decode(encode(x)) == x`;
 - the parser never crashes on arbitrary UTF-8 strings.
@@ -249,6 +228,10 @@ let compressedPublicKey = try wallet
 ```
 
 Changing `xPrivKey`, account, index, chain, or curve is a fixture-breaking design change, not an implementation detail.
+
+## Slice-versioned contract gates
+
+S1-03 adds `Tests/ThorChainKitTests/Fixtures/S1-03-public-symbols.txt` and `Scripts/verify-s1-03.sh`; its CI job compares the generated public graph exactly with the S1-03 baseline and requires every canonical declaration in both S1-01 and S1-02 baselines to remain an unchanged subset. New codec/derivation declarations appear only in the S1-03 exact baseline; prior removal or signature mutation fails. S1-03 repeats S1-01's exact production factory capability audit because derivation remains a separate public value operation and does not change `Kit.instance` composition.
 
 ## Acceptance Criteria
 

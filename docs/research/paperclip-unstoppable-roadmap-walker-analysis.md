@@ -164,21 +164,20 @@ The comment must precede PATCH. In the old API, attempting to write a comment af
 
 ## Roadmap marker contract
 
-The old parser considered a slice complete if it found `**Status:** ✅` within the three lines after the heading. This is insufficient validation for ThorChain, so the selection rule is preserved while the marker content is strengthened:
+The old parser considered a slice complete if it found `**Status:** ✅` within the three lines after the heading. This is insufficient validation for ThorChain. ThorChain instead uses the exact sprint table row and a dedicated status cell:
 
 ```markdown
-### S1.01 Package Public API
-**Status:** ✅ Implemented — PR #42 — merge `abc1234` — 2026-07-17
+| S1-01 | Package and public API | standalone package builds | — | ✅ Implemented — PR #42 — 2026-07-17 |
 ```
 
 Mandatory rules:
 
 - real PR number, no `#TBD`;
-- merge commit, not an intermediate implementation commit;
 - marker is added in the feature PR for the same slice;
 - roadmap-only PR is prohibited;
-- marker is verified after merge on the integration branch;
-- heading/marker format is checked by a separate deterministic lint.
+- Reviewer/QA/CI cite one final PR `headRefOid`, and any later push invalidates that evidence;
+- after merge, the CTO separately records `mergeCommit.oid`, verifies it is on the integration branch, and verifies the PR-number marker there;
+- slice-row/status-cell format is checked by a separate deterministic lint.
 
 ## What the live history establishes
 
@@ -231,7 +230,7 @@ The cleaned model is carried over:
 - **ThorChainCTO** owns child phases 1, 3, and 7, but does not select a second slice in parallel.
 - **ThorChainCodeReviewer**, **ThorChainSwiftEngineer**, and **ThorChainQAEngineer** retain independent phases.
 - One parent walker serves `ThorChainKit.Swift` and a single integration branch.
-- Slice headings have stable IDs `S1.01`, `S1.02`, …; each links to a separate detailed spec.
+- Slice rows have stable IDs `S1-01`, `S1-02`, …; each links to a separate detailed spec.
 - Every child verifies the kit and its `iOS Example`; Maestro applies only to the Example app, not to Unstoppable.
 - Host-integration slices use Unstoppable adapter/AppTests acceptance, but do not add Maestro there.
 - The new Gimle evidence/design approval gate applies before implementation.
