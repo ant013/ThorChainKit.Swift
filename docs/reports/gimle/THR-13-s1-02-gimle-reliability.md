@@ -1,7 +1,7 @@
-# Gimle reliability report: THR-13 S1-02 revision 14
+# Gimle reliability report: THR-13 S1-02 revision 15
 
 - Task: THR-13
-- Workflow/phase: `analog_change` / `design` rework after discovery 2/2
+- Workflow/phase: `analog_change` / `design` rework after closure 1/5
 - Trust: **YELLOW**
 - Repository/base: `ThorChainKit.Swift@f7da1ce7b0b16c9a44b339d9bdfc5e2c9404dfc9`
 - Branch: `docs/THR-13-network-endpoint-policy`
@@ -19,7 +19,7 @@ This committed report is the redacted repository view. The canonical machine sta
 - Analog slices/candidates: 2/10.
 - Defects/limitations: 4 — target and lifecycle coverage gaps, one fixed caller query, and one historical Serena environment drift.
 
-`YELLOW` is required because Palace has no ThorChainKit or ZcashLightClientKit mapping, and MarketKit has no explicit indexed commit even though its identity and dominant symbol commit match. Current target and lifecycle truth therefore comes from codebase-memory plus exact Git, Serena, and targeted `rg`. Current TronKit and EvmKit mappings agree with their exact checkouts; pinned Vultisig evidence was verified directly. Target Serena resolves the exact Swift workspace. Revision 14 changes no analog selection: it is a normative design rework of partial-result retention, cancellation linearization, generation-bound health, redaction, evidence schema, and CI execution policy.
+`YELLOW` is required because Palace has no ThorChainKit or ZcashLightClientKit mapping, and MarketKit has no explicit indexed commit even though its identity and dominant symbol commit match. Current target and lifecycle truth therefore comes from codebase-memory plus exact Git, Serena, and targeted `rg`. Current TronKit and EvmKit mappings agree with their exact checkouts; pinned Vultisig evidence was verified directly. Target Serena resolves the exact Swift workspace. Revision 15 changes no analog selection: it narrowly makes live winner validation consistent with the already-approved deterministic selection rule.
 
 ## Evidence calls
 
@@ -92,7 +92,7 @@ The accepted evidence preserves actor-owned serialized state, reset, monotonic h
 
 Independent discovery 2/2 at exact head `0f26a98b715e011e2272ca0e4cd58e5984b1d557` exhausted discovery with no Critical finding. Five IDs are closed: `S02-EVID-001`, `VOP-S02-01`, `VOP-S02-02`, `VOP-S02-03`, and `VOP-S02-06`. Five High IDs remain frozen for closure: `S102-SEC-001`, `S102-SEC-002`, `S02-ARCH-001`, `S102-SEC-003`, and `VOP-S02-04`.
 
-Revision 14 returns the canonical state to design rework and responds without changing the verified analog family:
+Revision 14 responded without changing the verified analog family:
 
 - three independently indexed request outcomes preserve observed foreign identity across partial Cosmos failures;
 - the failure algebra compiles, every result retains family/role/request, and stale-generation leases cannot mutate health;
@@ -101,10 +101,14 @@ Revision 14 returns the canonical state to design rework and responds without ch
 - live evidence has an exact schema-v1/source/path/head contract with mechanical fixture rejection;
 - routine verification is local-first and GitHub-hosted macOS is one explicit final exact-PR-head gate with no PR/push/`main` trigger.
 
+Independent closure 1/5 at exact head `4dd51c36eda2495a5cfb84ec6fd382be131ff187` closed `S102-SEC-001`, `S102-SEC-002`, `S02-ARCH-001`, and `S102-SEC-003`. It retained only `VOP-S02-04`: the schema accepted any eligible selected family instead of requiring the deterministic greatest-Comet-height/first-on-tie winner. Revision 15 requires validator recomputation and adds lower-height and later-equal-height-tie mutants.
+
+The operator's CI transition clarification adds no analog claim. Current GitHub documentation establishes that `workflow_dispatch` must exist on the default branch, workflow runs use the version at the event SHA/ref, and open pull-request events use a merge ref. Revision 15 therefore specifies a separately recorded two-path CI-policy bootstrap whose candidate merge ref has no PR trigger and whose merged commit has no push trigger, verified locally and through read-only zero-run evidence before the product branch is created.
+
 Pre-approval checks:
 
 - `git diff --check` — pass.
-- `swift test` — pass at the revision-13 review head, 18 tests and 0 failures; revision-14 documentation re-verification is recorded at its pushed head.
+- `swift test` — pass at the revision-14 review head, 18 tests and 0 failures; revision-15 documentation re-verification is recorded at its pushed head.
 - Absolute-path/credential scan of the changed design files — pass; no new operator path or secret was added.
 
-No implementation-specific S1-02 test, Maestro, hosted workflow, or live probe was run because implementation remains blocked pending independent closure review and explicit approval of revision 14.
+No implementation-specific S1-02 test, Maestro, hosted workflow, or live probe was run because implementation remains blocked pending independent closure review and explicit approval of revision 15.

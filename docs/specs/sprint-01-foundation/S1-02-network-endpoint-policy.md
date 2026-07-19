@@ -1,6 +1,6 @@
 # S1-02 — Network and Endpoint Policy
 
-**Status:** revision 14 resolves the five frozen discovery-2 blockers and the local-first CI budget requirement; implementation remains blocked pending independent closure review and explicit revision-bound approval.
+**Status:** revision 15 resolves the remaining closure-1 winner-validation blocker and makes the accepted local-first CI transition executable without a bootstrap runner allocation; implementation remains blocked pending independent closure review and explicit revision-bound approval.
 **Risk:** high/security boundary.
 **Observable outcome:** the kit accepts only provider families consistent with `Network`; wrong-chain, stale, mixed-family, retryable, terminal, and cancelled operations have deterministic, distinct outcomes.
 
@@ -33,7 +33,7 @@ Out of scope:
 - S1-01 revision 11 at `f7da1ce` is the immutable public-value baseline for this slice.
 - Callers explicitly group one Cosmos REST URL and one CometBFT URL into a family; matching hosts are not required, but both roles must independently prove identity and freshness.
 - Provider presets and opt-in live credentials are deployment inputs, not part of the S1-02 policy contract.
-- There are no open design questions for revision 14. Any material change to identity precedence, waiter ownership, diagnostic redaction, stale-family fallback, CI execution ownership, or failover ownership requires a new spec revision and approval.
+- There are no open design questions for revision 15. Any material change to identity precedence, waiter ownership, diagnostic redaction, stale-family fallback, CI execution ownership, live-winner validation, or failover ownership requires a new spec revision and approval.
 
 ## Files
 
@@ -312,7 +312,7 @@ Each family is used at most once per logical read. Broadcast receives a separate
 
 ### Endpoint family contract
 
-| Field | Revision-14 decision |
+| Field | Revision-15 decision |
 |---|---|
 | Analog family | Primary: Tron `RpcSource`. Supporting: the inherited S1-01 endpoint values and Vultisig LCD/RPC role routing. Rejected: Evm `NodeApiProvider` URL rotation. |
 | Coverage | Contract/composition/consumer from Tron; runtime-safe value and error contract plus tests from S1-01; THOR role boundary from Vultisig. No role waiver. |
@@ -325,7 +325,7 @@ Each family is used at most once per logical read. Broadcast receives a separate
 
 ### Probe, health, selection, and lease lifecycle
 
-| Field | Revision-14 decision |
+| Field | Revision-15 decision |
 |---|---|
 | Analog family | Primary lifecycle spine: Zcash `LatestBlocksDataProviderImpl`. Supporting: Vultisig `RPCHealthProbe` injection/fixtures, S1-01 policy bounds, and Vultisig THOR LCD/RPC split. Rejected: Evm broad recursive failover and MarketKit wall-clock/untyped scheduler. |
 | Coverage | Actor ownership/reset/composition/consumers/test substitution from Zcash; probe contract/error fixture shape from Vultisig; policy/trust bounds from S1-01; THOR role split from Vultisig. Evm and MarketKit challenge retry, task, clock, and redaction behavior. No role waiver. |
@@ -386,7 +386,7 @@ Production `Kit.instance` remains inert. The package adds one `@_spi(Testing) pu
 1. Probe exactly two approved mainnet families supplied through operator environment variables; no credentials or URLs are accepted on the command line.
 2. Assert exact `thorchain-1` from Cosmos node info, Cosmos block header, and Comet status.
 3. Assert both heights are positive, cross-role skew is bounded, and Comet is not catching up.
-4. With two providers, compare lag and select the expected family.
+4. With two providers, compute the deterministic winner from the recorded eligible families: greatest Comet height, then the first configuration-order entry on an equal-height tie.
 5. Record the exact implementation head and one sanitized record per family: family ID, role origins, local expected identity, identity classification, heights, skew, catching-up, outcome code, and timestamp. Never record observed raw identity or arbitrary text.
 
 The exact opt-in command is:
@@ -443,14 +443,17 @@ The UTF-8 JSON document has exactly these keys; unknown or missing keys fail val
 }
 ```
 
-`schemaVersion` must be integer `1`; `source` must equal `thorchainkit-s1-02-live`; `implementationHead` must be the clean current 40-character lowercase Git SHA and the output directory name; `generatedAt` must be canonical UTC RFC 3339 with whole seconds; `expectedChainId` must equal the selected local `Network.expectedChainId`; `families` must contain exactly the two supplied IDs once each; `identityClassification` and `outcome` must be the exact literals `expected` and `eligible`; heights must be positive signed 64-bit integers; `heightSkew` must be the nonnegative absolute difference and within policy; `catchingUp` must be `false`; and `selection.familyId` must name one listed eligible family with a nonnegative unsigned 64-bit generation.
+`schemaVersion` must be integer `1`; `source` must equal `thorchainkit-s1-02-live`; `implementationHead` must be the clean current 40-character lowercase Git SHA and the output directory name; `generatedAt` must be canonical UTC RFC 3339 with whole seconds; `expectedChainId` must equal the selected local `Network.expectedChainId`; `families` must contain exactly the two supplied IDs once each in configuration order; `identityClassification` and `outcome` must be the exact literals `expected` and `eligible`; heights must be positive signed 64-bit integers; `heightSkew` must be the nonnegative absolute difference and within policy; and `catchingUp` must be `false`. The validator must independently recompute the deterministic winner from the recorded array—greatest `cometHeight`, then lowest array index on a tie—and require `selection.familyId` to equal that family ID. `selection.poolGeneration` must be a nonnegative unsigned 64-bit integer.
 
-Each origin has exactly `scheme`, `host`, and `port`; scheme must be `https`, host must be lowercase and nonempty, and port is `null` or an integer in `1...65535`. The validator recursively rejects keys or string values that can encode `url`, `userinfo`, `path`, `query`, `fragment`, response/body/error text, or actual/observed/raw chain IDs. It also rejects duplicate JSON keys. `verify-s1-02-live-evidence.swift` validates the exact shape, source discriminator, head/directory binding, arithmetic, family set, and redaction before atomic rename. Fixture evidence uses source `thorchainkit-s1-02-fixture`, a different schema, and `build/s1-02-fixture/`; either source/path supplied to the other validator fails.
+Each origin has exactly `scheme`, `host`, and `port`; scheme must be `https`, host must be lowercase and nonempty, and port is `null` or an integer in `1...65535`. The validator recursively rejects keys or string values that can encode `url`, `userinfo`, `path`, `query`, `fragment`, response/body/error text, or actual/observed/raw chain IDs. It also rejects duplicate JSON keys. `verify-s1-02-live-evidence.swift` validates the exact shape, source discriminator, head/directory binding, arithmetic, family set/order, deterministic winner, and redaction before atomic rename. Its mandatory mutants include selecting the lower-Comet-height family and selecting the later array entry on an equal-height tie; both must fail. Fixture evidence uses source `thorchainkit-s1-02-fixture`, a different schema, and `build/s1-02-fixture/`; either source/path supplied to the other validator fails.
 
 ## Local-first CI budget policy
 
 - Routine `swift build`, narrow/full tests, Swift 5 strict-concurrency warnings-as-errors, verifier/mutant scripts, exact-destination Example simulator builds, and both Maestro flows run on the operator MacBook. The Engineer, CodeReviewer, and QA cite exact local commands, exit status, head SHA, and retained redacted output in their role-separated evidence.
-- `.github/workflows/ci.yml` exposes a macOS job only through `workflow_dispatch` with required `pr_number`, exact 40-character `expected_head_sha`, and confirmation token `FINAL_S1_02_GATE`. It has no `pull_request`, `pull_request_target`, `push`, `schedule`, or other automatic macOS trigger. `Scripts/verify-s1-02-ci-policy.sh` parses the workflow and fails if this trigger allowlist changes.
+- GitHub requires a `workflow_dispatch` workflow to exist on the default branch before it can receive dispatches, while each run uses the workflow version at its event SHA/ref. A `pull_request` event uses `refs/pull/<number>/merge` and its merge commit. These rules require a separate zero-run bootstrap before the product PR; they are documented in GitHub's [workflow model](https://docs.github.com/en/actions/concepts/workflows-and-actions/workflows), [workflow-dispatch event](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch), and [pull-request event](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request).
+- After revision-bound approval, ThorChainSwiftEngineer first opens a minimal CI-policy bootstrap PR from the then-current `main`. Its only permitted paths are `.github/workflows/ci.yml` and `Scripts/verify-s1-02-ci-policy.sh`; it contains no S1-02 product source, tests, Example, Maestro, roadmap, or slice-document edits. The candidate workflow replaces `pull_request` plus `push: main` with `workflow_dispatch` only and requires `pr_number`, exact 40-character `expected_head_sha`, and confirmation token `FINAL_S1_02_GATE`.
+- The bootstrap PR's merge ref therefore contains no `pull_request` trigger, so opening or updating it starts no hosted job. Its merged `main` commit contains no `push` trigger, so merging it starts no hosted job. CodeReviewer reviews the exact bootstrap head and the CTO runs the policy verifier locally, confirms through the GitHub runs API that neither event created a run, records bootstrap PR/base/head/merge commit separately, and only then starts the product implementation branch from updated `main`.
+- `Scripts/verify-s1-02-ci-policy.sh bootstrap --base-ref <pre-bootstrap-main> --candidate-ref <bootstrap-head>` requires the base workflow to lack `workflow_dispatch`, permits exactly the two bootstrap paths, proves the candidate has no `pull_request`, `pull_request_target`, `push`, `schedule`, or other automatic trigger, and asserts the required dispatch inputs. `steady-state --ref <implementation-head>` repeats the trigger/input/preflight checks and rejects any automatic macOS or duplicate `main` job. Mutants cover each forbidden trigger, an extra bootstrap path, changed job commands beyond the trigger/preflight transition, omitted input, mutable checkout, mismatched PR head, and duplicate merge-time suite.
 - The dispatch preflight reads the open PR from GitHub, requires base `main`, requires its current `headRefOid` to equal `expected_head_sha`, checks out that immutable SHA, and records PR number, workflow run ID/URL, and SHA. The CTO/operator dispatches it once, immediately before merge, only after local Reviewer and QA evidence is exact-head green.
 - Intermediate PR pushes start no hosted macOS work. A failed final run requires a changed/fixed PR head and a new exact-head review before another dispatch; a successful run for a SHA is not rerun. Pushing or merging that already-verified SHA to `main` starts no duplicate full suite.
 - The one final hosted run executes the same deterministic package, strict-concurrency, verifier, Example simulator, and Maestro suite; the opt-in mainnet live probe remains local and separate. Reviewer/QA/CTO closure evidence cites both local output and, when dispatched, the single hosted run URL/status/SHA.
@@ -468,27 +471,25 @@ swift test --filter EndpointPoolTests
 swift test --filter EndpointDiagnosticsTests
 swift test
 Scripts/verify-s1-02.sh
-Scripts/verify-s1-02-ci-policy.sh
+Scripts/verify-s1-02-ci-policy.sh steady-state --ref HEAD
 Scripts/test-run-maestro.sh
 THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh s1-02
 ```
 
 The live command above runs separately after deterministic gates. Its absence is `UNRUN`, never pass/skip; an attempted unavailable or invalid run is failure evidence.
 
+The bootstrap command runs earlier, on the standalone CI-policy PR, with its exact base and head refs. The bootstrap PR is recorded separately and never populates the roadmap's S1-02 Implemented marker; that marker names only the later product implementation PR.
+
 ## Slice-versioned contract gates
 
 S1-02 adds `Tests/ThorChainKitTests/Fixtures/S1-02-public-symbols.txt` and `Scripts/verify-s1-02.sh`; the S1-02 CI job compares the generated public graph exactly with that current-slice baseline and also requires every canonical declaration in `S1-01-public-symbols.txt` to remain an unchanged subset. New S1-02 declarations appear only in the S1-02 exact baseline; removal or signature mutation of an S1-01 declaration fails. The S1-02 script repeats S1-01's exact production factory capability audit because this slice does not compose probing or networking into `Kit.instance`. A separate SPI syntax fixture permits only `TestingEndpointPolicySession`/`TestingEndpointPolicySnapshot`, proves `ExampleRuntime` reaches the real pool through that root, and rejects SPI import anywhere outside tests and `iOS Example`.
 
-## Frozen discovery-2 closure matrix
+## Frozen closure matrix after closure 1/5
 
-Discovery is exhausted at 2/2. The five closed-at-discovery IDs remain closed (`S02-EVID-001`, `VOP-S02-01`, `VOP-S02-02`, `VOP-S02-03`, `VOP-S02-06`). Closure review may evaluate only the five open IDs below plus a direct Critical/High regression caused by revision 14.
+Discovery is exhausted at 2/2. Closure 1/5 closed `S102-SEC-001`, `S102-SEC-002`, `S02-ARCH-001`, and `S102-SEC-003`; the five closed-at-discovery IDs also remain closed. Closure 2/5 may evaluate only `VOP-S02-04`, the frozen operator CI-bootstrap acceptance requirement, and a direct Critical/High regression caused by revision 15.
 
-| Stable blocker | Revision-14 resolution | Required closure evidence |
+| Stable blocker | Revision-15 resolution | Required closure evidence |
 |---|---|---|
-| `S102-SEC-001` | Three independent indexed request results preserve every observed identity; identity classification precedes partial failure/shape validation. | A foreign node-info or block identity plus sibling timeout/invalid and a healthy family still locks deterministically. |
-| `S102-SEC-002` | `RoleProbeFailure: Error`; each outcome retains family/role/request; health mutation accepts and validates the originating lease generation. | The algebra compiles; missing/duplicate/mismatched outcomes fail; a pre-reset lease cannot reinstall health. |
-| `S02-ARCH-001` | One synchronous cancellation latch is shared by `onCancel`, actor enrollment, and stable-order commit locking; unknown cancellation messages retain no state. | Pre-cancel, registration race, completion race, last-waiter suppression, reset, and cancellation-insensitive probe tests are implementable without sleeps. |
-| `S102-SEC-003` | Provider errors retain only local expected identity plus fixed classification/index codes; no actual/raw identity associated value exists. | Compile/API audit plus sentinels prove foreign IDs cannot survive in errors, logs, UI, xUnit, Maestro, or JSON. |
-| `VOP-S02-04` | Live schema v1 fixes every discriminator/key/type/value rule, forbids extras/duplicates, binds source/path/head, and mechanically excludes fixture evidence. | Validator mutants cover wrong source/head/path, keys/types/counts/arithmetic/origins, fixture substitution, duplicate keys, and redaction. |
+| `VOP-S02-04` | Live schema v1 now binds `selection.familyId` to a validator-recomputed winner: greatest recorded Comet height, then first configuration-order entry on a tie. | Existing schema mutants plus explicit lower-height selection and later-equal-height-tie selection mutants both fail. |
 
 The operator's local-first CI budget is an additional frozen acceptance requirement. Closure must also verify that the plan includes the manual exact-head workflow contract and that the future CI-policy verifier rejects automatic hosted macOS triggers or a repeated `main` gate.

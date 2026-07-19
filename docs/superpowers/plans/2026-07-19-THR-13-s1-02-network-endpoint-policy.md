@@ -2,7 +2,7 @@
 
 ## Objective and gate
 
-Implement only S1-02 after explicit approval of spec revision 14. The slice adds independently retained three-request family probing, fail-closed identity/freshness selection, cancellation-linearized actor leases, generation-bound health, origin-only diagnostics, deterministic fixture acceptance, an exact-schema opt-in mainnet gate, and local-first verification with one manual final hosted macOS run. Production `Kit.instance` stays inert; S1-04 remains the sole business-read/failover owner.
+Implement only S1-02 after explicit approval of spec revision 15. The slice adds independently retained three-request family probing, fail-closed identity/freshness selection, cancellation-linearized actor leases, generation-bound health, origin-only diagnostics, deterministic fixture acceptance, an exact-schema and deterministic-winner opt-in mainnet gate, and local-first verification with one manual final hosted macOS run. Production `Kit.instance` stays inert; S1-04 remains the sole business-read/failover owner.
 
 This plan is tests-before-code and is bound with:
 
@@ -11,12 +11,30 @@ This plan is tests-before-code and is bound with:
 - `docs/reports/gimle/THR-13-s1-02-gimle-reliability.md`;
 - the integrity pins in `docs/specs/sprint-01-foundation/README.md`.
 
-Discovery is exhausted at 2/2. No implementation starts until independent closure review ACCEPTs revision 14's five frozen blockers and local-first CI contract, then a user confirmation names that exact pushed revision.
+Discovery is exhausted at 2/2 and closure 1/5 closed four of five frozen IDs. No implementation starts until independent closure review ACCEPTs revision 15's remaining `VOP-S02-04` winner-validation correction and the zero-run CI bootstrap transition, then a user confirmation names that exact pushed revision.
+
+## 0. Bootstrap manual dispatch on `main` without a hosted run
+
+- Suggested owner: ThorChainSwiftEngineer after revision-15 approval; CodeReviewer reviews, CTO merges.
+- Dependencies: exact revision-15 approval; this precedes every product implementation step.
+- Basis: GitHub requires `workflow_dispatch` to exist on the default branch, resolves each run from its event SHA/ref, and uses `refs/pull/<number>/merge` for open pull-request events. The cited official workflow/event references are linked from the spec.
+- Test first:
+  - add bootstrap mode to `Scripts/verify-s1-02-ci-policy.sh` and mutants for every automatic trigger, a third changed path, trigger-unrelated job drift, missing dispatch input, mutable checkout, mismatched head, and duplicate `main` execution;
+  - require exact base/head inputs and parse both workflow revisions from Git;
+  - after PR open/update and after merge, query the GitHub runs API read-only and require zero runs for the bootstrap merge ref and merge commit.
+- Implementation:
+  - create a branch from then-current `main` changing only `.github/workflows/ci.yml` and `Scripts/verify-s1-02-ci-policy.sh`;
+  - replace `pull_request`/`push: main` with the final required `workflow_dispatch` inputs while preserving existing job commands except the dispatch preflight;
+  - open and update the CI-policy PR: its merge-ref workflow has no PR trigger, so it allocates no runner;
+  - after exact-head CodeReviewer ACCEPT and local CTO verification, merge it: its `main` workflow has no push trigger, so it allocates no runner;
+  - record bootstrap PR number, base/head, merge commit, local commands, reviewer evidence, and zero-run API evidence separately; do not update the roadmap Implemented marker.
+- Acceptance: `workflow_dispatch` is available on default `main` without consuming hosted minutes, and the later product branch starts from that merge commit.
+- Narrow checks: `Scripts/verify-s1-02-ci-policy.sh bootstrap --base-ref <pre-bootstrap-main> --candidate-ref <bootstrap-head>` plus read-only GitHub runs-API queries.
 
 ## 1. Lock the typed probe and redaction contracts
 
 - Suggested owner: ThorChainSwiftEngineer after approval.
-- Dependencies: approved revision-14 gate.
+- Dependencies: completed bootstrap step 0 and product branch from updated `main`.
 - Test first:
   - add `LiveNodeProbeTests` for the exact node-info, latest-block, and Comet status requests;
   - add expected node info plus a foreign latest-block header, including a healthy sibling;
@@ -115,10 +133,10 @@ Discovery is exhausted at 2/2. No implementation starts until independent closur
 - Test first:
   - exact discovered/non-skipped allowlists for `EndpointPoolTests`, `LiveNodeProbeTests`, and `EndpointDiagnosticsTests`;
   - public symbol subset/exact-current-slice fixtures and production factory inertness;
-  - live validator mutants for wrong source/head/path/schema, missing/extra/duplicate keys or families, wrong types/literals/arithmetic/origins, fixture substitution, sentinel leakage, malformed JSON, and unavailable provider.
+  - live validator mutants for wrong source/head/path/schema, missing/extra/duplicate keys or families, wrong types/literals/arithmetic/origins, fixture substitution, sentinel leakage, malformed JSON, unavailable provider, selection of the lower-Comet-height family, and selection of the later family on an equal-height tie.
 - Implementation:
   - add the S1-02 verifier and fixtures;
-  - add `verify-s1-02-live.sh` and `verify-s1-02-live-evidence.swift` with exact schema-v1 keys/types/literals, duplicate/unknown-key rejection, source/path/head binding, arithmetic, opt-in environment, and atomic output semantics;
+  - add `verify-s1-02-live.sh` and `verify-s1-02-live-evidence.swift` with exact schema-v1 keys/types/literals, duplicate/unknown-key rejection, source/path/head binding, arithmetic, configuration-order retention, independent recomputation of the greatest-Comet-height/first-on-tie winner, opt-in environment, and atomic output semantics;
   - keep live output beneath ignored `build/s1-02-live/<head>/` and fixture output beneath `build/s1-02-fixture/`.
 - Affected paths:
   - `Tests/ThorChainKitTests/Fixtures/S1-02-public-symbols.txt`;
@@ -127,18 +145,18 @@ Discovery is exhausted at 2/2. No implementation starts until independent closur
   - `Scripts/verify-s1-02-live.sh`;
   - `Scripts/verify-s1-02-live-evidence.swift`;
   - `.github/workflows/ci.yml`.
-- Acceptance: deterministic gates have no skips; live absence is UNRUN, attempted failure is nonzero, and exact source/schema/path validators make fixture/live evidence mechanically non-interchangeable.
+- Acceptance: deterministic gates have no skips; live absence is UNRUN, attempted failure is nonzero, exact source/schema/path validators make fixture/live evidence mechanically non-interchangeable, and lower-height or later-on-tie selections fail validation.
 - Check: `Scripts/verify-s1-02.sh`; run the exact live command from the spec separately when approved providers are available.
 
 ## 6. Enforce local-first CI and the one-run hosted budget
 
 - Dependencies: steps 1–5.
 - Test first:
-  - add `Scripts/verify-s1-02-ci-policy.sh` mutants for `pull_request`, `pull_request_target`, `push`, `schedule`, omitted dispatch inputs, mutable branch checkout, mismatched PR head, and a duplicate `main` job;
+  - run steady-state policy mutants for `pull_request`, `pull_request_target`, `push`, `schedule`, omitted dispatch inputs, mutable branch checkout, mismatched PR head, and a duplicate `main` job;
   - prove the manual workflow requires `pr_number`, `expected_head_sha`, and confirmation token `FINAL_S1_02_GATE`, checks an open PR targeting `main`, and checks out its exact current SHA;
   - prove routine local evidence records the exact head/command/exit status and the hosted job does not invoke the opt-in live probe.
 - Implementation:
-  - replace automatic macOS triggers in `.github/workflows/ci.yml` with `workflow_dispatch` only;
+  - preserve the bootstrap's `workflow_dispatch`-only trigger and extend its event-ref job body with S1-02 commands;
   - run package, strict-concurrency, verifier, Example simulator, and both Maestro flows once in the final hosted job;
   - record workflow run ID/URL, PR, and SHA; never trigger on intermediate pushes or the verified merge/push to `main`.
 - Affected paths:
@@ -146,7 +164,7 @@ Discovery is exhausted at 2/2. No implementation starts until independent closur
   - `Scripts/verify-s1-02-ci-policy.sh`;
   - `Scripts/verify-s1-02.sh`.
 - Acceptance: routine verification is local, automatic hosted macOS triggers fail the policy verifier, and only the CTO/operator can dispatch one final exact-PR-head gate immediately before merge. Self-hosted Mac support is deferred.
-- Narrow check: `Scripts/verify-s1-02-ci-policy.sh`.
+- Narrow check: `Scripts/verify-s1-02-ci-policy.sh steady-state --ref HEAD`.
 
 ## 7. Open one exact-head implementation PR and run role-separated closure
 
@@ -168,10 +186,11 @@ Discovery is exhausted at 2/2. No implementation starts until independent closur
 
 ## Handoff sequence
 
-1. CodeReviewer performs closure 1/5 on the exact revision-14 documentation head, limited to the five open frozen IDs plus direct Critical/High regressions, and either ACCEPTs or returns stable blockers.
+1. CodeReviewer performs closure 2/5 on the exact revision-15 documentation head, limited to `VOP-S02-04`, the frozen operator CI-bootstrap requirement, and direct Critical/High regressions, and either ACCEPTs or returns the stable blocker/requirement gap.
 2. CTO presents a confirmation bound to the latest Paperclip plan revision only after independent ACCEPT.
-3. SwiftEngineer implements tests first and opens the PR; never merges.
-4. CodeReviewer and QA perform local exact-head closure; neither implements fixes.
-5. After the sole hosted exact-head run, QA and CodeReviewer append citations binding that run to their unchanged local evidence; the CTO then performs the merge gate.
+3. After approval, SwiftEngineer opens the two-path CI-policy bootstrap PR; CodeReviewer reviews its exact head, and CTO verifies/records zero PR/push runs before merging it.
+4. SwiftEngineer creates the product branch from post-bootstrap `main`, implements tests first, and opens the separate product PR; never merges.
+5. CodeReviewer and QA perform local exact-head product closure; neither implements fixes.
+6. After the sole hosted exact-product-head run, QA and CodeReviewer append citations binding that run to their unchanged local evidence; the CTO then performs the merge gate. The roadmap marker names only this product PR.
 
 No role may self-review, infer approval, or move business-read ownership from S1-04 into this slice.

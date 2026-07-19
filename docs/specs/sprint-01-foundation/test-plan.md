@@ -97,7 +97,7 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 
 ## S1-02 endpoint-policy gate
 
-Revision 14 adds the following local-first obligations before implementation may be considered complete. They run routinely on the operator MacBook; GitHub-hosted macOS runs them only once through the manual final exact-PR-head gate.
+Revision 15 adds the following local-first obligations before implementation may be considered complete. They run routinely on the operator MacBook; GitHub-hosted macOS runs them only once through the manual final exact-PR-head gate.
 
 | Behavior | Deterministic evidence |
 |---|---|
@@ -113,8 +113,8 @@ Revision 14 adds the following local-first obligations before implementation may
 | Diagnostics/UI | `ProviderError` has no actual/raw identity associated value. Hostile path/body/error/chain-ID sentinels are absent from typed diagnostics, logs, xUnit, Example UI, Maestro artifacts, and live JSON; only family/role/request, origin, local expected identity/classification, height/status, and fixed reason codes remain. |
 | Example execution | The sole Testing SPI session calls the real pool while production `Kit` stays inert; source/syntax gates reject duplicated classification, static outcomes, or SPI imports outside tests/Example. |
 | Slice-exact Maestro | Runner tests prove `s1-01` and `s1-02` each execute exactly one different allowlisted YAML and retain all provenance, containment, JUnit, OCR, and secret canaries. |
-| Live separation | Exact schema-v1 keys/types/literals/arithmetic, source/path/head binding, duplicate/unknown-key rejection, validator mutants, nonzero failure semantics, and distinct fixture/live roots prevent fixture substitution. |
-| Hosted CI budget | A verifier proves the macOS workflow is `workflow_dispatch` only, requires PR/head/confirmation inputs, checks out the current exact PR head, and has no PR/push/main rerun. Reviewer/QA cite local outputs and the one final hosted run when dispatched. |
+| Live separation | Exact schema-v1 keys/types/literals/arithmetic, source/path/head binding, duplicate/unknown-key rejection, and distinct fixture/live roots prevent fixture substitution. The validator recomputes the greatest-Comet-height/configuration-order winner; lower-height selection and later-equal-height-tie mutants must fail. |
+| Hosted CI bootstrap/budget | Bootstrap mode compares pre-bootstrap `main` with a two-path CI-policy PR, proving its merge-ref has no `pull_request` trigger and its merged commit has no `push` trigger; GitHub runs-API evidence records zero runs for both events. Steady-state mode proves `workflow_dispatch` only, required PR/head/confirmation inputs, exact-head checkout, and no merge-time rerun. The bootstrap PR is recorded separately; Reviewer/QA cite local product outputs and the one final hosted product run. |
 
 The narrow-to-broad command order is:
 
@@ -126,12 +126,14 @@ swift test --filter EndpointPoolTests
 swift test --filter EndpointDiagnosticsTests
 swift test
 Scripts/verify-s1-02.sh
-Scripts/verify-s1-02-ci-policy.sh
+Scripts/verify-s1-02-ci-policy.sh steady-state --ref HEAD
 Scripts/test-run-maestro.sh
 THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh s1-02
 ```
 
 The opt-in live command in the S1-02 spec runs locally only after deterministic gates pass. It validates two families and all three identity sources against the exact implementation head. Absence is `UNRUN`, an attempted unavailable/invalid run is nonzero failure, and its sanitized JSON cannot be replaced by fixture evidence.
+
+Before the product branch exists, the separately reviewed bootstrap PR runs `Scripts/verify-s1-02-ci-policy.sh bootstrap --base-ref <pre-bootstrap-main> --candidate-ref <bootstrap-head>` locally. Mutants must fail for every automatic trigger, any third changed path, trigger-unrelated job-command drift, missing dispatch input, mutable checkout, head mismatch, or duplicate `main` suite. Read-only GitHub runs-API checks after PR open/update and after merge must find no run attributable to the bootstrap PR merge ref or merge commit.
 
 ## Verification order per slice
 

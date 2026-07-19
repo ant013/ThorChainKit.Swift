@@ -2,7 +2,7 @@
 
 ## Conclusion
 
-**Current S1-02 decision: REVISE pending closure 1/5.** Discovery is exhausted at 2/2. Independent discovery 2 closed five IDs and froze five open High blockers; revision 14 addresses those blockers plus the operator's local-first CI budget. It may not be presented for approval or implementation until an independent exact-head closure review ACCEPTs.
+**Current S1-02 decision: REVISE pending closure 2/5.** Discovery is exhausted at 2/2. Closure 1/5 closed four of five frozen High blockers and retained only deterministic live-winner validation under `VOP-S02-04`; revision 15 addresses that gap together with the frozen zero-run CI-bootstrap clarification. It may not be presented for approval or implementation until an independent exact-head closure review ACCEPTs both.
 
 The review was performed against the current versions of the seven slice specs and the consolidated test plan. The ThorChainKit, Unstoppable Wallet, and reference-kit source code was not changed.
 
@@ -123,10 +123,22 @@ The operator also froze a local-first CI acceptance requirement. Revision 14 req
 
 Result: **REVISE remains active** until CodeReviewer closure 1/5 verifies the exact pushed revision-14 head, the five frozen responses, and the local-first CI contract.
 
+## S1-02 closure 1/5 — REVISE
+
+The CodeReviewer reproduced all revision-14 digests and reviewed exact pushed head `4dd51c36eda2495a5cfb84ec6fd382be131ff187`. Four frozen IDs closed: `S102-SEC-001`, `S102-SEC-002`, `S02-ARCH-001`, and `S102-SEC-003`. The local-first CI contract was accepted without a new Critical/High regression.
+
+`VOP-S02-04` remained open because the live schema required `selection.familyId` to name any eligible family while the policy requires the greatest verified Comet height and first configuration-order family on a tie. That mismatch allowed a lower-height family or a later equal-height family to pass evidence validation.
+
+Revision 15 requires the validator to recompute the winner from the recorded, configuration-ordered family array and compare it exactly with `selection.familyId`. Two mandatory mutants select the lower-height family and the later family on an equal-height tie; both must fail. Closure 2/5 is limited to this stable ID plus direct Critical/High regressions caused by the correction.
+
+The operator clarified the already-accepted local-first policy before revision 15 could be frozen. Because GitHub accepts `workflow_dispatch` only when the workflow exists on the default branch and resolves workflow content from the event SHA/ref, revision 15 now includes a separate two-path CI-policy bootstrap PR. Its merge-ref removes `pull_request`, its merged commit removes `push`, and both events therefore allocate no runner. A local two-ref verifier plus read-only runs-API evidence proves the transition; only afterward does the product PR start from updated `main` and receive the single final exact-head dispatch. The bootstrap PR is recorded separately and never substitutes for the roadmap's product implementation PR.
+
+Result: **REVISE remains active** until CodeReviewer closure 2/5 verifies the exact pushed revision-15 head.
+
 ## Decision constraints
 
 - Gimle trust remains `RED`; all load-bearing conclusions were reverified in the exact current trees through Serena and targeted `rg`.
 - Maestro CLI is not installed on the current machine, so the Example YAML and runner currently exist only as an asserted design contract and apply exclusively to the future `ThorChainKit/iOS Example`.
 - The user's term `Meteora` was interpreted as Maestro. If it refers to another internal tool, the UI layer must be rebound to its actual contract before implementation.
 - Implementation remains blocked pending independent S1-02 closure ACCEPT and explicit revision-bound user approval.
-- For S1-02 revision 14 specifically, Gimle trust is `YELLOW`, not the earlier Sprint-wide `RED`: current Tron/Evm mappings agree with exact checkouts; ThorChainKit and Zcash lifecycle evidence lack Palace mappings, and MarketKit has no explicit indexed commit. Codebase-memory plus exact Git/Serena/`rg` provides the recorded fallback basis.
+- For S1-02 revision 15 specifically, Gimle trust is `YELLOW`, not the earlier Sprint-wide `RED`: current Tron/Evm mappings agree with exact checkouts; ThorChainKit and Zcash lifecycle evidence lack Palace mappings, and MarketKit has no explicit indexed commit. Codebase-memory plus exact Git/Serena/`rg` provides the recorded fallback basis.
