@@ -2,7 +2,7 @@
 
 ## Objective and gate
 
-Implement only S1-02 after explicit approval of spec revision 13. The slice adds typed three-request family probing, fail-closed identity/freshness selection, actor-owned waiter-aware leases, origin-only diagnostics, deterministic fixture acceptance, and a mechanically separate opt-in mainnet gate. Production `Kit.instance` stays inert; S1-04 remains the sole business-read/failover owner.
+Implement only S1-02 after explicit approval of spec revision 14. The slice adds independently retained three-request family probing, fail-closed identity/freshness selection, cancellation-linearized actor leases, generation-bound health, origin-only diagnostics, deterministic fixture acceptance, an exact-schema opt-in mainnet gate, and local-first verification with one manual final hosted macOS run. Production `Kit.instance` stays inert; S1-04 remains the sole business-read/failover owner.
 
 This plan is tests-before-code and is bound with:
 
@@ -11,24 +11,25 @@ This plan is tests-before-code and is bound with:
 - `docs/reports/gimle/THR-13-s1-02-gimle-reliability.md`;
 - the integrity pins in `docs/specs/sprint-01-foundation/README.md`.
 
-No implementation starts until discovery 2/2 independently ACCEPTs the frozen discovery-1 blocker allowlist and a user confirmation names the resulting exact revision.
+Discovery is exhausted at 2/2. No implementation starts until independent closure review ACCEPTs revision 14's five frozen blockers and local-first CI contract, then a user confirmation names that exact pushed revision.
 
 ## 1. Lock the typed probe and redaction contracts
 
 - Suggested owner: ThorChainSwiftEngineer after approval.
-- Dependencies: approved revision-13 gate.
+- Dependencies: approved revision-14 gate.
 - Test first:
   - add `LiveNodeProbeTests` for the exact node-info, latest-block, and Comet status requests;
   - add expected node info plus a foreign latest-block header, including a healthy sibling;
+  - add foreign node info plus latest-block timeout/invalid, missing/duplicate/extra/request-kind-mismatched outcomes, and strict-concurrency compilation of the complete algebra;
   - add controlled timeout, 429 with/without `Retry-After`, invalid envelope/field, cancellation, and completion permutations;
   - add base-path retention and prohibited-request counts;
   - add hostile path/body/error/chain-ID sentinel tests across diagnostics serialization.
 - Implementation:
-  - add indexed typed observations/failures and the nonthrowing `NodeProbing` seam;
+  - add `RoleProbeFailure: Error`, one indexed typed result for each independent request, and the nonthrowing `NodeProbing` seam that always returns exactly three outcomes;
   - inject a controlled `HTTPTransporting` boundary into `LiveNodeProbe`;
-  - decode and cross-bind Cosmos node-info identity, Cosmos block-header identity/height, and Comet status identity/height/catching-up;
+  - decode and retain Cosmos node-info identity, Cosmos block-header identity/height, and Comet status identity/height/catching-up independently, then classify every observed identity before partial failures;
   - append probe paths to configured base paths;
-  - expose only `EndpointOrigin` and fixed diagnostic codes.
+  - expose only `EndpointOrigin`, local expected identity, and fixed diagnostic codes; no provider error stores an actual/raw observed identity.
 - Affected paths:
   - `Sources/ThorChainKit/Network/NodeProbing.swift`;
   - `Sources/ThorChainKit/Network/LiveNodeProbe.swift`;
@@ -46,22 +47,23 @@ No implementation starts until discovery 2/2 independently ACCEPTs the frozen di
   - same identity/healthy heights, mixed/foreign pool lock, catching-up/stale fallback, highest-height/tie/lag selection;
   - healthy sibling plus timeout/429/invalid versus foreign completion permutations;
   - concurrent first lease and TTL revalidation coalescing;
-  - cancel one of two, cancel all with a cancellation-insensitive probe, and reset during a shared probe;
-  - monotonic TTL, cooldown extension/expiry, identity-TTL interaction, and old-generation rejection;
+  - pre-cancelled lease, cancellation before/after enrollment, cancellation racing completion through controlled barriers, cancel one of two, cancel all with a cancellation-insensitive probe, and reset during a shared probe;
+  - monotonic TTL, cooldown extension/expiry, identity-TTL interaction, stale completion rejection, and `recordFailure` rejection for a pre-reset lease;
   - immutable family/identity/role-height/generation lease assertions.
 - Implementation:
   - add `EndpointHealth`, `EndpointLease`, and the `EndpointPool` actor;
-  - use one shared `(generation, token)` probe task and an actor-owned waiter continuation registry;
-  - install cache only for a current token/generation with a remaining waiter;
+  - use one shared `(generation, token)` probe task, actor-owned waiter continuations, and one synchronous `CancellationLatch` per call;
+  - share that latch among `onCancel`, actor enrollment, and stable waiter-ID-order commit locking; unknown cancellation messages are no-ops and retain no orphan state;
+  - install cache only for a current token/generation with a remaining noncancelled waiter;
   - use injected monotonic time for TTL and `retryNotBefore` eligibility;
   - apply the fixed error precedence and original-index/role/request tie order;
-  - retain an observed identity lock until `reset()`.
+  - retain an observed identity lock until `reset()` and require the originating current-generation lease for health mutation.
 - Affected paths:
   - `Sources/ThorChainKit/Network/EndpointHealth.swift`;
   - `Sources/ThorChainKit/Network/EndpointLease.swift`;
   - `Sources/ThorChainKit/Network/EndpointPool.swift`;
   - `Tests/ThorChainKitTests/EndpointPoolTests.swift`.
-- Acceptance: cancellation is prompt per waiter, stale completions never install, and no pool method performs a business read, retry, sleep, or backoff calculation.
+- Acceptance: cancellation is prompt and race-safe per waiter, stale completions/leases never mutate current state, and no pool method performs a business read, retry, sleep, or backoff calculation.
 - Narrow check: `swift test --filter EndpointPoolTests`.
 
 ## 3. Add the sole Example-only executable seam
@@ -97,7 +99,7 @@ No implementation starts until discovery 2/2 independently ACCEPTs the frozen di
 - Implementation:
   - add the S1-02 accessibility flow;
   - make `run-maestro.sh` map one allowlisted slice token to one exact YAML and slice-versioned output root;
-  - update `.maestro/config.yaml`, runner tests, and CI with separate exact invocations.
+  - update `.maestro/config.yaml` and runner tests with separate exact invocations; routine execution remains local and the final hosted job invokes both once.
 - Affected paths:
   - `.maestro/config.yaml`;
   - `.maestro/flows/01-endpoint-policy.yaml`;
@@ -113,10 +115,10 @@ No implementation starts until discovery 2/2 independently ACCEPTs the frozen di
 - Test first:
   - exact discovered/non-skipped allowlists for `EndpointPoolTests`, `LiveNodeProbeTests`, and `EndpointDiagnosticsTests`;
   - public symbol subset/exact-current-slice fixtures and production factory inertness;
-  - live validator mutants for wrong head/schema, missing family, fixture substitution, sentinel leakage, malformed JSON, and unavailable provider.
+  - live validator mutants for wrong source/head/path/schema, missing/extra/duplicate keys or families, wrong types/literals/arithmetic/origins, fixture substitution, sentinel leakage, malformed JSON, and unavailable provider.
 - Implementation:
   - add the S1-02 verifier and fixtures;
-  - add `verify-s1-02-live.sh` and `verify-s1-02-live-evidence.swift` with exact opt-in environment/schema/output semantics;
+  - add `verify-s1-02-live.sh` and `verify-s1-02-live-evidence.swift` with exact schema-v1 keys/types/literals, duplicate/unknown-key rejection, source/path/head binding, arithmetic, opt-in environment, and atomic output semantics;
   - keep live output beneath ignored `build/s1-02-live/<head>/` and fixture output beneath `build/s1-02-fixture/`.
 - Affected paths:
   - `Tests/ThorChainKitTests/Fixtures/S1-02-public-symbols.txt`;
@@ -125,12 +127,30 @@ No implementation starts until discovery 2/2 independently ACCEPTs the frozen di
   - `Scripts/verify-s1-02-live.sh`;
   - `Scripts/verify-s1-02-live-evidence.swift`;
   - `.github/workflows/ci.yml`.
-- Acceptance: deterministic gates have no skips; live absence is UNRUN, attempted failure is nonzero, and fixture/live evidence are mechanically non-interchangeable.
+- Acceptance: deterministic gates have no skips; live absence is UNRUN, attempted failure is nonzero, and exact source/schema/path validators make fixture/live evidence mechanically non-interchangeable.
 - Check: `Scripts/verify-s1-02.sh`; run the exact live command from the spec separately when approved providers are available.
 
-## 6. Open one exact-head implementation PR and run role-separated closure
+## 6. Enforce local-first CI and the one-run hosted budget
 
 - Dependencies: steps 1–5.
+- Test first:
+  - add `Scripts/verify-s1-02-ci-policy.sh` mutants for `pull_request`, `pull_request_target`, `push`, `schedule`, omitted dispatch inputs, mutable branch checkout, mismatched PR head, and a duplicate `main` job;
+  - prove the manual workflow requires `pr_number`, `expected_head_sha`, and confirmation token `FINAL_S1_02_GATE`, checks an open PR targeting `main`, and checks out its exact current SHA;
+  - prove routine local evidence records the exact head/command/exit status and the hosted job does not invoke the opt-in live probe.
+- Implementation:
+  - replace automatic macOS triggers in `.github/workflows/ci.yml` with `workflow_dispatch` only;
+  - run package, strict-concurrency, verifier, Example simulator, and both Maestro flows once in the final hosted job;
+  - record workflow run ID/URL, PR, and SHA; never trigger on intermediate pushes or the verified merge/push to `main`.
+- Affected paths:
+  - `.github/workflows/ci.yml`;
+  - `Scripts/verify-s1-02-ci-policy.sh`;
+  - `Scripts/verify-s1-02.sh`.
+- Acceptance: routine verification is local, automatic hosted macOS triggers fail the policy verifier, and only the CTO/operator can dispatch one final exact-PR-head gate immediately before merge. Self-hosted Mac support is deferred.
+- Narrow check: `Scripts/verify-s1-02-ci-policy.sh`.
+
+## 7. Open one exact-head implementation PR and run role-separated closure
+
+- Dependencies: steps 1–6.
 - Implementation: push the implementation branch, open the PR, and update only the S1-02 roadmap marker with the real PR number/date.
 - Affected paths: implementation/test/acceptance paths above, `docs/roadmap/sprint-01-foundation.md`, and this plan’s completion evidence.
 - Verification order:
@@ -141,15 +161,17 @@ No implementation starts until discovery 2/2 independently ACCEPTs the frozen di
   5. `Scripts/test-run-maestro.sh`;
   6. exact-destination Example build and `Scripts/run-maestro.sh s1-02`;
   7. opt-in live gate, recorded separately;
-  8. `git diff --check`, scope/secrets/conflict-marker audits, required CI, and clean PR merge state.
-- Acceptance: CodeReviewer and QA independently cite the same `headRefOid`; any push invalidates their evidence. Closure uses the frozen discovery blocker allowlist and the repository’s five-pass review sequence.
+  8. exact local CodeReviewer and QA evidence at one `headRefOid`;
+  9. one explicit final hosted macOS dispatch for that PR/head;
+  10. QA and CodeReviewer append exact-head attestations citing their local outputs plus the hosted run URL/status/SHA, then the CTO checks `git diff --check`, scope/secrets/conflict-marker audits and clean PR merge state.
+- Acceptance: CodeReviewer and QA independently cite the same local-command outputs, hosted run, and `headRefOid`; any push invalidates all three. The hosted run URL/status/SHA matches that head, and merge/push to `main` does not repeat it. Closure uses the frozen discovery blocker allowlist and the repository’s five-pass review sequence.
 
 ## Handoff sequence
 
-1. CodeReviewer performs discovery 2/2 on the exact revision-13 documentation head and either ACCEPTs or returns only frozen blocker IDs.
+1. CodeReviewer performs closure 1/5 on the exact revision-14 documentation head, limited to the five open frozen IDs plus direct Critical/High regressions, and either ACCEPTs or returns stable blockers.
 2. CTO presents a confirmation bound to the latest Paperclip plan revision only after independent ACCEPT.
 3. SwiftEngineer implements tests first and opens the PR; never merges.
-4. CodeReviewer and QA perform exact-head closure; neither implements fixes.
-5. CTO verifies all role-separated evidence and performs the merge gate.
+4. CodeReviewer and QA perform local exact-head closure; neither implements fixes.
+5. After the sole hosted exact-head run, QA and CodeReviewer append citations binding that run to their unchanged local evidence; the CTO then performs the merge gate.
 
 No role may self-review, infer approval, or move business-read ownership from S1-04 into this slice.

@@ -8,13 +8,13 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 
 | Layer | Execution | What it proves |
 |---|---|---|
-| Pure unit | default CI | network/address/amount/error invariants |
-| Controlled async | default CI | cancellation, coalescing, generation, retry, pagination |
-| Storage | default CI, temporary DB | migrations, atomic replace, restart/cache namespaces |
-| Package integration | default CI | facade composition, publishers, real dependencies |
-| Contract audit | default CI | parsed manifest topology, import allowlist, public symbol allowlist, exact test discovery, and public-only iOS consumer |
+| Pure unit | routine local; one final hosted gate | network/address/amount/error invariants |
+| Controlled async | routine local; one final hosted gate | cancellation, coalescing, generation, retry, pagination |
+| Storage | routine local with temporary DB; one final hosted gate | migrations, atomic replace, restart/cache namespaces |
+| Package integration | routine local; one final hosted gate | facade composition, publishers, real dependencies |
+| Contract audit | routine local; one final hosted gate | parsed manifest topology, import allowlist, public symbol allowlist, exact test discovery, and public-only iOS consumer |
 | WalletCore integration | host branch CI | manager/adapter/factory/consumer lifecycle |
-| Example UI acceptance | default fixture CI via Maestro | public user-visible state, accessibility contract, cross-slice scenario |
+| Example UI acceptance | routine local Maestro; one final hosted gate | public user-visible state, accessibility contract, cross-slice scenario |
 | Opt-in live | manual/release gate | current endpoint/API compatibility and chain identity |
 | Host product acceptance | manual `Development` checklist | observable create/import/enable/receive/relaunch/App Status behavior without Maestro |
 
@@ -74,12 +74,12 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 - S1-01 endpoint tests enumerate every constructor rule: nonempty families, `https`, no credentials/query/fragment, normalized nonempty unique family IDs, separate `clientId` trim/control/empty-to-nil normalization, finite nonnegative lag, finite positive timeout/revalidation seconds, retryable-status subset, `1...1000` page count, explicit attempts in `1...families.count`, nil attempts, and the exact `effectiveMaximumAttempts` result.
 - Retry count and requested URLs assert exact sequence.
 - Random/property tests log seed on failure.
-- Network live tests excluded from default CI and never make deterministic suite flaky.
+- Network live tests are local opt-in only, excluded from the hosted gate, and never make the deterministic suite flaky.
 - Maestro selectors use accessibility identifiers, not localized labels or screen coordinates.
 - Committed Maestro YAML contains no mnemonic, API key or endpoint credential; runtime values arrive via environment.
 - Fixture and live modes expose an explicit `data-source` badge so fixture success cannot masquerade as live evidence.
 - S1-01's sole UI gate is `THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh`; raw `maestro test` is not accepted. Boot, build, install, launch, and Maestro use that same UDID.
-- S1-01 default CI pins `actions/checkout` to `34e114876b0b11c390a56381ad16ebd13914f8d5`, `actions/setup-java` to `c1e323688fd81a25caa38c78aa6df2d33d3e20d9`, and the Maestro `2.6.1` `maestro.zip` artifact to official SHA-256 `3440825f514f537c6a96bcf5de995780c2a4a7f83a43208fdc95d4f1fecfad3b`. It asserts Maestro `2.6.1` and Temurin `17.0.19+10` before the fixture flow.
+- The final hosted gate preserves S1-01's pins: `actions/checkout` at `34e114876b0b11c390a56381ad16ebd13914f8d5`, `actions/setup-java` at `c1e323688fd81a25caa38c78aa6df2d33d3e20d9`, and the Maestro `2.6.1` `maestro.zip` artifact at official SHA-256 `3440825f514f537c6a96bcf5de995780c2a4a7f83a43208fdc95d4f1fecfad3b`. It asserts Maestro `2.6.1` and Temurin `17.0.19+10` before the fixture flow.
 - S1-01 resolves JUnit, test-output, and debug-output to absolute paths under one repository-root `build/maestro-results` tree. The runner and shims reject workspace-relative or outside-root artifacts, and the scanner covers the separate JUnit file plus both Maestro output trees.
 - The S1-01 launcher requires one configured flow and JUnit `tests=1`, `failures=0`, `errors=0`, and `skipped=0`; detecting zero, extra, failed, errored, or skipped tests fails the gate.
 - All Maestro rules apply only to `ThorChainKit/iOS Example`; the Unstoppable repository receives no Maestro YAML, runner, DEBUG transport, or acceptance launch arguments.
@@ -97,38 +97,41 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 
 ## S1-02 endpoint-policy gate
 
-Revision 13 adds the following default-CI obligations before implementation may be considered complete:
+Revision 14 adds the following local-first obligations before implementation may be considered complete. They run routinely on the operator MacBook; GitHub-hosted macOS runs them only once through the manual final exact-PR-head gate.
 
 | Behavior | Deterministic evidence |
 |---|---|
 | S1-01 surface preservation | Compile the unchanged `Network`, `EndpointFamilyDescriptor`, `EndpointPolicy`, `EndpointConfiguration`, and error values through the pool; preserve the S1-01 symbol baseline as an exact subset. |
-| Family identity | Cosmos node info, Cosmos latest-block header, and Comet status must all equal the expected identity; any mixed/foreign observation locks the pool even when another family is healthy. |
+| Family identity | Three separately retained request results must all equal the expected identity; any observed mixed/foreign value locks the pool even when its sibling request fails and another family is healthy. Missing/duplicate/mismatched result indices cannot erase that fact. |
 | Role freshness | Positive independent Cosmos/Comet heights pass; catching-up, nonpositive, cross-role-skewed, fresh-Comet+stale-Cosmos, and best-height-lagging families are stale. |
-| Typed deterministic selection | Indexed per-family/per-role/request outcomes classify transport, HTTP/`Retry-After`, invalid field, identity, and cancellation; highest verified Comet height wins, ties use original order, and completion permutations preserve the fixed result. |
+| Typed deterministic selection | `RoleProbeFailure: Error` and exactly three indexed per-family/role/request outcomes compile under strict concurrency and classify transport, HTTP/`Retry-After`, invalid field, identity, and cancellation; highest verified Comet height wins, ties use original order, and completion permutations preserve the fixed result. |
 | Stale-family fallback | A correctly identified stale family may be excluded for another verified family; no remaining family returns distinct `catchingUp` or `staleEndpoint`, never `wrongNetwork`. |
-| Probe lifecycle | Concurrent first lease and TTL revalidation coalesce through a waiter registry/shared token; cancel-one, cancel-all, and reset have distinct prompt behavior and stale completions cannot install. |
-| Health effects | An injected monotonic clock controls TTL and explicit `retryNotBefore`; retryable values only extend eligibility, expiry/TTL interaction is deterministic, and terminal/stale/invalid/cancelled outcomes create no timed health state. |
+| Probe lifecycle | Concurrent first lease and TTL revalidation coalesce through a waiter registry/shared token; one synchronous cancellation latch shared by `onCancel`, enrollment, and stable-order commit locking makes pre-cancel, registration/completion races, cancel-one, cancel-all, and reset deterministic without sleeps. |
+| Health effects | An injected monotonic clock controls TTL and explicit `retryNotBefore`; retryable values only extend eligibility, expiry/TTL interaction is deterministic, and terminal/stale/invalid/cancelled outcomes create no timed health state. `recordFailure` rejects a lease from a stale generation without mutation. |
 | Ownership boundary | `EndpointPool` performs no business read or retry. S1-04 alone tests attempt order, backoff, family-at-most-once, exhaustion, and cancellation propagation. |
 | Live probe contract | Controlled transport proves exact base-path-preserving node-info/latest-block/status requests, decoder/status/cancellation behavior, and zero `/thorchain`, Midgard, gRPC, business-read, write, broadcast, or retry requests. |
-| Diagnostics/UI | Hostile path/body/error/chain-ID sentinels are absent from typed diagnostics, logs, xUnit, Example UI, Maestro artifacts, and live JSON; only family/role/request, origin, local expected identity/classification, height/status, and fixed reason codes remain. |
+| Diagnostics/UI | `ProviderError` has no actual/raw identity associated value. Hostile path/body/error/chain-ID sentinels are absent from typed diagnostics, logs, xUnit, Example UI, Maestro artifacts, and live JSON; only family/role/request, origin, local expected identity/classification, height/status, and fixed reason codes remain. |
 | Example execution | The sole Testing SPI session calls the real pool while production `Kit` stays inert; source/syntax gates reject duplicated classification, static outcomes, or SPI imports outside tests/Example. |
 | Slice-exact Maestro | Runner tests prove `s1-01` and `s1-02` each execute exactly one different allowlisted YAML and retain all provenance, containment, JUnit, OCR, and secret canaries. |
-| Live separation | Exact opt-in command, implementation-head-bound schema, validator, nonzero failure semantics, and distinct fixture/live roots prevent deterministic evidence from substituting for mainnet evidence. |
+| Live separation | Exact schema-v1 keys/types/literals/arithmetic, source/path/head binding, duplicate/unknown-key rejection, validator mutants, nonzero failure semantics, and distinct fixture/live roots prevent fixture substitution. |
+| Hosted CI budget | A verifier proves the macOS workflow is `workflow_dispatch` only, requires PR/head/confirmation inputs, checks out the current exact PR head, and has no PR/push/main rerun. Reviewer/QA cite local outputs and the one final hosted run when dispatched. |
 
 The narrow-to-broad command order is:
 
 ```bash
 swift build
+swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
 swift test --filter LiveNodeProbeTests
 swift test --filter EndpointPoolTests
 swift test --filter EndpointDiagnosticsTests
 swift test
 Scripts/verify-s1-02.sh
+Scripts/verify-s1-02-ci-policy.sh
 Scripts/test-run-maestro.sh
 THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh s1-02
 ```
 
-The opt-in live command in the S1-02 spec runs only after deterministic gates pass. It validates two families and all three identity sources against the exact implementation head. Absence is `UNRUN`, an attempted unavailable/invalid run is nonzero failure, and its sanitized JSON cannot be replaced by fixture evidence.
+The opt-in live command in the S1-02 spec runs locally only after deterministic gates pass. It validates two families and all three identity sources against the exact implementation head. Absence is `UNRUN`, an attempted unavailable/invalid run is nonzero failure, and its sanitized JSON cannot be replaced by fixture evidence.
 
 ## Verification order per slice
 
@@ -142,7 +145,7 @@ The opt-in live command in the S1-02 spec runs only after deterministic gates pa
 8. Opt-in live API gate.
 9. Unstoppable manual create/import/relaunch/App Status checklist for S1-07.
 10. Diff audit confirms that no Maestro/acceptance-only host files were added.
-11. Before merge, `gh pr checks <PR>` is green, `mergeStateStatus` is `CLEAN`, the conflict-marker diff scan is empty, the PR-linked plan exists on the branch, and Paperclip Reviewer and QA evidence cite the exact final head. After QA evidence is copied into the PR body, the CodeReviewer performs one final exact-head pass.
+11. Before merge, Reviewer and QA first produce exact local command outputs at the same `headRefOid`; the CTO/operator then dispatches the sole GitHub-hosted macOS gate with that PR/head. Once green, QA and CodeReviewer append attestations citing their unchanged local evidence and its run URL/status/SHA. The CTO verifies `mergeStateStatus` is `CLEAN`, the conflict-marker diff scan is empty, and the PR-linked plan exists. Any push invalidates all evidence; merge/push to `main` does not rerun the suite.
 
 ## Live evidence record
 

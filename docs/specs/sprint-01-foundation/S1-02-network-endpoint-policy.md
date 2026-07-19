@@ -1,6 +1,6 @@
 # S1-02 — Network and Endpoint Policy
 
-**Status:** revision 13 resolves discovery 1/2 findings; implementation blocked pending independent discovery 2/2 and explicit revision-bound approval.
+**Status:** revision 14 resolves the five frozen discovery-2 blockers and the local-first CI budget requirement; implementation remains blocked pending independent closure review and explicit revision-bound approval.
 **Risk:** high/security boundary.
 **Observable outcome:** the kit accepts only provider families consistent with `Network`; wrong-chain, stale, mixed-family, retryable, terminal, and cancelled operations have deterministic, distinct outcomes.
 
@@ -33,7 +33,7 @@ Out of scope:
 - S1-01 revision 11 at `f7da1ce` is the immutable public-value baseline for this slice.
 - Callers explicitly group one Cosmos REST URL and one CometBFT URL into a family; matching hosts are not required, but both roles must independently prove identity and freshness.
 - Provider presets and opt-in live credentials are deployment inputs, not part of the S1-02 policy contract.
-- There are no open design questions for revision 13. Any material change to identity precedence, waiter ownership, diagnostic redaction, stale-family fallback, or failover ownership requires a new spec revision and approval.
+- There are no open design questions for revision 14. Any material change to identity precedence, waiter ownership, diagnostic redaction, stale-family fallback, CI execution ownership, or failover ownership requires a new spec revision and approval.
 
 ## Files
 
@@ -59,6 +59,7 @@ iOS Example/iOS Example.xcodeproj/project.pbxproj
 Scripts/run-maestro.sh
 Scripts/test-run-maestro.sh
 Scripts/verify-s1-02.sh
+Scripts/verify-s1-02-ci-policy.sh
 Scripts/verify-s1-02-live.sh
 Scripts/verify-s1-02-live-evidence.swift
 .github/workflows/ci.yml
@@ -82,15 +83,25 @@ struct EndpointOrigin: Equatable, Sendable {
     let port: Int?
 }
 
-enum ProbeRequestKind: Sendable {
+enum ProbeRequestKind: Int, CaseIterable, Sendable {
     case cosmosNodeInfo
     case cosmosLatestBlock
     case cometStatus
 }
 
-struct CosmosObservation: Equatable, Sendable {
-    let nodeInfoChainId: String
-    let blockHeaderChainId: String
+struct ProbeRequestIndex: Equatable, Sendable {
+    let familyIndex: Int
+    let familyId: String
+    let role: EndpointRole
+    let request: ProbeRequestKind
+}
+
+struct CosmosNodeInfoObservation: Equatable, Sendable {
+    let chainId: String
+}
+
+struct CosmosLatestBlockObservation: Equatable, Sendable {
+    let chainId: String
     let latestHeight: Int64
 }
 
@@ -119,24 +130,28 @@ enum ProbeField: Equatable, Sendable {
     case cometCatchingUp
 }
 
-enum RoleProbeFailure: Equatable, Sendable {
+enum RoleProbeFailure: Error, Equatable, Sendable {
     case cancelled
     case transport(kind: TransportFailureKind)
     case httpStatus(code: Int, retryAfterSeconds: Int?)
     case invalidResponse(field: ProbeField)
 }
 
-struct IndexedFamilyProbeOutcome: Equatable, Sendable {
-    let familyIndex: Int
-    let familyId: String
+enum ProbeRequestResult: Equatable, Sendable {
+    case cosmosNodeInfo(Result<CosmosNodeInfoObservation, RoleProbeFailure>)
+    case cosmosLatestBlock(Result<CosmosLatestBlockObservation, RoleProbeFailure>)
+    case cometStatus(Result<CometObservation, RoleProbeFailure>)
+}
+
+struct IndexedProbeOutcome: Equatable, Sendable {
+    let index: ProbeRequestIndex
     let cosmosOrigin: EndpointOrigin
     let cometOrigin: EndpointOrigin
-    let cosmos: Result<CosmosObservation, RoleProbeFailure>
-    let comet: Result<CometObservation, RoleProbeFailure>
+    let result: ProbeRequestResult
 }
 
 protocol NodeProbing: Sendable {
-    func probe(index: Int, family: EndpointFamilyDescriptor) async -> IndexedFamilyProbeOutcome
+    func probe(index: Int, family: EndpointFamilyDescriptor) async -> [IndexedProbeOutcome]
 }
 
 struct EndpointLease: Sendable {
@@ -152,10 +167,20 @@ enum EndpointFailure: Equatable, Sendable {
     case retryableStatus(code: Int, retryNotBefore: ContinuousClock.Instant)
 }
 
+enum IdentityFailureCode: Equatable, Sendable {
+    case foreign
+    case mixed
+}
+
 enum ProviderError: Error, Equatable, Sendable {
     case noEligibleFamily
-    case wrongNetwork(expected: String, actual: String)
-    case mixedFamilyIdentity(cosmos: String, comet: String)
+    case identityFailure(
+        expected: String,
+        familyId: String,
+        role: EndpointRole,
+        request: ProbeRequestKind,
+        code: IdentityFailureCode
+    )
     case catchingUp
     case staleEndpoint(height: Int64, bestKnown: Int64)
     case invalidResponse(familyId: String, role: EndpointRole, field: ProbeField)
@@ -170,26 +195,27 @@ actor EndpointPool {
         clock: any EndpointClock
     )
     func lease(excludingFamilyIds: Set<String>) async throws -> EndpointLease
-    func recordFailure(familyId: String, failure: EndpointFailure) async
+    @discardableResult
+    func recordFailure(for lease: EndpointLease, failure: EndpointFailure) async -> Bool
     func reset() async
 }
 ```
 
-`LiveNodeProbe` catches every transport/HTTP/decoding failure and returns the typed outcome above. It never forwards an arbitrary `Error`; `.cancelled` is the only cancellation outcome, and `EndpointPool` maps it back to `CancellationError` for the affected waiter. Family index, family ID, role, request kind, status code, and fixed `ProbeField`/`TransportFailureKind` codes are the complete diagnostic algebra. Raw bodies and `localizedDescription` are never stored.
+`LiveNodeProbe` launches all three requests independently and returns exactly three outcomes, one for every `ProbeRequestKind`, even when another request fails. It never collapses Cosmos node info and latest block into one `Result`, so an observed foreign identity survives a sibling timeout or decoding failure. Each result's enum case must equal its `ProbeRequestIndex.request`; a duplicate, missing, extra, or mismatched index is `.invalidResponse(.httpEnvelope)` after all successfully observed identities have first been classified. `LiveNodeProbe` catches every transport/HTTP/decoding failure and never forwards an arbitrary `Error`; `.cancelled` is the only probe cancellation code. Family index, family ID, role, request kind, status code, and fixed `ProbeField`/`TransportFailureKind` codes are the complete diagnostic algebra. Raw bodies and `localizedDescription` are never stored.
 
 ## Acceptance Criteria
 
 - S1-01's public `Network`, endpoint-family, policy, configuration, and error declarations are consumed unchanged and compile-tested with the pool.
 - A family is lease-eligible only when Cosmos node info, the Cosmos latest-block header, and Comet status all return the exact expected chain ID, both heights are positive, Comet reports `catching_up == false`, and cross-role skew is at most `maximumHeightLag`.
-- A mixed Cosmos/Comet identity or any consistently foreign configured family is a terminal configuration error for the pool. It is never silently skipped in favor of another family.
+- A mixed Cosmos/Comet identity or any consistently foreign configured family is a terminal configuration error for the pool. It is never silently skipped in favor of another family. The aggregator classifies every successfully observed identity before considering missing/invalid/retryable outcomes, so a foreign node-info result plus a latest-block timeout still locks the pool despite a healthy sibling.
 - A correctly identified but catching-up, nonpositive-height, cross-role-skewed, or best-height-lagging family is stale, not foreign. It may be excluded in favor of another already verified family; if no eligible family remains, the pool returns a distinct `catchingUp` or `staleEndpoint` result.
 - Concurrent completion order cannot change the outcome. Precedence is `mixedFamilyIdentity`, `wrongNetwork`, `invalidResponse`, `catchingUp`, `staleEndpoint`, `temporarilyUnavailable`, then `noEligibleFamily`; ties use original family order and then role/request order (`cosmosNodeInfo`, `cosmosLatestBlock`, `cometStatus`). Observed mixed/foreign identity locks the pool until `reset()`; invalid, stale, and retryable outcomes never lock it.
 - Selection uses the greatest verified Comet height, filters families below `bestHeight - maximumHeightLag`, and breaks equal-height ties by original family order.
 - `EndpointLease` is immutable and contains one complete family, the verified identity, both role heights, and the pool generation. A lease never borrows a height or role from another family.
 - Initial and TTL revalidation probes are coalesced by one actor-owned shared task plus an explicit per-waiter registry. After `identityRevalidationInterval`, no cached lease is returned until revalidation succeeds.
-- Cancelling one waiter resumes that waiter promptly with `CancellationError` and leaves the shared task alive for remaining waiters. Cancelling the last waiter cancels the shared task and installs no cache. A completion installs cache only when its generation/token is current and at least one waiter remains.
+- Waiter enrollment and cancellation have one linearized handshake. A per-call lock-protected `CancellationLatch` is synchronously marked by `onCancel`; actor enrollment checks that same latch, and completion acquires live waiter latches in stable waiter-ID order and holds them through its synchronous cache commit. Whichever latch mark or commit lock acquisition linearizes first determines cancellation versus delivery. Cancelling one waiter resumes that waiter promptly with `CancellationError` and leaves the shared task alive for remaining waiters. Cancelling the last waiter cancels the shared task and installs no cache, including when cancellation races registration or completion.
 - `reset()` cancels the active probe, resumes all waiters with cancellation, increments generation, clears cache/health/identity lock, and prevents an old generation from installing results.
-- TTL, cooldown, and rate-limit eligibility use an injected monotonic clock. `recordFailure` accepts only retryable transport/status failures with an explicit monotonic `retryNotBefore`; it extends but never shortens existing unavailability. Before expiry the family is excluded. At expiry it becomes eligible from an unexpired identity cache, or participates in one coalesced revalidation if the identity TTL also expired. Cancellation, identity, stale, and invalid-response outcomes create no timed health state.
+- TTL, cooldown, and rate-limit eligibility use an injected monotonic clock. `recordFailure(for:failure:)` accepts an immutable lease, verifies its family and `poolGeneration` against current actor state, and returns `false` without mutation for a stale/foreign lease. For a current lease it accepts only retryable transport/status failures with an explicit monotonic `retryNotBefore`; it extends but never shortens existing unavailability and returns `true`. Before expiry the family is excluded. At expiry it becomes eligible from an unexpired identity cache, or participates in one coalesced revalidation if the identity TTL also expired. Cancellation, identity, stale, and invalid-response outcomes create no timed health state.
 - `EndpointPool` never performs or retries a business read. S1-04's `ReadOperationCoordinator` is the only owner of whole-operation attempts, backoff, family exclusion, exhaustion, and cancellation propagation.
 - Diagnostics and Example output contain family IDs, role/request labels, local expected identity, identity classification (`expected`, `foreign`, or `mixed`), heights, status codes, fixed reason codes, and `EndpointOrigin` only. They never contain an observed raw chain ID, userinfo, path, query, fragment, full URL, response body, `localizedDescription`, or arbitrary server/error text.
 
@@ -209,11 +235,11 @@ S1-01 validates families, IDs, URL safety, client ID, timeouts, lag, retryable c
 
 ## Probe and Selection
 
-1. Probe families concurrently with a bounded task group and retain each result under its original configuration index.
-2. Each family must return identical Cosmos node-info, Cosmos block-header, and Comet chain IDs.
+1. Probe families concurrently with a bounded task group and retain exactly three independent request outcomes under each original family/role/request index.
+2. Classify all successfully observed chain IDs before transport/HTTP/invalid failures. Each family must return identical Cosmos node-info, Cosmos block-header, and Comet chain IDs; one observed foreign value is never erased by a failed sibling request.
 3. All three must equal `Network.expectedChainId`.
 4. Both heights must be positive, `catching_up == false`, and cross-role skew must not exceed `maximumHeightLag`.
-5. Aggregate all completed probes in original configuration order; do not let task completion order select an error or family.
+5. Reject a missing, duplicate, extra, or request-kind-mismatched outcome as invalid after preserving any identity lock implied by the valid observed outcomes. Aggregate all completed probes in original configuration order; do not let task completion order select an error or family.
 6. Any observed foreign/mixed identity, including expected node info plus a foreign Cosmos block header, locks the pool even when a sibling is healthy.
 7. Invalid and retryable failures reject only that family for the current probe set. A verified sibling may still lease; if none remains, fixed precedence distinguishes invalid response from temporary unavailability.
 8. Exclude correctly identified catching-up, nonpositive-height, cross-role-skewed, and best-height-lagging families. If another verified family remains, continue with it; otherwise apply the fixed precedence above.
@@ -234,7 +260,7 @@ ReadOperationCoordinator
   → pool.lease(excluding attempted families)
   → status + account + complete balances on same family
   → classify failure
-  → recordFailure
+  → recordFailure(for: lease, failure:)
   → optional injected backoff
   → retry whole operation, at most configuration.effectiveMaximumAttempts
 ```
@@ -257,18 +283,19 @@ Each family is used at most once per logical read. Broadcast receives a separate
 
 ## Internal Versus Public Errors
 
-`ProviderError`, `RoleProbeFailure`, and `EndpointFailure` are internal and preserve only enumerated diagnostic detail (`familyId`, role, request kind, HTTP status, fixed field/transport code, identity classification). They never appear directly in public `SyncState`. S1-05 maps them to the stable, sanitized `SyncError`.
+`ProviderError`, `RoleProbeFailure`, and `EndpointFailure` are internal and preserve only enumerated diagnostic detail (`familyId`, role, request kind, HTTP status, fixed field/transport code, identity classification, and the local expected identity). `ProviderError` has no `actual`, observed-ID, Cosmos-ID, or Comet-ID associated value. They never appear directly in public `SyncState`. S1-05 maps them to the stable, sanitized `SyncError`.
 
 `EndpointOrigin` is constructed from `scheme`, lowercase `host`, and explicit `port` only. Sensitive URL credentials/query are prohibited during construction, but arbitrary safe base paths remain valid configuration and are therefore treated as secret-bearing. Diagnostics, UI, logs, xUnit, Maestro, live JSON, and committed artifacts contain neither path/query/fragment/userinfo nor raw bodies, raw observed chain IDs, arbitrary `Error` text, or `localizedDescription`.
 
 ## Lifecycle
 
 - The pool is initially unvalidated and owns all mutable cache, waiter, identity-lock, and timed-health state inside one actor.
-- The first lease creates a shared probe token `(generation, UUID)` and one waiter continuation. Later leases join that token rather than awaiting the task directly.
-- A cancellation handler sends the waiter ID back to the actor. One cancelled waiter is removed and resumed immediately; the shared task survives while another waiter remains.
+- The first lease creates a shared probe token `(generation, UUID)` and one waiter continuation. Later leases join that token rather than awaiting the task directly. Every call creates a unique waiter ID and lock-protected `CancellationLatch` before entering `withTaskCancellationHandler`.
+- `onCancel` synchronously marks the latch, then sends the waiter ID back to the actor. Enrollment reads the latch under the same lock and rejects a marked call; if enrollment wins, the later actor cancellation removes and resumes that waiter. A cancellation message for an unknown waiter is a no-op because the marked latch remains the authoritative pre-enrollment fact; the actor retains no orphan IDs.
 - When the last waiter cancels, the actor cancels and removes the shared task. Even a cancellation-insensitive probe cannot install cache because no current waiter/token remains.
-- A shared completion atomically checks generation, token identity, and nonempty waiters before installing one immutable result set and resuming the remaining waiters.
+- A shared completion atomically checks generation/token, acquires waiter latches in stable ID order, filters marked waiters, and holds the remaining locks through the non-suspending cache commit before resuming continuations. A latch marked before lock acquisition loses to cancellation; a commit that acquired the latch first may deliver the lease. No actor state mutation or continuation resume occurs while acquiring another latch, preventing lock-order inversion.
 - `reset()` cancels/removes the shared task, resumes all waiters with cancellation, increments generation, clears cache/timed health/identity lock, and invalidates every old token.
+- `recordFailure(for:failure:)` checks the lease generation and configured family inside the same actor. A lease created before `reset()` can never reinstall health into the new generation.
 - TTL and retry eligibility use the injected monotonic `EndpointClock`; wall-clock `Date` does not decide cache or cooldown validity.
 - The S1-05 lifecycle owner cancels the active `ReadOperationCoordinator`; the pool remains reusable after restart.
 
@@ -285,7 +312,7 @@ Each family is used at most once per logical read. Broadcast receives a separate
 
 ### Endpoint family contract
 
-| Field | Revision-13 decision |
+| Field | Revision-14 decision |
 |---|---|
 | Analog family | Primary: Tron `RpcSource`. Supporting: the inherited S1-01 endpoint values and Vultisig LCD/RPC role routing. Rejected: Evm `NodeApiProvider` URL rotation. |
 | Coverage | Contract/composition/consumer from Tron; runtime-safe value and error contract plus tests from S1-01; THOR role boundary from Vultisig. No role waiver. |
@@ -298,12 +325,12 @@ Each family is used at most once per logical read. Broadcast receives a separate
 
 ### Probe, health, selection, and lease lifecycle
 
-| Field | Revision-13 decision |
+| Field | Revision-14 decision |
 |---|---|
 | Analog family | Primary lifecycle spine: Zcash `LatestBlocksDataProviderImpl`. Supporting: Vultisig `RPCHealthProbe` injection/fixtures, S1-01 policy bounds, and Vultisig THOR LCD/RPC split. Rejected: Evm broad recursive failover and MarketKit wall-clock/untyped scheduler. |
 | Coverage | Actor ownership/reset/composition/consumers/test substitution from Zcash; probe contract/error fixture shape from Vultisig; policy/trust bounds from S1-01; THOR role split from Vultisig. Evm and MarketKit challenge retry, task, clock, and redaction behavior. No role waiver. |
 | Invariants to preserve | One serialized owner, async collaborator boundary, explicit reset, monotonic height update, protocol DI/test doubles, injected transport, deterministic fixtures, explicit role paths, and bounded policy. |
-| Required differences | Waiter registry plus shared token, cancel-one/cancel-all/reset rules, monotonic TTL/eligibility, typed indexed per-role outcomes, Cosmos block-header identity binding, fixed precedence/pool lock, catching-up/skew/lag filtering, generation invalidation, immutable leases, and origin-only diagnostics. |
+| Required differences | Cancellation-latch enrollment handshake plus shared token, cancel-one/cancel-all/reset rules, monotonic TTL/eligibility, three independently retained typed request outcomes, Cosmos block-header identity binding, fixed precedence/pool lock, catching-up/skew/lag filtering, generation-bound health mutation, immutable leases, and origin-only diagnostics. |
 | Rejected differences | Claiming Vultisig as lifecycle ownership, treating 2xx `node_info` as verified identity, liveness-only health, mutable nonisolated request IDs, wall-clock TTL, raw error logging, retrying every error, and business-read retries inside the pool. |
 | Failure modes | Cancelled waiter hangs, last-waiter completion installs cache, reset races old generation, completion-order nondeterminism, foreign Cosmos block under expected node info, stale Cosmos legitimized by fresh Comet, cooldown applied to terminal errors, secret-bearing path/body/chain ID disclosure, and stale lease reuse after TTL. |
 | Tests before code | Cancel one of two, cancel all, reset during shared probe, TTL/cooldown clock, typed permutation precedence, Cosmos block identity, selection/tie/lag, fresh-Comet+stale-Cosmos, origin redaction, exact probe requests, and retryable-only health effects. |
@@ -317,16 +344,18 @@ Each family is used at most once per logical read. Broadcast receives a separate
 - a single-family configuration with public default policy is valid and produces `effectiveMaximumAttempts == 1`;
 - explicit attempts greater than family count remain rejected by the inherited S1-01 tests; attempt order/exhaustion remains in S1-04;
 - expected Cosmos node info plus a foreign Cosmos block header → terminal pool lock even when another family is healthy;
+- foreign node info plus a timed-out/invalid latest-block request still preserves the foreign fact and locks the pool; missing, duplicate, extra, and request-kind-mismatched outcomes remain invalid without masking an observed foreign fact;
 - any Cosmos node-info/block-header/Comet mismatch within a family → terminal pool lock even when another family is healthy;
 - a consistently foreign configured family → terminal pool lock even when another family is healthy;
 - fresh Comet + stale Cosmos REST is rejected; distinct hosts are permitted only with independent per-role freshness agreement;
 - catching-up or stale correctly identified family is excluded in favor of another verified family, with a distinct stale error when none remains;
 - selection of the highest healthy family, configured-order tie break, and lag exclusion;
 - permuted concurrent probe completion preserves the same family/error and fixed terminal precedence;
-- concurrent lease calls share one probe; cancelling one of two waiters is prompt and the remaining waiter receives the shared result;
+- `RoleProbeFailure: Error` and the complete three-result algebra compile under strict concurrency, with family/role/request index retained by every path;
+- concurrent lease calls share one probe; a pre-cancelled call, cancellation before/after enrollment, and cancellation racing completion use the cancellation-latch linearization rule; cancelling one of two waiters is prompt and the remaining waiter receives the shared result;
 - cancelling all waiters cancels the shared task and installs no result, including with a cancellation-insensitive probe double;
 - TTL expiry blocks lease reuse until one coalesced revalidation completes;
-- reset during probing cancels all waiters, advances generation, and blocks stale health installation;
+- reset during probing cancels all waiters, advances generation, and blocks stale completion; `recordFailure` using a pre-reset lease returns `false` and cannot install health;
 - monotonic cooldown/rate-limit expiry, extension, identity-TTL interaction, and active-family best-height selection are deterministic;
 - healthy plus timeout/429/invalid/foreign permutations prove sibling fallback, foreign pool lock, fixed precedence, and completion-order independence;
 - URL order does not change kit persistence identity.
@@ -350,7 +379,7 @@ Production `Kit.instance` remains inert. The package adds one `@_spi(Testing) pu
 - verifies that terminal wrong-network is not masked by an automatic transition to another family;
 - uses accessibility IDs rather than localized display text.
 
-`Scripts/run-maestro.sh` takes exactly one allowlisted slice argument: `s1-01` or `s1-02`. It maps that token internally to exactly one YAML path, passes that exact path to `maestro test`, writes slice-versioned output roots, and rejects raw paths, extra arguments, unknown slices, multi-flow manifests, and output reuse. `Scripts/test-run-maestro.sh` proves both exact argv paths and all existing S1-01 provenance/artifact canaries. CI runs `Scripts/run-maestro.sh s1-01` for the foundation job and `Scripts/run-maestro.sh s1-02` for the S1-02 job; neither invocation can execute the other flow.
+`Scripts/run-maestro.sh` takes exactly one allowlisted slice argument: `s1-01` or `s1-02`. It maps that token internally to exactly one YAML path, passes that exact path to `maestro test`, writes slice-versioned output roots, and rejects raw paths, extra arguments, unknown slices, multi-flow manifests, and output reuse. `Scripts/test-run-maestro.sh` proves both exact argv paths and all existing S1-01 provenance/artifact canaries. Local operator verification runs both exact slice invocations; the one manual final hosted gate repeats them once at the exact PR head. Neither invocation can execute the other flow.
 
 ## Live Verification
 
@@ -373,7 +402,59 @@ THORCHAIN_S1_02_FAMILY_B_COMET_URL=<url> \
 Scripts/verify-s1-02-live.sh
 ```
 
-The script refuses to run without the opt-in value, validates a clean implementation HEAD, writes atomically to `build/s1-02-live/<head>/evidence.json`, and exits nonzero for missing inputs, network/identity/freshness failures, schema mismatch, secret sentinel detection, dirty/mismatched head, or unavailable providers. Default CI never invokes it and never reports an absent live run as skipped or green. `verify-s1-02-live-evidence.swift` validates schema/head/redaction. Fixture evidence remains under `build/s1-02-fixture/` and cannot satisfy the live validator.
+The script refuses to run without the opt-in value, validates a clean implementation HEAD, writes atomically to `build/s1-02-live/<head>/evidence.json`, and exits nonzero for missing inputs, network/identity/freshness failures, schema mismatch, secret sentinel detection, dirty/mismatched head, or unavailable providers. The hosted gate never invokes it and never reports an absent live run as skipped or green.
+
+### Live evidence schema v1
+
+The UTF-8 JSON document has exactly these keys; unknown or missing keys fail validation. Integers are JSON integers, not strings or floating-point values. Array order is configuration order.
+
+```json
+{
+  "schemaVersion": 1,
+  "source": "thorchainkit-s1-02-live",
+  "implementationHead": "0123456789abcdef0123456789abcdef01234567",
+  "generatedAt": "2026-07-19T00:00:00Z",
+  "expectedChainId": "thorchain-1",
+  "families": [
+    {
+      "familyId": "provider-a",
+      "cosmosOrigin": { "scheme": "https", "host": "example.invalid", "port": null },
+      "cometOrigin": { "scheme": "https", "host": "rpc.example.invalid", "port": 443 },
+      "identityClassification": "expected",
+      "cosmosHeight": 1,
+      "cometHeight": 1,
+      "heightSkew": 0,
+      "catchingUp": false,
+      "outcome": "eligible"
+    },
+    {
+      "familyId": "provider-b",
+      "cosmosOrigin": { "scheme": "https", "host": "second.invalid", "port": null },
+      "cometOrigin": { "scheme": "https", "host": "rpc.second.invalid", "port": null },
+      "identityClassification": "expected",
+      "cosmosHeight": 1,
+      "cometHeight": 1,
+      "heightSkew": 0,
+      "catchingUp": false,
+      "outcome": "eligible"
+    }
+  ],
+  "selection": { "familyId": "provider-a", "poolGeneration": 0 }
+}
+```
+
+`schemaVersion` must be integer `1`; `source` must equal `thorchainkit-s1-02-live`; `implementationHead` must be the clean current 40-character lowercase Git SHA and the output directory name; `generatedAt` must be canonical UTC RFC 3339 with whole seconds; `expectedChainId` must equal the selected local `Network.expectedChainId`; `families` must contain exactly the two supplied IDs once each; `identityClassification` and `outcome` must be the exact literals `expected` and `eligible`; heights must be positive signed 64-bit integers; `heightSkew` must be the nonnegative absolute difference and within policy; `catchingUp` must be `false`; and `selection.familyId` must name one listed eligible family with a nonnegative unsigned 64-bit generation.
+
+Each origin has exactly `scheme`, `host`, and `port`; scheme must be `https`, host must be lowercase and nonempty, and port is `null` or an integer in `1...65535`. The validator recursively rejects keys or string values that can encode `url`, `userinfo`, `path`, `query`, `fragment`, response/body/error text, or actual/observed/raw chain IDs. It also rejects duplicate JSON keys. `verify-s1-02-live-evidence.swift` validates the exact shape, source discriminator, head/directory binding, arithmetic, family set, and redaction before atomic rename. Fixture evidence uses source `thorchainkit-s1-02-fixture`, a different schema, and `build/s1-02-fixture/`; either source/path supplied to the other validator fails.
+
+## Local-first CI budget policy
+
+- Routine `swift build`, narrow/full tests, Swift 5 strict-concurrency warnings-as-errors, verifier/mutant scripts, exact-destination Example simulator builds, and both Maestro flows run on the operator MacBook. The Engineer, CodeReviewer, and QA cite exact local commands, exit status, head SHA, and retained redacted output in their role-separated evidence.
+- `.github/workflows/ci.yml` exposes a macOS job only through `workflow_dispatch` with required `pr_number`, exact 40-character `expected_head_sha`, and confirmation token `FINAL_S1_02_GATE`. It has no `pull_request`, `pull_request_target`, `push`, `schedule`, or other automatic macOS trigger. `Scripts/verify-s1-02-ci-policy.sh` parses the workflow and fails if this trigger allowlist changes.
+- The dispatch preflight reads the open PR from GitHub, requires base `main`, requires its current `headRefOid` to equal `expected_head_sha`, checks out that immutable SHA, and records PR number, workflow run ID/URL, and SHA. The CTO/operator dispatches it once, immediately before merge, only after local Reviewer and QA evidence is exact-head green.
+- Intermediate PR pushes start no hosted macOS work. A failed final run requires a changed/fixed PR head and a new exact-head review before another dispatch; a successful run for a SHA is not rerun. Pushing or merging that already-verified SHA to `main` starts no duplicate full suite.
+- The one final hosted run executes the same deterministic package, strict-concurrency, verifier, Example simulator, and Maestro suite; the opt-in mainnet live probe remains local and separate. Reviewer/QA/CTO closure evidence cites both local output and, when dispatched, the single hosted run URL/status/SHA.
+- Self-hosted Mac support may be added in a separate approved slice and is not required by S1-02.
 
 ## Verification Commands
 
@@ -381,9 +462,14 @@ Run in order after approval and implementation:
 
 ```bash
 swift build
+swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
+swift test --filter LiveNodeProbeTests
 swift test --filter EndpointPoolTests
+swift test --filter EndpointDiagnosticsTests
 swift test
 Scripts/verify-s1-02.sh
+Scripts/verify-s1-02-ci-policy.sh
+Scripts/test-run-maestro.sh
 THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh s1-02
 ```
 
@@ -393,17 +479,16 @@ The live command above runs separately after deterministic gates. Its absence is
 
 S1-02 adds `Tests/ThorChainKitTests/Fixtures/S1-02-public-symbols.txt` and `Scripts/verify-s1-02.sh`; the S1-02 CI job compares the generated public graph exactly with that current-slice baseline and also requires every canonical declaration in `S1-01-public-symbols.txt` to remain an unchanged subset. New S1-02 declarations appear only in the S1-02 exact baseline; removal or signature mutation of an S1-01 declaration fails. The S1-02 script repeats S1-01's exact production factory capability audit because this slice does not compose probing or networking into `Kit.instance`. A separate SPI syntax fixture permits only `TestingEndpointPolicySession`/`TestingEndpointPolicySnapshot`, proves `ExampleRuntime` reaches the real pool through that root, and rejects SPI import anywhere outside tests and `iOS Example`.
 
-## Discovery 1/2 remediation allowlist
+## Frozen discovery-2 closure matrix
 
-| Stable blocker | Revision-13 resolution | Required discovery-2 evidence |
+Discovery is exhausted at 2/2. The five closed-at-discovery IDs remain closed (`S02-EVID-001`, `VOP-S02-01`, `VOP-S02-02`, `VOP-S02-03`, `VOP-S02-06`). Closure review may evaluate only the five open IDs below plus a direct Critical/High regression caused by revision 14.
+
+| Stable blocker | Revision-14 resolution | Required closure evidence |
 |---|---|---|
-| `S02-EVID-001` | Zcash actor provider is the lifecycle primary; Vultisig is probe-seam support only; MarketKit/Evm are rejected. | Reproduce exact commits/anchors and verify the revised analog-state selection. |
-| `S102-SEC-001` | Cosmos latest-block `chain_id` must match node info, Comet, and expected identity. | Foreign block-header plus healthy sibling locks the pool. |
-| `S102-SEC-002` | Indexed typed per-role/request outcomes, complete precedence, pool-lock rules, and monotonic timed health are explicit. | Healthy plus timeout/429/invalid/foreign completion permutations. |
-| `S02-ARCH-001` | Per-waiter registry/shared token defines cancel-one, cancel-all, reset, and cache installation. | Deterministic waiter/cancellation/reset tests are named and internally consistent. |
-| `S102-SEC-003` | Diagnostics expose only origin and fixed codes; paths, bodies, arbitrary errors, and raw foreign chain IDs are forbidden. | Sentinel tests cover UI, logs, xUnit, Maestro, and live JSON. |
-| `VOP-S02-01` | Runner accepts one slice token and executes one exact flow; tests/CI cover both slices. | Affected runner/config/test/CI paths and exact argv are complete. |
-| `VOP-S02-02` | One Example-only Testing SPI session executes the real pool while production `Kit` stays inert. | SPI reachability and forbidden-import/static-logic gates are complete. |
-| `VOP-S02-03` | Controlled-transport `LiveNodeProbeTests` pin requests, decoders, status, cancellation, and forbidden work. | Exact non-skipped discovery and prohibited-request assertions are complete. |
-| `VOP-S02-04` | Exact opt-in command, output path/schema, head binding, validator, and fail/unrun semantics are defined. | Fixture/live evidence cannot substitute for each other. |
-| `VOP-S02-06` | Affected-file implementation plan and integrity pins are revision-bound with spec/test plan. | All digests reproduce at the pushed review head. |
+| `S102-SEC-001` | Three independent indexed request results preserve every observed identity; identity classification precedes partial failure/shape validation. | A foreign node-info or block identity plus sibling timeout/invalid and a healthy family still locks deterministically. |
+| `S102-SEC-002` | `RoleProbeFailure: Error`; each outcome retains family/role/request; health mutation accepts and validates the originating lease generation. | The algebra compiles; missing/duplicate/mismatched outcomes fail; a pre-reset lease cannot reinstall health. |
+| `S02-ARCH-001` | One synchronous cancellation latch is shared by `onCancel`, actor enrollment, and stable-order commit locking; unknown cancellation messages retain no state. | Pre-cancel, registration race, completion race, last-waiter suppression, reset, and cancellation-insensitive probe tests are implementable without sleeps. |
+| `S102-SEC-003` | Provider errors retain only local expected identity plus fixed classification/index codes; no actual/raw identity associated value exists. | Compile/API audit plus sentinels prove foreign IDs cannot survive in errors, logs, UI, xUnit, Maestro, or JSON. |
+| `VOP-S02-04` | Live schema v1 fixes every discriminator/key/type/value rule, forbids extras/duplicates, binds source/path/head, and mechanically excludes fixture evidence. | Validator mutants cover wrong source/head/path, keys/types/counts/arithmetic/origins, fixture substitution, duplicate keys, and redaction. |
+
+The operator's local-first CI budget is an additional frozen acceptance requirement. Closure must also verify that the plan includes the manual exact-head workflow contract and that the future CI-policy verifier rejects automatic hosted macOS triggers or a repeated `main` gate.
