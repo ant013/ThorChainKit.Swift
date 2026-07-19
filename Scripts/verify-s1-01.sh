@@ -177,18 +177,28 @@ PY
 }
 
 verify_public_symbols() {
-    local actual fixture symbol_graph
+    local actual bin_path fixture output_dir sdk_path symbol_graph target
     actual=$(mktemp)
-    trap 'rm -f "$actual"' RETURN
+    output_dir=$(mktemp -d)
+    trap 'rm -f "$actual"; rm -rf "$output_dir"' RETURN
     fixture="$repository_root/Tests/ThorChainKitTests/Fixtures/S1-01-public-symbols.txt"
 
     cd "$repository_root"
-    swift package dump-symbol-graph \
-        --minimum-access-level public \
-        --skip-synthesized-members >/dev/null
-    symbol_graph=$(find .build -path '*/symbolgraph/ThorChainKit.symbols.json' -print)
-    [[ $(printf '%s\n' "$symbol_graph" | sed '/^$/d' | wc -l | tr -d ' ') == 1 ]] \
-        || fail "verify-s1-01-public-symbols" "expected one ThorChainKit symbol graph"
+    bin_path=$(swift build --show-bin-path)
+    target=$(xcrun swiftc -print-target-info | python3 -c 'import json, sys; print(json.load(sys.stdin)["target"]["triple"])')
+    sdk_path=$(xcrun --sdk macosx --show-sdk-path)
+    xcrun swift-symbolgraph-extract \
+        -module-name ThorChainKit \
+        -I "$bin_path/Modules" \
+        -target "$target" \
+        -sdk "$sdk_path" \
+        -minimum-access-level public \
+        -skip-synthesized-members \
+        -omit-extension-block-symbols \
+        -output-dir "$output_dir"
+    symbol_graph="$output_dir/ThorChainKit.symbols.json"
+    [[ -f "$symbol_graph" ]] \
+        || fail "verify-s1-01-public-symbols" "ThorChainKit symbol graph is unavailable"
     python3 - "$symbol_graph" > "$actual" <<'PY'
 import json
 import sys
