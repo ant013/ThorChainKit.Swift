@@ -97,31 +97,38 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 
 ## S1-02 endpoint-policy gate
 
-Revision 12 adds the following default-CI obligations before implementation may be considered complete:
+Revision 13 adds the following default-CI obligations before implementation may be considered complete:
 
 | Behavior | Deterministic evidence |
 |---|---|
 | S1-01 surface preservation | Compile the unchanged `Network`, `EndpointFamilyDescriptor`, `EndpointPolicy`, `EndpointConfiguration`, and error values through the pool; preserve the S1-01 symbol baseline as an exact subset. |
-| Family identity | Same identity leases; mixed roles and any consistently foreign configured family lock the pool even when another family is healthy. |
+| Family identity | Cosmos node info, Cosmos latest-block header, and Comet status must all equal the expected identity; any mixed/foreign observation locks the pool even when another family is healthy. |
 | Role freshness | Positive independent Cosmos/Comet heights pass; catching-up, nonpositive, cross-role-skewed, fresh-Comet+stale-Cosmos, and best-height-lagging families are stale. |
-| Deterministic selection | Highest verified Comet height wins, equal heights use original family order, and permuted task completion produces the same family or fixed-precedence error. |
+| Typed deterministic selection | Indexed per-family/per-role/request outcomes classify transport, HTTP/`Retry-After`, invalid field, identity, and cancellation; highest verified Comet height wins, ties use original order, and completion permutations preserve the fixed result. |
 | Stale-family fallback | A correctly identified stale family may be excluded for another verified family; no remaining family returns distinct `catchingUp` or `staleEndpoint`, never `wrongNetwork`. |
-| Probe lifecycle | Concurrent first lease and TTL revalidation coalesce; cancellation installs no result; reset cancels, increments generation, and blocks old-generation installation. |
-| Health effects | Only retryable transport/status failures create cooldown/rate-limit state; cancellation, configuration, and invalid-response failures do not. |
+| Probe lifecycle | Concurrent first lease and TTL revalidation coalesce through a waiter registry/shared token; cancel-one, cancel-all, and reset have distinct prompt behavior and stale completions cannot install. |
+| Health effects | An injected monotonic clock controls TTL and explicit `retryNotBefore`; retryable values only extend eligibility, expiry/TTL interaction is deterministic, and terminal/stale/invalid/cancelled outcomes create no timed health state. |
 | Ownership boundary | `EndpointPool` performs no business read or retry. S1-04 alone tests attempt order, backoff, family-at-most-once, exhaustion, and cancellation propagation. |
-| Diagnostics/UI | Fixture output exposes sanitized family/role/identity/height/reason fields and no credentials, full query-bearing URL, or raw body. |
+| Live probe contract | Controlled transport proves exact base-path-preserving node-info/latest-block/status requests, decoder/status/cancellation behavior, and zero `/thorchain`, Midgard, gRPC, business-read, write, broadcast, or retry requests. |
+| Diagnostics/UI | Hostile path/body/error/chain-ID sentinels are absent from typed diagnostics, logs, xUnit, Example UI, Maestro artifacts, and live JSON; only family/role/request, origin, local expected identity/classification, height/status, and fixed reason codes remain. |
+| Example execution | The sole Testing SPI session calls the real pool while production `Kit` stays inert; source/syntax gates reject duplicated classification, static outcomes, or SPI imports outside tests/Example. |
+| Slice-exact Maestro | Runner tests prove `s1-01` and `s1-02` each execute exactly one different allowlisted YAML and retain all provenance, containment, JUnit, OCR, and secret canaries. |
+| Live separation | Exact opt-in command, implementation-head-bound schema, validator, nonzero failure semantics, and distinct fixture/live roots prevent deterministic evidence from substituting for mainnet evidence. |
 
 The narrow-to-broad command order is:
 
 ```bash
 swift build
+swift test --filter LiveNodeProbeTests
 swift test --filter EndpointPoolTests
+swift test --filter EndpointDiagnosticsTests
 swift test
 Scripts/verify-s1-02.sh
-THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh .maestro/flows/01-endpoint-policy.yaml
+Scripts/test-run-maestro.sh
+THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh s1-02
 ```
 
-The opt-in live check runs only after deterministic gates pass. It validates both role identities and heights against the exact implementation head and records only sanitized family IDs and measurements.
+The opt-in live command in the S1-02 spec runs only after deterministic gates pass. It validates two families and all three identity sources against the exact implementation head. Absence is `UNRUN`, an attempted unavailable/invalid run is nonzero failure, and its sanitized JSON cannot be replaced by fixture evidence.
 
 ## Verification order per slice
 
@@ -145,13 +152,13 @@ For a controlled run, record:
 - final PR `headRefOid`; Reviewer, QA, and CI records are invalidated by any later push;
 - timestamp/timezone;
 - endpoint IDs/roles, without credentials;
-- returned chain ID and heights;
+- local expected chain ID, sanitized match classification, and heights; S1-02 never records an observed raw identity;
 - test address class/provenance;
 - expected and actual raw RUNE amount;
 - create/import/relaunch result;
 - Example Maestro flow name, mode (`FIXTURE`/`LIVE`) and JUnit/artifact location;
 - the Unstoppable manual-checklist result separately from the Maestro evidence;
-- skipped/unavailable checks and the exact reason.
+- unrun checks and the exact reason; an attempted unavailable live check is failure, not a skip/pass.
 
 The mnemonic/private key must not appear in the evidence. Use a public fixture mnemonic or a purpose-created test account without user funds.
 
