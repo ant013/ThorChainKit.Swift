@@ -74,6 +74,7 @@ SH
 echo "maestro $*" >> "$SHIM_LOG"
 if [[ ${1:-} == --version ]]; then
     [[ ${SHIM_MAESTRO_VERSION:-good} == good ]] && echo '2.6.1' || echo '2.6.0'
+    [[ ${SHIM_MAESTRO_UPDATE_NOTICE:-0} == 1 ]] && echo 'A new version is available' >&2
     exit 0
 fi
 [[ " $* " == *" --device $SHIM_UDID "* ]] || exit 51
@@ -109,6 +110,7 @@ run_fixture() {
     local fixture=$1
     SHIM_LOG="$fixture/commands.log" \
     SHIM_UDID="$canary_udid" \
+    SHIM_MAESTRO_UPDATE_NOTICE=1 \
     PATH="$fixture/shims:$PATH" \
     THORCHAIN_SIMULATOR_UDID="$canary_udid" \
         "$fixture/Scripts/run-maestro.sh" >/dev/null
