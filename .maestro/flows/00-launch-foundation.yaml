@@ -1,0 +1,30 @@
+appId: org.horizontalsystems.thorchainkit.example
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: data-source
+    text: FIXTURE
+- assertVisible:
+    id: network
+    text: mainnet · thorchain-1
+- assertVisible:
+    id: address
+    text: thor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhudkmnn2
+- assertVisible:
+    id: sync-state
+    text: "idle(cached: false)"
+- assertVisible:
+    id: last-block
+    text: nil
+- assertVisible:
+    id: rune-balance
+    text: "0"
+- assertVisible:
+    id: account-exists
+    text: "false"
+- assertVisible:
+    id: account-state
+    text: nil
+- assertNotVisible: "(?i).*(mnemonic|seed phrase|private key).*"
+- takeScreenshot: foundation-success

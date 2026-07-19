@@ -89,7 +89,7 @@ The cross-slice verification authority remains `docs/specs/sprint-01-foundation/
 
 ### 6. Add the guarded exact-UDID Maestro flow and artifact scanner
 
-- [ ] Completion evidence recorded in this plan and the implementation commit.
+- [x] Completion evidence recorded in this plan and the implementation commit.
 - Suggested owner: ThorChainSwiftEngineer.
 - Dependencies: step 5; exact simulator UDID and Maestro CLI for live execution.
 - Affected paths: `.maestro/config.yaml`, `.maestro/flows/00-launch-foundation.yaml`, `Scripts/run-maestro.sh`, `Scripts/test-run-maestro.sh`, `Scripts/scan-s1-01-artifacts.swift`, `.github/workflows/ci.yml`, and ignore rules only for generated artifacts.

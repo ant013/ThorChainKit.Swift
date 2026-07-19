@@ -426,7 +426,9 @@ verify_direct_scripts() {
     for script in \
         Scripts/verify-s1-01.sh \
         Scripts/verify-bigint-floor.sh \
-        Scripts/test-s1-01-mutants.sh
+        Scripts/test-s1-01-mutants.sh \
+        Scripts/run-maestro.sh \
+        Scripts/test-run-maestro.sh
     do
         [[ -x "$repository_root/$script" ]] \
             || fail "verify-s1-01-script-modes" "$script is not executable"
@@ -530,6 +532,26 @@ PY
     echo "PASS verify-s1-01-example-workspace"
 }
 
+verify_ci_provenance() {
+    python3 - "$repository_root/.github/workflows/ci.yml" <<'PY' \
+        || fail "verify-s1-01-ci-provenance" "CI action or Maestro provenance differs"
+from pathlib import Path
+import sys
+
+source = Path(sys.argv[1]).read_text()
+required = [
+    "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5",
+    "actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9",
+    "https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.6.1/maestro.zip",
+    "3440825f514f537c6a96bcf5de995780c2a4a7f83a43208fdc95d4f1fecfad3b",
+]
+assert all(source.count(value) == 1 for value in required)
+assert "actions/checkout@v" not in source
+assert "actions/setup-java@v" not in source
+PY
+    echo "PASS verify-s1-01-ci-provenance"
+}
+
 verify_package_topology
 verify_default_bigint_resolution
 verify_toolchain
@@ -545,4 +567,5 @@ verify_strict_build
 "$repository_root/Scripts/test-s1-01-mutants.sh"
 verify_public_consumer
 verify_example_workspace
+verify_ci_provenance
 verify_sanitized_gimle_report
