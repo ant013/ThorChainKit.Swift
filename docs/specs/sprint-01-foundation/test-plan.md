@@ -95,6 +95,34 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 - The named `verify-s1-01-example-workspace` subgate parses the workspace and asserts exactly `container:iOS Example.xcodeproj` plus `group:..` before the exact-destination build.
 - Directly invoked shell scripts have Git mode `100755`, pass `test -x`, and use a valid shell shebang. Non-executable Swift helpers are called through `xcrun swift`.
 
+## S1-02 endpoint-policy gate
+
+Revision 12 adds the following default-CI obligations before implementation may be considered complete:
+
+| Behavior | Deterministic evidence |
+|---|---|
+| S1-01 surface preservation | Compile the unchanged `Network`, `EndpointFamilyDescriptor`, `EndpointPolicy`, `EndpointConfiguration`, and error values through the pool; preserve the S1-01 symbol baseline as an exact subset. |
+| Family identity | Same identity leases; mixed roles and any consistently foreign configured family lock the pool even when another family is healthy. |
+| Role freshness | Positive independent Cosmos/Comet heights pass; catching-up, nonpositive, cross-role-skewed, fresh-Comet+stale-Cosmos, and best-height-lagging families are stale. |
+| Deterministic selection | Highest verified Comet height wins, equal heights use original family order, and permuted task completion produces the same family or fixed-precedence error. |
+| Stale-family fallback | A correctly identified stale family may be excluded for another verified family; no remaining family returns distinct `catchingUp` or `staleEndpoint`, never `wrongNetwork`. |
+| Probe lifecycle | Concurrent first lease and TTL revalidation coalesce; cancellation installs no result; reset cancels, increments generation, and blocks old-generation installation. |
+| Health effects | Only retryable transport/status failures create cooldown/rate-limit state; cancellation, configuration, and invalid-response failures do not. |
+| Ownership boundary | `EndpointPool` performs no business read or retry. S1-04 alone tests attempt order, backoff, family-at-most-once, exhaustion, and cancellation propagation. |
+| Diagnostics/UI | Fixture output exposes sanitized family/role/identity/height/reason fields and no credentials, full query-bearing URL, or raw body. |
+
+The narrow-to-broad command order is:
+
+```bash
+swift build
+swift test --filter EndpointPoolTests
+swift test
+Scripts/verify-s1-02.sh
+THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh .maestro/flows/01-endpoint-policy.yaml
+```
+
+The opt-in live check runs only after deterministic gates pass. It validates both role identities and heights against the exact implementation head and records only sanitized family IDs and measurements.
+
 ## Verification order per slice
 
 1. `swift build` / compile of changed target.

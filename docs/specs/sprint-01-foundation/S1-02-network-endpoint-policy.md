@@ -1,6 +1,6 @@
 # S1-02 — Network and Endpoint Policy
 
-**Status:** synchronized to S1-01 revision 11 after revision-10 adversarial REVISE; implementation blocked pending fresh review and approval.
+**Status:** revision 12 adversarial review accepted; implementation blocked pending explicit revision-bound approval.
 **Risk:** high/security boundary.
 **Observable outcome:** the kit accepts only provider families consistent with `Network`; wrong-chain, stale, mixed-family, retryable, terminal, and cancelled operations have deterministic, distinct outcomes.
 
@@ -27,6 +27,13 @@ Out of scope:
 - write/broadcast failover;
 - API-payload quorum;
 - automatic stagenet chain-ID discovery.
+
+## Assumptions and Open Questions
+
+- S1-01 revision 11 at `f7da1ce` is the immutable public-value baseline for this slice.
+- Callers explicitly group one Cosmos REST URL and one CometBFT URL into a family; matching hosts are not required, but both roles must independently prove identity and freshness.
+- Provider presets and opt-in live credentials are deployment inputs, not part of the S1-02 policy contract.
+- There are no open design questions for revision 12. Any material change to identity precedence, stale-family fallback, or failover ownership requires a new spec revision and approval.
 
 ## Files
 
@@ -102,6 +109,21 @@ actor EndpointPool {
 }
 ```
 
+## Acceptance Criteria
+
+- S1-01's public `Network`, endpoint-family, policy, configuration, and error declarations are consumed unchanged and compile-tested with the pool.
+- A family is lease-eligible only when Cosmos and Comet return the exact expected chain ID, both heights are positive, Comet reports `catching_up == false`, and cross-role skew is at most `maximumHeightLag`.
+- A mixed Cosmos/Comet identity or any consistently foreign configured family is a terminal configuration error for the pool. It is never silently skipped in favor of another family.
+- A correctly identified but catching-up, nonpositive-height, cross-role-skewed, or best-height-lagging family is stale, not foreign. It may be excluded in favor of another already verified family; if no eligible family remains, the pool returns a distinct `catchingUp` or `staleEndpoint` result.
+- Concurrent completion order cannot change the outcome. Terminal precedence is `mixedFamilyIdentity`, `wrongNetwork`, `catchingUp`, `staleEndpoint`, then `noEligibleFamily`; ties use original family order.
+- Selection uses the greatest verified Comet height, filters families below `bestHeight - maximumHeightLag`, and breaks equal-height ties by original family order.
+- `EndpointLease` is immutable and contains one complete family, the verified identity, both role heights, and the pool generation. A lease never borrows a height or role from another family.
+- Initial and TTL revalidation probes are coalesced. After `identityRevalidationInterval`, no cached lease is returned until revalidation succeeds.
+- `reset()` cancels the active probe, increments generation, clears health, and prevents an old generation from installing results.
+- `recordFailure` applies cooldown/rate-limit state only to retryable transport/status failures. Cancellation records nothing; terminal configuration and invalid-response failures are not converted into retryable health state.
+- `EndpointPool` never performs or retries a business read. S1-04's `ReadOperationCoordinator` is the only owner of whole-operation attempts, backoff, family exclusion, exhaustion, and cancellation propagation.
+- Diagnostics and Example output contain family IDs, role labels, chain IDs, heights, and sanitized reasons only; they never contain credentials, full query-bearing URLs, or response bodies.
+
 The probe always uses both URLs from one family and obtains freshness separately for each role:
 
 - Cosmos REST: `/cosmos/base/tendermint/v1beta1/node_info` proves `network` identity, while `/cosmos/base/tendermint/v1beta1/blocks/latest` provides its own REST height.
@@ -121,10 +143,12 @@ S1-01 validates families, IDs, URL safety, client ID, timeouts, lag, retryable c
 2. Each family must return identical Cosmos/Comet chain IDs.
 3. Both must equal `Network.expectedChainId`.
 4. Both heights must be positive, `catching_up == false`, and cross-role skew must not exceed `maximumHeightLag`.
-5. Any configured foreign/mixed identity is a terminal configuration failure; it is not silently skipped.
-6. Select the healthy family with the highest height; exclude families below `bestHeight - maximumHeightLag`.
-7. Coalesce concurrent initial/revalidation probes.
-8. Identity TTL expiration triggers revalidation before the next lease.
+5. Aggregate all completed probes in original configuration order; do not let task completion order select an error or family.
+6. Any configured foreign/mixed identity is a terminal configuration failure; it is not silently skipped.
+7. Exclude correctly identified catching-up, nonpositive-height, cross-role-skewed, and best-height-lagging families. If another verified family remains, continue with it; otherwise apply the fixed terminal precedence above.
+8. Select the remaining family with the highest Comet height, breaking ties by original order.
+9. Coalesce concurrent initial/revalidation probes.
+10. Identity TTL expiration triggers revalidation before the next lease.
 
 ## Single Failover Owner
 
@@ -152,7 +176,7 @@ Neither `LiveThorNodeClient`, the decoder, nor `AccountSyncer` performs its own 
 | HTTP 400/401/403/404 | no | client/config | terminal HTTP |
 | malformed JSON/invalid field | no | quarantine | invalid response |
 | wrong/mixed chain ID | no | pool locked | wrong/inconsistent network |
-| catching up/excessive inter-family or cross-role lag | select another verified family | stale | stale after exhaustion |
+| catching up/nonpositive height/excessive inter-family or cross-role lag | S1-04 may request another already verified family | stale | distinct stale result when none remains |
 
 Each family is used at most once per logical read. Broadcast receives a separate policy in Sprint 2.
 
@@ -170,14 +194,41 @@ Sensitive URL credentials/query are prohibited during construction; diagnostics 
 - An old probe generation cannot install health.
 - The S1-05 lifecycle owner cancels the active `ReadOperationCoordinator`; the pool remains reusable after restart.
 
-## Analog Delta
+## Evidence Revision
 
-| Source | Use | Reject |
-|---|---|---|
-| Tron network/source | explicit configuration | `urls[0]`, ungrouped endpoints |
-| Evm provider seam | narrow transport | rotation on any error, mutable nonisolated ID |
-| Vultisig | Cosmos/RPC separation, HRP fixtures | one URL override, 2xx-only health, infinite chain-ID cache |
-| Official docs | Cosmos REST + CometBFT roles, 429/503 backoff | unstable stagenet defaults |
+- Target: `ThorChainKit.Swift@f7da1ce` on `docs/THR-13-network-endpoint-policy`.
+- Primary configuration analog: `TronKit.Swift@aa691bcd`, `RpcSource` plus its `Kit` consumer.
+- Primary probe seam and THOR-specific support: pinned `vultisig-ios@d3123dbe`, `RPCHealthProbe`, its tests/consumer, and `ThorchainMainnetAPI` role routing.
+- Rejected counterexample: `EvmKit.Swift@be028631`, `NodeApiProvider` broad recursive rotation and mutable request ID.
+- Gimle trust is `YELLOW`: Tron/Evm mappings are current, but ThorChainKit is absent from Palace and target Serena symbol navigation remained cached as documentation-only. The target decision basis is codebase-memory plus exact Git/`rg`; analogs were independently verified with Serena and `rg`.
+
+## Analog Delta Matrix
+
+### Endpoint family contract
+
+| Field | Revision-12 decision |
+|---|---|
+| Analog family | Primary: Tron `RpcSource`. Supporting: the inherited S1-01 endpoint values and Vultisig LCD/RPC role routing. Rejected: Evm `NodeApiProvider` URL rotation. |
+| Coverage | Contract/composition/consumer from Tron; runtime-safe value and error contract plus tests from S1-01; THOR role boundary from Vultisig. No role waiver. |
+| Invariants to preserve | Explicit caller configuration, immutable value flow, separate network identity, narrow dependency direction, and construction-time URL safety. |
+| Required differences | Replace an untyped URL array with one typed Cosmos+Comet family; independently verify both roles; bind the complete family to one lease. |
+| Rejected differences | `urls[0]`, arbitrary endpoint rotation, app-global endpoint inventory, `/thorchain/*`, Midgard, gRPC, persisted health, and automatic stagenet discovery. |
+| Failure modes | Mixed roles, consistently foreign identity, unsafe URL disclosure, role height borrowed from another host, and nondeterministic family ordering. |
+| Tests before code | S1-01 surface preservation, same/foreign/mixed identity, distinct-host role agreement, deterministic family order, and sanitized diagnostics. |
+| Verification | `swift test --filter EndpointPoolTests`; `Scripts/verify-s1-02.sh`; fixture Maestro flow; opt-in two-role mainnet probe. |
+
+### Probe, health, selection, and lease lifecycle
+
+| Field | Revision-12 decision |
+|---|---|
+| Analog family | Primary: Vultisig `RPCHealthProbe` injected async seam and tests. Supporting: S1-01 policy bounds and Vultisig THOR LCD/RPC split. Rejected: Evm broad recursive failover. |
+| Coverage | Probe contract/implementation/error/test seam from Vultisig; policy/trust bounds from S1-01; composition/consumer from the Vultisig view model; lifecycle counterexample from Evm. No role waiver. |
+| Invariants to preserve | Injected transport, typed results, deterministic fixtures, explicit role paths, bounded policy, and caller-owned composition. |
+| Required differences | Actor-owned coalescing, fixed error precedence, decoded chain IDs and heights for both roles, catching-up/skew/lag filtering, TTL revalidation, generation invalidation, and immutable leases. |
+| Rejected differences | Treating 2xx `node_info` as verified identity, liveness-only health, mutable nonisolated request IDs, retrying every error, and business-read retries inside the pool. |
+| Failure modes | Cancellation installing health, old-generation completion, completion-order nondeterminism, stale Cosmos legitimized by fresh Comet, cooldown applied to terminal errors, and stale lease reuse after TTL. |
+| Tests before code | Coalescing, cancellation, generation reset, TTL clock, precedence under permuted completion, selection/tie/lag, fresh-Comet+stale-Cosmos, and retryable-only health effects. |
+| Verification | Narrow controlled async tests first, then full package tests, strict concurrency and symbol gates, Maestro fixture flow, and opt-in live probe. |
 
 ## Tests Before Implementation
 
@@ -185,13 +236,18 @@ Sensitive URL credentials/query are prohibited during construction; diagnostics 
 
 - same identity/healthy height → lease;
 - a single-family configuration with public default policy is valid and produces `effectiveMaximumAttempts == 1`;
-- multi-family default uses each family at most once; explicit attempts > family count is rejected;
-- Cosmos/Comet mismatch within a family → terminal;
+- explicit attempts greater than family count remain rejected by the inherited S1-01 tests; attempt order/exhaustion remains in S1-04;
+- Cosmos/Comet mismatch within a family → terminal pool lock even when another family is healthy;
+- a consistently foreign configured family → terminal pool lock even when another family is healthy;
 - fresh Comet + stale Cosmos REST is rejected; distinct hosts are permitted only with independent per-role freshness agreement;
-- any foreign configured family → terminal, with no silent skip;
-- selection of the highest healthy family and lag/catching-up exclusion;
+- catching-up or stale correctly identified family is excluded in favor of another verified family, with a distinct stale error when none remains;
+- selection of the highest healthy family, configured-order tie break, and lag exclusion;
+- permuted concurrent probe completion preserves the same family/error and fixed terminal precedence;
 - concurrent lease calls share one probe;
+- cancellation records no health effect and cannot install a probe result;
+- TTL expiry blocks lease reuse until one coalesced revalidation completes;
 - reset during probing blocks stale health installation;
+- `recordFailure` applies cooldown/rate-limit only to retryable failures and never turns invalid response or configuration errors into retryable state;
 - URL order does not change kit persistence identity.
 
 `ReadOperationCoordinatorTests` live in S1-04 and prove retry ownership/attempt order.
@@ -215,17 +271,20 @@ Sensitive URL credentials/query are prohibited during construction; diagnostics 
 4. With two providers, compare lag and select the expected family.
 5. Record family IDs/heights only, without credentials.
 
+## Verification Commands
+
+Run in order after approval and implementation:
+
+```bash
+swift build
+swift test --filter EndpointPoolTests
+swift test
+Scripts/verify-s1-02.sh
+THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh .maestro/flows/01-endpoint-policy.yaml
+```
+
+The live probe remains opt-in and must record the exact implementation head, timestamp, family IDs, chain IDs, both heights, skew, catching-up state, and skipped/unavailable reasons without recording provider credentials or full URLs.
+
 ## Slice-versioned contract gates
 
 S1-02 adds `Tests/ThorChainKitTests/Fixtures/S1-02-public-symbols.txt` and `Scripts/verify-s1-02.sh`; the S1-02 CI job compares the generated public graph exactly with that current-slice baseline and also requires every canonical declaration in `S1-01-public-symbols.txt` to remain an unchanged subset. New S1-02 declarations appear only in the S1-02 exact baseline; removal or signature mutation of an S1-01 declaration fails. The S1-02 script repeats S1-01's exact production factory capability audit because this slice does not compose probing or networking into `Kit.instance`.
-
-## Acceptance Criteria
-
-- The S1-01 public configuration surface is consumed unchanged and compile-tested with the pool.
-- HRP/chain ID are atomic.
-- A family binds Cosmos+Comet attempts; roles are not mixed.
-- Role-specific probes prove the identity + freshness of each role; the published account height is never borrowed from another host.
-- Foreign/mixed identity fails closed.
-- Failover has exactly one owner in S1-04.
-- Cancellation is not retried and does not become a sync error.
-- The deterministic matrix and controlled mainnet probe pass.
