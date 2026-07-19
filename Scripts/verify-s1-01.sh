@@ -514,6 +514,22 @@ verify_sanitized_gimle_report() {
     echo "PASS verify-s1-01-gimle-report"
 }
 
+verify_example_workspace() {
+    local workspace="$repository_root/iOS Example/iOS Example.xcworkspace/contents.xcworkspacedata"
+    [[ -f "$workspace" ]] \
+        || fail "verify-s1-01-example-workspace" "workspace data is absent"
+    python3 - "$workspace" <<'PY' \
+        || fail "verify-s1-01-example-workspace" "workspace links are not exact"
+import sys
+import xml.etree.ElementTree as ET
+
+root = ET.parse(sys.argv[1]).getroot()
+locations = [node.attrib.get("location") for node in root.findall("FileRef")]
+assert locations == ["container:iOS Example.xcodeproj", "group:.."]
+PY
+    echo "PASS verify-s1-01-example-workspace"
+}
+
 verify_package_topology
 verify_default_bigint_resolution
 verify_toolchain
@@ -528,4 +544,5 @@ verify_strict_build
 "$repository_root/Scripts/verify-bigint-floor.sh"
 "$repository_root/Scripts/test-s1-01-mutants.sh"
 verify_public_consumer
+verify_example_workspace
 verify_sanitized_gimle_report

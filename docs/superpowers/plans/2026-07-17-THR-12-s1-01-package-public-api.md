@@ -77,7 +77,7 @@ The cross-slice verification authority remains `docs/specs/sprint-01-foundation/
 
 ### 5. Add and independently build the fixture-only iOS Example
 
-- [ ] Completion evidence recorded in this plan and the implementation commit.
+- [x] Completion evidence recorded in this plan and the implementation commit.
 - Suggested owner: ThorChainSwiftEngineer.
 - Dependencies: step 4; an exact simulator UDID for the build check.
 - Affected paths: `iOS Example/iOS Example.xcodeproj/`, shared scheme, `.xcworkspace/`, and the minimal `Sources/` files listed in the spec.
