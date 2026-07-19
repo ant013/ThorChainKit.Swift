@@ -184,6 +184,7 @@ verify_public_symbols() {
     fixture="$repository_root/Tests/ThorChainKitTests/Fixtures/S1-01-public-symbols.txt"
 
     cd "$repository_root"
+    swift build --target ThorChainKit >/dev/null
     bin_path=$(swift build --show-bin-path)
     target=$(xcrun swiftc -print-target-info | python3 -c 'import json, sys; print(json.load(sys.stdin)["target"]["triple"])')
     sdk_path=$(xcrun --sdk macosx --show-sdk-path)
