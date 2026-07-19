@@ -64,9 +64,24 @@ An independent repeat review verified the current files and returned **ACCEPT** 
 - separation of Example Maestro evidence and manual host evidence;
 - complete manual sequence offline → recovery → remove → reinstall.
 
+## S1-02 revision 12 — ACCEPT for approval presentation
+
+This slice review is bound to `ThorChainKit.Swift@f7da1ce`, spec revision 12, and the consolidated test-plan revision on branch `docs/THR-13-network-endpoint-policy`. Five stable challenges were closed:
+
+| Decision | Challenge | Resolution |
+|---|---|---|
+| `D-S02-01` | Are the analog identity and freshness claims current enough for a high-risk boundary? | Tron and Evm Gimle mappings match the exact local heads and were independently verified with Serena/`rg`; pinned Vultisig was verified directly. ThorChainKit Palace coverage and target Serena caching remain explicit YELLOW limitations, so target truth comes from codebase-memory plus Git/`rg`. |
+| `D-S02-02` | Is there one coherent family rather than an incompatible collage? | Tron remains the configuration spine; Vultisig supplies only the injected probe seam and THOR LCD/RPC role evidence; S1-01 supplies the inherited local contract. Every conflict is stated in the delta matrix, and Evm broad rotation remains rejected. |
+| `D-S02-03` | Do foreign identity and stale health have deterministic, noncontradictory outcomes? | Revision 12 removes the prior contradiction: mixed/foreign identity locks the pool, while a correctly identified stale/catching-up family may be excluded for another verified family. Fixed error precedence and configured-order tie breaking remove task-completion nondeterminism. |
+| `D-S02-04` | Can cancellation, old probe completion, or split failover ownership install invalid state or duplicate retries? | Coalesced actor probes, TTL blocking, generation invalidation, and cancellation-with-no-health-effect are required tests. `EndpointPool` performs no business read; S1-04 alone owns whole-operation attempts and exhaustion. |
+| `D-S02-05` | Is the change and test surface the smallest sufficient delta? | Scope stays within the six network files, one test file, Example controller/flow, and slice verification assets. `/thorchain/*`, Midgard, gRPC, persisted health, custom-node UI, broadcast, and host-app integration remain excluded. |
+
+Result: **ACCEPT** for presenting revision 12 for explicit user approval. This is not implementation authorization.
+
 ## Decision constraints
 
 - Gimle trust remains `RED`; all load-bearing conclusions were reverified in the exact current trees through Serena and targeted `rg`.
 - Maestro CLI is not installed on the current machine, so the Example YAML and runner currently exist only as an asserted design contract and apply exclusively to the future `ThorChainKit/iOS Example`.
 - The user's term `Meteora` was interpreted as Maestro. If it refers to another internal tool, the UI layer must be rebound to its actual contract before implementation.
 - Implementation remains blocked pending explicit user approval of the design package.
+- For S1-02 revision 12 specifically, Gimle trust is `YELLOW`, not the earlier Sprint-wide `RED`: current Tron/Evm mappings agree with exact checkouts, while ThorChainKit Palace coverage and target Serena symbol navigation remain unavailable. The fallback basis is recorded and independently sufficient for the design gate.
