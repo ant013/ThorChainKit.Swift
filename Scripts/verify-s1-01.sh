@@ -31,11 +31,10 @@ targets = package["targets"]
 dependencies = package["dependencies"]
 
 assert package["name"] == "ThorChainKit"
-assert package["platforms"] == [{
-    "options": [],
-    "platformName": "ios",
-    "version": "13.0",
-}]
+assert package["platforms"] == [
+    {"options": [], "platformName": "ios", "version": "13.0"},
+    {"options": [], "platformName": "macos", "version": "10.15"},
+]
 assert len(products) == 1
 assert products[0]["name"] == "ThorChainKit"
 assert products[0]["type"] == {"library": ["automatic"]}

@@ -1,5 +1,7 @@
 import Foundation
 import BigInt
+import Combine
+import Darwin
 import XCTest
 @testable import ThorChainKit
 
@@ -293,12 +295,216 @@ final class PublicApiTests: XCTestCase {
         }
     }
 
+    func testFactoryRejectsWhitespaceOnlyWalletId() throws {
+        let address = try Address(
+            "thor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhudkmnn2",
+            network: .mainnet
+        )
+        for walletId in ["", " ", "\n\t"] {
+            assertThrows(KitConfigurationError.invalidWalletId) {
+                try Kit.instance(
+                    address: address,
+                    walletId: walletId,
+                    endpoints: try self.endpoints()
+                )
+            }
+        }
+    }
+
+    func testFactoryDerivesNetworkFromAddress() throws {
+        let vectors: [(String, Network)] = [
+            ("thor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhudkmnn2", .mainnet),
+            ("sthor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhue08995", try .stagenet(expectedChainId: "stage-1")),
+            ("cthor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhupxcqek", try .chainnet(expectedChainId: "chain-1")),
+        ]
+
+        for (raw, network) in vectors {
+            let address = try Address(raw, network: network)
+            let kit = try Kit.instance(
+                address: address,
+                walletId: "wallet-01",
+                endpoints: endpoints()
+            )
+            XCTAssertEqual(kit.address, address)
+            XCTAssertEqual(kit.network, address.network)
+        }
+    }
+
+    func testFactoryCreatesNoWorkAndDoesNotStartLifecycle() throws {
+        let (kit, lifecycle) = try makeKit()
+
+        XCTAssertTrue(lifecycle.events.isEmpty)
+        XCTAssertNil(kit.lastBlockHeight)
+        XCTAssertEqual(kit.syncState, .idle(cached: false))
+        XCTAssertNil(kit.accountState)
+        XCTAssertEqual(kit.runeBalance, 0)
+        XCTAssertFalse(kit.accountExists)
+
+        let factoryKit = try Kit.instance(
+            address: kit.address,
+            walletId: "wallet-01",
+            endpoints: endpoints()
+        )
+        XCTAssertNil(factoryKit.lastBlockHeight)
+        XCTAssertEqual(factoryKit.syncState, .idle(cached: false))
+        XCTAssertNil(factoryKit.accountState)
+        XCTAssertEqual(factoryKit.runeBalance, 0)
+        XCTAssertFalse(factoryKit.accountExists)
+    }
+
+    func testLifecycleSerializesIdempotentStartStopAndRunningRefresh() throws {
+        let (kit, lifecycle) = try makeKit()
+        kit.start()
+        kit.start()
+        kit.refresh()
+        kit.stop()
+        kit.stop()
+        kit.refresh()
+        XCTAssertEqual(lifecycle.events.map(\.name), ["start", "refresh", "stop"])
+
+        try assertReentryTrace(
+            initiallyRunning: false,
+            c0: { $0.start() },
+            reentrant: { $0.stop() },
+            c1: { $0.start() },
+            expected: ["start", "stop", "start"]
+        )
+        try assertReentryTrace(
+            initiallyRunning: true,
+            c0: { $0.stop() },
+            reentrant: { $0.start() },
+            c1: { $0.stop() },
+            expected: ["stop", "start", "stop"]
+        )
+        try assertReentryTrace(
+            initiallyRunning: true,
+            c0: { $0.refresh() },
+            reentrant: { $0.refresh() },
+            c1: { $0.stop() },
+            expected: ["refresh", "refresh", "stop"]
+        )
+    }
+
+    func testInitialPublishersAllowReentrantSnapshotAndLifecycleAccess() throws {
+        let (kit, lifecycle) = try makeKit()
+        let height = expectation(description: "height replay")
+        let sync = expectation(description: "sync replay")
+        let account = expectation(description: "account replay")
+        var cancellables = Set<AnyCancellable>()
+
+        kit.lastBlockHeightPublisher.sink { value in
+            XCTAssertNil(value)
+            XCTAssertNil(kit.lastBlockHeight)
+            kit.stop()
+            height.fulfill()
+        }.store(in: &cancellables)
+
+        kit.syncStatePublisher.sink { value in
+            XCTAssertEqual(value, .idle(cached: false))
+            XCTAssertEqual(kit.syncState, .idle(cached: false))
+            kit.refresh()
+            sync.fulfill()
+        }.store(in: &cancellables)
+
+        kit.accountStatePublisher.sink { value in
+            XCTAssertNil(value)
+            XCTAssertNil(kit.accountState)
+            account.fulfill()
+        }.store(in: &cancellables)
+
+        wait(for: [height, sync, account], timeout: 1)
+        XCTAssertTrue(lifecycle.events.isEmpty)
+        XCTAssertEqual(cancellables.count, 3)
+    }
+
+    func testPersistenceNamespaceIsDeterministicInternalAndAbsentFromErrors() throws {
+        let address = try Address(
+            "thor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhudkmnn2",
+            network: .mainnet
+        )
+        let kit = try Kit.instance(
+            address: address,
+            walletId: "wallet-01",
+            endpoints: endpoints()
+        )
+        XCTAssertEqual(
+            kit.persistenceNamespace,
+            "e2df225b7a00d471b1b09ec2d3344df89a11e9cfe116c05f5290683480623015"
+        )
+
+        do {
+            _ = try Kit.instance(address: address, walletId: " \n", endpoints: endpoints())
+            XCTFail("accepted whitespace-only wallet ID")
+        } catch {
+            let description = String(describing: error)
+            XCTAssertFalse(description.contains("wallet-01"))
+            XCTAssertFalse(description.contains(kit.persistenceNamespace))
+        }
+    }
+
     private func family(id: String) throws -> EndpointFamilyDescriptor {
         try EndpointFamilyDescriptor(
             id: id,
             cosmosRestURL: URL(string: "https://rest.example.com")!,
             cometBftURL: URL(string: "https://rpc.example.com")!
         )
+    }
+
+    private func endpoints() throws -> EndpointConfiguration {
+        try EndpointConfiguration(families: [family(id: "primary")])
+    }
+
+    private func makeKit() throws -> (Kit, LifecycleSpy) {
+        let lifecycle = LifecycleSpy()
+        let address = try Address(
+            "thor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhudkmnn2",
+            network: .mainnet
+        )
+        let kit = Kit(
+            address: address,
+            dependencies: KitDependencies(lifecycle: lifecycle),
+            persistenceNamespace: "test"
+        )
+        return (kit, lifecycle)
+    }
+
+    private func assertReentryTrace(
+        initiallyRunning: Bool,
+        c0: @escaping (Kit) -> Void,
+        reentrant: @escaping (Kit) -> Void,
+        c1: @escaping (Kit) -> Void,
+        expected: [String],
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let (kit, lifecycle) = try makeKit()
+        if initiallyRunning {
+            kit.start()
+            lifecycle.events.removeAll()
+        }
+
+        let c1Entered = DispatchSemaphore(value: 0)
+        let c1Completed = DispatchSemaphore(value: 0)
+        var c1Thread: pthread_t?
+        lifecycle.onEvent = { _ in
+            lifecycle.onEvent = nil
+            c1Thread = startTestThread {
+                c1Entered.signal()
+                c1(kit)
+                c1Completed.signal()
+            }
+            XCTAssertEqual(c1Entered.wait(timeout: .now() + 1), .success, file: file, line: line)
+            reentrant(kit)
+            XCTAssertEqual(lifecycle.events.map(\.name), [expected[0]], file: file, line: line)
+            XCTAssertEqual(c1Completed.wait(timeout: .now()), .timedOut, file: file, line: line)
+        }
+
+        c0(kit)
+        XCTAssertEqual(c1Completed.wait(timeout: .now() + 1), .success, file: file, line: line)
+        if let c1Thread {
+            pthread_join(c1Thread, nil)
+        }
+        XCTAssertEqual(lifecycle.events.map(\.name), expected, file: file, line: line)
     }
 
     private func accountState(
@@ -345,5 +551,60 @@ final class PublicApiTests: XCTestCase {
         _ expression: () throws -> T
     ) {
         assertThrows(expected, file: file, line: line, expression)
+    }
+}
+
+private final class TestThreadJob {
+    let body: () -> Void
+
+    init(body: @escaping () -> Void) {
+        self.body = body
+    }
+}
+
+private func startTestThread(_ body: @escaping () -> Void) -> pthread_t {
+    let job = Unmanaged.passRetained(TestThreadJob(body: body)).toOpaque()
+    var thread: pthread_t?
+    let status = pthread_create(&thread, nil, { pointer in
+        Unmanaged<TestThreadJob>.fromOpaque(pointer).takeRetainedValue().body()
+        return nil
+    }, job)
+    precondition(status == 0)
+    return thread!
+}
+
+private final class LifecycleSpy: KitLifecycle {
+    enum Event {
+        case start(UInt64)
+        case stop(UInt64)
+        case refresh(UInt64)
+
+        var name: String {
+            switch self {
+            case .start: "start"
+            case .stop: "stop"
+            case .refresh: "refresh"
+            }
+        }
+    }
+
+    var events = [Event]()
+    var onEvent: ((Event) -> Void)?
+
+    func start(sequence: UInt64) {
+        record(.start(sequence))
+    }
+
+    func stop(sequence: UInt64) {
+        record(.stop(sequence))
+    }
+
+    func refresh(sequence: UInt64) {
+        record(.refresh(sequence))
+    }
+
+    private func record(_ event: Event) {
+        events.append(event)
+        onEvent?(event)
     }
 }
