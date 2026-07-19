@@ -54,8 +54,9 @@ import sys
 path = pathlib.Path(sys.argv[1])
 source = path.read_text(encoding="utf-8")
 old = '''        if isOnFacadeDispatcher {
+            let shouldDrain = pendingLifecycleCommands.isEmpty
             enqueueLifecycleCommand(kind)
-            if pendingLifecycleCommands.count == 1 {
+            if shouldDrain && !pendingLifecycleCommands.isEmpty {
                 drainPendingLifecycleCommands()
             }
             return
@@ -63,8 +64,9 @@ old = '''        if isOnFacadeDispatcher {
 '''
 new = '''        if isOnFacadeDispatcher {
             facadeDispatcher.async {
+                let shouldDrain = self.pendingLifecycleCommands.isEmpty
                 self.enqueueLifecycleCommand(kind)
-                if self.pendingLifecycleCommands.count == 1 {
+                if shouldDrain && !self.pendingLifecycleCommands.isEmpty {
                     self.drainPendingLifecycleCommands()
                 }
             }

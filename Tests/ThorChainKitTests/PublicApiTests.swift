@@ -383,6 +383,27 @@ final class PublicApiTests: XCTestCase {
             c1: { $0.stop() },
             expected: ["refresh", "refresh", "stop"]
         )
+        try assertReentryTrace(
+            initiallyRunning: false,
+            c0: { $0.start() },
+            reentrant: { $0.start() },
+            c1: { $0.stop() },
+            expected: ["start", "stop"]
+        )
+        try assertReentryTrace(
+            initiallyRunning: true,
+            c0: { $0.stop() },
+            reentrant: { $0.stop() },
+            c1: { $0.start() },
+            expected: ["stop", "start"]
+        )
+        try assertReentryTrace(
+            initiallyRunning: true,
+            c0: { $0.stop() },
+            reentrant: { $0.refresh() },
+            c1: { $0.start() },
+            expected: ["stop", "start"]
+        )
     }
 
     func testInitialPublishersAllowReentrantSnapshotAndLifecycleAccess() throws {

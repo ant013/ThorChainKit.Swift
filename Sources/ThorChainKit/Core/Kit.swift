@@ -98,16 +98,18 @@ public final class Kit {
 
     private func submit(_ kind: LifecycleCommandKind) {
         if isOnFacadeDispatcher {
+            let shouldDrain = pendingLifecycleCommands.isEmpty
             enqueueLifecycleCommand(kind)
-            if pendingLifecycleCommands.count == 1 {
+            if shouldDrain && !pendingLifecycleCommands.isEmpty {
                 drainPendingLifecycleCommands()
             }
             return
         }
 
         facadeDispatcher.sync {
+            let shouldDrain = pendingLifecycleCommands.isEmpty
             enqueueLifecycleCommand(kind)
-            if pendingLifecycleCommands.count == 1 {
+            if shouldDrain && !pendingLifecycleCommands.isEmpty {
                 drainPendingLifecycleCommands()
             }
         }
