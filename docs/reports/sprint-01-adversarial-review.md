@@ -2,7 +2,7 @@
 
 ## Conclusion
 
-**Current S1-02 decision: REVISE pending discovery 2/2.** The earlier Sprint-wide rounds remain historical evidence, but independent S1-02 discovery 1/2 returned the frozen High-severity allowlist below. Revision 13 is prepared for a second independent exact-head review; it may not be presented for approval or implementation until that review ACCEPTs.
+**Current S1-02 decision: REVISE pending closure 1/5.** Discovery is exhausted at 2/2. Independent discovery 2 closed five IDs and froze five open High blockers; revision 14 addresses those blockers plus the operator's local-first CI budget. It may not be presented for approval or implementation until an independent exact-head closure review ACCEPTs.
 
 The review was performed against the current versions of the seven slice specs and the consolidated test plan. The ThorChainKit, Unstoppable Wallet, and reference-kit source code was not changed.
 
@@ -107,10 +107,26 @@ Revision-13 pre-handoff verification:
 - `swift test` — 18 tests, 0 failures;
 - `Scripts/verify-s1-01.sh` — pass, including topology, imports, symbols, exact discovery/xUnit/execution, skip/factory/value/mutant gates, strict build, public consumer, Example workspace, CI provenance, and redacted Gimle report.
 
+## S1-02 independent discovery 2/2 — REVISE
+
+The CodeReviewer reproduced the revision-13 artifacts at exact pushed head `0f26a98b715e011e2272ca0e4cd58e5984b1d557` over base `f7da1ce7b0b16c9a44b339d9bdfc5e2c9404dfc9`, returned no Critical finding, and exhausted discovery. Five IDs closed (`S02-EVID-001`, `VOP-S02-01`, `VOP-S02-02`, `VOP-S02-03`, `VOP-S02-06`); the remaining five High IDs form the immutable closure allowlist:
+
+| Stable ID | Discovery-2 finding | Revision-14 response pending closure |
+|---|---|---|
+| `S102-SEC-001` | One collapsed Cosmos `Result` could discard a foreign node-info fact when latest-block failed, allowing a healthy sibling to mask it. | The probe returns exactly three independently retained indexed outcomes; all observed identities are classified before partial failures or shape errors. |
+| `S102-SEC-002` | The typed algebra did not compile, request kind was absent from outcomes, and a pre-reset lease could reinstall health. | `RoleProbeFailure` conforms to `Error`; each result carries family/role/request index; `recordFailure(for:)` validates the immutable lease generation/family and rejects stale leases. |
+| `S02-ARCH-001` | Waiter cancellation was not atomic with enrollment. | One synchronous latch is shared by `onCancel`, actor enrollment, and stable waiter-ID-order commit locking; unknown cancellation messages retain no state. |
+| `S102-SEC-003` | `ProviderError` retained raw actual/mixed chain IDs despite downstream redaction. | Provider errors contain only local expected identity plus fixed classification/index codes; raw observed identity has no associated-value storage path. |
+| `VOP-S02-04` | Live verification still lacked an exact versioned machine schema. | Schema v1 specifies every key/type/literal/count/arithmetic/origin rule, duplicate/unknown-key rejection, source/path/head binding, redaction, and fixture incompatibility mutants. |
+
+The operator also froze a local-first CI acceptance requirement. Revision 14 requires all routine package, strict-concurrency, verifier, Example, and Maestro work on the operator MacBook. GitHub-hosted macOS becomes a `workflow_dispatch`-only final exact-PR-head gate run once immediately before merge; intermediate pushes and the verified `main` merge cannot trigger another full suite. Self-hosted Mac support is explicitly optional.
+
+Result: **REVISE remains active** until CodeReviewer closure 1/5 verifies the exact pushed revision-14 head, the five frozen responses, and the local-first CI contract.
+
 ## Decision constraints
 
 - Gimle trust remains `RED`; all load-bearing conclusions were reverified in the exact current trees through Serena and targeted `rg`.
 - Maestro CLI is not installed on the current machine, so the Example YAML and runner currently exist only as an asserted design contract and apply exclusively to the future `ThorChainKit/iOS Example`.
 - The user's term `Meteora` was interpreted as Maestro. If it refers to another internal tool, the UI layer must be rebound to its actual contract before implementation.
-- Implementation remains blocked pending independent S1-02 discovery 2/2 ACCEPT and explicit revision-bound user approval.
-- For S1-02 revision 13 specifically, Gimle trust is `YELLOW`, not the earlier Sprint-wide `RED`: current Tron/Evm mappings agree with exact checkouts; ThorChainKit and Zcash lifecycle evidence lack Palace mappings, and MarketKit has no explicit indexed commit. Codebase-memory plus exact Git/Serena/`rg` provides the recorded fallback basis.
+- Implementation remains blocked pending independent S1-02 closure ACCEPT and explicit revision-bound user approval.
+- For S1-02 revision 14 specifically, Gimle trust is `YELLOW`, not the earlier Sprint-wide `RED`: current Tron/Evm mappings agree with exact checkouts; ThorChainKit and Zcash lifecycle evidence lack Palace mappings, and MarketKit has no explicit indexed commit. Codebase-memory plus exact Git/Serena/`rg` provides the recorded fallback basis.

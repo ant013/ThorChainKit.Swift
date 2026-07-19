@@ -85,12 +85,12 @@ SHA-256 pins the exact versions of the seven slice specs, the active S1-02 imple
 | Artifact | SHA-256 |
 |---|---|
 | `S1-01-package-public-api.md` | `3c42cf77364c6ca27388ec56a1573395ca7fba9b48ddb89f4ae371af79bbd53a` |
-| `S1-02-network-endpoint-policy.md` | `0bd6e49db68756d13e89723664c2b8c7c0db84afc834f49b30bc0b27f67e42ce` |
+| `S1-02-network-endpoint-policy.md` | `ffbacae285f7ec8dbdca818bf850062b62222d4bb65a479b7ce4f9929c0d5194` |
 | `S1-03-derivation-address-codec.md` | `bb06bdfeae3f6b5dfa54b7b49c689ade3fc6454b7666f158e1c59b5e2554d58a` |
 | `S1-04-thornode-read-client.md` | `c2d51c8be3a19fdd96ea21e6501aed3d27489a675ef455defa444118a0db9595` |
 | `S1-05-rune-account-sync.md` | `9ce0432cc1bb75f47dd803d9db8c57f5cd24c87d86a9d7bc61ffe33a215ce305` |
 | `S1-06-unstoppable-lifecycle-composition.md` | `fc6bc88fa09aa18223e52edf22a35f129f871b5c4a9d9c59a370c91604854827` |
 | `S1-07-unstoppable-rune-surface.md` | `9da09bfc288bf9e43565f503d2db06b29f57291f0870c1d9729f9d092e2f502c` |
-| `docs/superpowers/plans/2026-07-19-THR-13-s1-02-network-endpoint-policy.md` | `dd3e30d8ea805dfc6a24750f72f728bd00535f69187c0d2826d99e0b1b0ac673` |
-| `test-plan.md` | `138189b460d256784a2f0140dad56b27e3f9c24aa86b636a1b3800ec5c0c9fe9` |
+| `docs/superpowers/plans/2026-07-19-THR-13-s1-02-network-endpoint-policy.md` | `2e70a48d94eace36c5589f53fe2ea0db5c53df68252e73c01d0bfe2a04fa9f9a` |
+| `test-plan.md` | `eaf96c2c26dae79ae0f90fdfd3dcd9f12f75878db7699f6597040e4f24a815c0` |
 <!-- SPEC_HASHES_END -->
