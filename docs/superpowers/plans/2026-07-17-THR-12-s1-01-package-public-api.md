@@ -101,7 +101,7 @@ The cross-slice verification authority remains `docs/specs/sprint-01-foundation/
 
 ### 7. Prepare one exact-head implementation PR
 
-- [ ] Completion evidence recorded in this plan and the implementation commit.
+- [x] Completion evidence recorded in this plan and the implementation commit.
 - Suggested owner: ThorChainSwiftEngineer.
 - Dependencies: steps 1–6.
 - Affected paths: `docs/roadmap/sprint-01-foundation.md`, PR body, and these plan checkboxes/evidence; the temporary consumer remains outside the repository.

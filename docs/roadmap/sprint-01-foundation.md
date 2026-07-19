@@ -10,7 +10,7 @@ Send, history, and swap are intentionally outside Sprint 1.
 
 | ID | Slice | Verifiable outcome | Depends on | Status |
 |---|---|---|---|---|
-| S1-01 | Package and public API | standalone package builds; local-package `iOS Example` and the first Maestro fixture flow run | — | Pending |
+| S1-01 | Package and public API | standalone package builds; local-package `iOS Example` and the first Maestro fixture flow run | — | ✅ Implemented — PR #1 — 2026-07-19 |
 | S1-02 | Network and endpoint policy | an endpoint with the wrong chain ID/role or a stale endpoint is rejected fail-closed | S1-01 | Pending |
 | S1-03 | Derivation and address codec | an official/independent vector produces the expected `thor1…`; wrong HRP/checksum is rejected | S1-01 | Pending |
 | S1-04 | THORNode read client | fixtures and opt-in mainnet requests return typed status/account/balances | S1-02, S1-03 | Pending |
