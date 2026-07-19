@@ -148,14 +148,30 @@ EOF
     cmp -s "$expected_sources" "$actual_sources" \
         || fail "verify-s1-01-source-closure" "unexpected production Swift source path"
 
-    rg '^import ' Sources/ThorChainKit \
-        | sed -E 's/^.*:import ([A-Za-z0-9_]+).*$/\1/' \
-        | sort -u > "$imports"
+    python3 - Sources/ThorChainKit > "$imports" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+modules = set()
+for path in Path(sys.argv[1]).rglob("*.swift"):
+    for line in path.read_text().splitlines():
+        match = re.fullmatch(r"import ([A-Za-z0-9_]+)", line)
+        if match:
+            modules.add(match.group(1))
+print("\n".join(sorted(modules)))
+PY
     [[ "$(<"$imports")" == $'BigInt\nCombine\nCryptoKit\nFoundation' ]] \
         || fail "verify-s1-01-imports" "imports differ from the system/BigInt allowlist"
-    if rg -n '\b(seed|privateKey)\b|@unchecked[[:space:]]+Sendable' Sources/ThorChainKit >/dev/null; then
-        fail "verify-s1-01-source-closure" "secret API or unchecked Sendable is present"
-    fi
+    python3 - Sources/ThorChainKit <<'PY' \
+        || fail "verify-s1-01-source-closure" "secret API or unchecked Sendable is present"
+from pathlib import Path
+import re
+import sys
+
+source = "\n".join(path.read_text() for path in Path(sys.argv[1]).rglob("*.swift"))
+assert re.search(r"\b(seed|privateKey)\b|@unchecked\s+Sendable", source) is None
+PY
     echo "PASS verify-s1-01-source-closure"
     echo "PASS verify-s1-01-imports"
 }
@@ -206,10 +222,15 @@ verify_test_contract() {
     swift test list --enable-xctest --disable-swift-testing > "$tmp/discovered.txt"
     cmp -s "$allowlist" "$tmp/discovered.txt" \
         || fail "verify-s1-01-test-discovery" "discovered tests differ from the 18-case allowlist"
-    if rg -n 'XCTSkip|XCTExpectFailure|^[[:space:]]*#if|@available' \
-        Tests/ThorChainKitTests/PublicApiTests.swift >/dev/null; then
-        fail "verify-s1-01-test-discovery" "authoritative tests contain a disabling construct"
-    fi
+    python3 - Tests/ThorChainKitTests/PublicApiTests.swift <<'PY' \
+        || fail "verify-s1-01-test-discovery" "authoritative tests contain a disabling construct"
+from pathlib import Path
+import re
+import sys
+
+source = Path(sys.argv[1]).read_text()
+assert re.search(r"XCTSkip|XCTExpectFailure|^\s*#if|@available", source, re.MULTILINE) is None
+PY
     command_text='swift test --enable-xctest --disable-swift-testing --parallel --num-workers 1 --filter ThorChainKitTests.PublicApiTests --xunit-output'
     [[ "$command_text" != *"--skip"* ]] \
         || fail "verify-s1-01-test-discovery" "test command contains --skip"
@@ -510,9 +531,14 @@ verify_sanitized_gimle_report() {
     local report="$repository_root/docs/reports/gimle/THR-12-s1-01-gimle-reliability.md"
     [[ -f "$report" ]] \
         || fail "verify-s1-01-gimle-report" "reliability report is absent"
-    if rg -n '/Users/|/Users/Shared/|/private/|file://' "$report" >/dev/null; then
-        fail "verify-s1-01-gimle-report" "report contains a machine-local path"
-    fi
+    python3 - "$report" <<'PY' \
+        || fail "verify-s1-01-gimle-report" "report contains a machine-local path"
+from pathlib import Path
+import sys
+
+source = Path(sys.argv[1]).read_text()
+assert not any(value in source for value in ["/Users/", "/Users/Shared/", "/private/", "file://"])
+PY
     echo "PASS verify-s1-01-gimle-report"
 }
 
