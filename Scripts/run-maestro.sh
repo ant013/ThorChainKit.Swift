@@ -16,7 +16,7 @@ udid=${THORCHAIN_SIMULATOR_UDID:-}
 [[ "$udid" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]] \
     || fail "THORCHAIN_SIMULATOR_UDID must contain one UUID"
 
-[[ "$(maestro --version | tr -d '\r')" == "2.6.1" ]] \
+[[ "$(MAESTRO_CLI_NO_ANALYTICS=1 maestro --version | tr -d '\r')" == "2.6.1" ]] \
     || fail "Maestro 2.6.1 is required"
 java_identity=$(java -version 2>&1)
 [[ "$java_identity" == *"17.0.19"* && "$java_identity" == *"Temurin-17.0.19+10"* ]] \
