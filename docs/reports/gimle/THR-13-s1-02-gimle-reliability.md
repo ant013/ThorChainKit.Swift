@@ -1,7 +1,7 @@
-# Gimle reliability report: THR-13 S1-02 revision 12
+# Gimle reliability report: THR-13 S1-02 revision 13
 
 - Task: THR-13
-- Workflow/phase: `analog_change` / `awaiting_approval`
+- Workflow/phase: `analog_change` / `adversarial_review`
 - Trust: **YELLOW**
 - Repository/base: `ThorChainKit.Swift@f7da1ce7b0b16c9a44b339d9bdfc5e2c9404dfc9`
 - Branch: `docs/THR-13-network-endpoint-policy`
@@ -12,14 +12,14 @@ This committed report is the redacted repository view. The canonical machine sta
 
 ## Summary
 
-- Calls: 9 — 7 success, 2 warning, 0 error, 0 false-success.
-- Useful-call rate: 88.9%.
+- Calls: 12 — 8 success, 4 warning, 0 error, 0 false-success.
+- Useful-call rate: 91.7%.
 - Gimle-backed claim agreement: 100%; contradictions: 0%.
 - Location validity and freshness coverage for Gimle-backed claims: 100%.
-- Analog slices/candidates: 2/8.
-- Defects/limitations: 3 — one target coverage gap, one fixed caller query, one Serena environment drift.
+- Analog slices/candidates: 2/10.
+- Defects/limitations: 4 — target and lifecycle coverage gaps, one fixed caller query, and one historical Serena environment drift.
 
-`YELLOW` is required because Palace has no ThorChainKit target mapping and the target Serena registration cached the earlier documentation-only checkout. Current target truth therefore comes from the healthy codebase-memory project plus Git and targeted `rg`. Current TronKit and EvmKit mappings agree with their exact checkouts and were independently verified with Serena and `rg`; pinned Vultisig evidence was verified directly.
+`YELLOW` is required because Palace has no ThorChainKit or ZcashLightClientKit mapping, and MarketKit has no explicit indexed commit even though its identity and dominant symbol commit match. Current target and lifecycle truth therefore comes from codebase-memory plus exact Git, Serena, and targeted `rg`. Current TronKit and EvmKit mappings agree with their exact checkouts; pinned Vultisig evidence was verified directly. Target Serena now resolves the exact Swift workspace; the earlier cache defect remains historical evidence.
 
 ## Evidence calls
 
@@ -34,15 +34,18 @@ This committed report is the redacted repository view. The canonical machine sta
 | `E-0007` | `palace.code.search_graph` | warning | no | Combined name query truncated before `RpcSource`; superseded by a split query. |
 | `E-0008` | `palace.code.search_graph` | success | yes | Located Evm `NodeApiProvider` and `RpcSource`. |
 | `E-0009` | `palace.code.search_graph` | success | yes | Located exact Tron `RpcSource`. |
+| `E-0010` | `palace.health.status` | success | yes | Runtime remains reachable and clean for revision-13 rework. |
+| `E-0011` | `palace.memory.list_projects` | warning | yes | ThorChainKit and ZcashLightClientKit are absent; current-tree fallback required. |
+| `E-0012` | `palace.memory.get_project_overview` | warning | yes | MarketKit identity/dominant commit match, but explicit indexed commit/freshness are unavailable. |
 
 ## Verified analog family
 
 | Slice | Primary | Supporting | Rejected counterexample |
 |---|---|---|---|
 | Endpoint family contract | Tron `RpcSource` explicit configuration shape | S1-01 endpoint values/tests; Vultisig THOR LCD/RPC routing | Evm broad URL rotation |
-| Probe, health, selection, lease lifecycle | Vultisig injected async `RPCHealthProbe` seam/tests | S1-01 policy bounds; Vultisig THOR role split | Evm recursive retry and mutable request ID |
+| Probe, health, selection, lease lifecycle | Zcash `LatestBlocksDataProviderImpl` actor ownership/reset/DI/test substitution | Vultisig injected probe seam/tests; S1-01 policy bounds; Vultisig THOR role split | Evm recursive retry/mutable request ID; MarketKit wall-clock scheduler/raw error logging |
 
-The accepted deltas are actor-owned coalescing, decoded two-role identity/freshness, fixed error precedence, deterministic selection, TTL revalidation, generation invalidation, immutable leases, and retryable-only health effects. The design explicitly rejects `urls[0]`, treating HTTP 2xx as network identity, broad failover, app-global endpoint ownership, and business-read retries inside the pool.
+The accepted evidence preserves actor-owned serialized state, reset, monotonic height update, DI consumers, and test substitution from Zcash. Waiter-aware coalescing, monotonic TTL/health, generation tokens, immutable leases, typed three-request identity/freshness, and origin-only diagnostics remain explicit S1-02 deltas. The design rejects `urls[0]`, treating HTTP 2xx as identity, broad failover, wall-clock TTL, raw error logging, app-global endpoint ownership, and business-read retries inside the pool.
 
 ## Load-bearing claims
 
@@ -53,6 +56,8 @@ The accepted deltas are actor-owned coalescing, decoded two-role identity/freshn
 | `F-VULTISIG-THOR-ROLES` | `MATCH`, accepted from Serena + `rg` | `vultisig-ios@d3123dbe`, `ThorchainMainnetAPI.swift` |
 | `F-VULTISIG-PROBE-SEAM` | `MATCH`, accepted from Serena + `rg` | `vultisig-ios@d3123dbe`, `RPCHealthProbe.swift`, tests, and view-model consumer |
 | `F-EVM-BROAD-ROTATION` | `MATCH`, accepted as counterevidence from Gimle + Serena + `rg` | `EvmKit.Swift@be028631`, `NodeApiProvider.swift` |
+| `F-POOL-ZCASH-LIFECYCLE` | `MATCH`, accepted from exact Git + Serena + `rg` | `ZcashLightClientKit@ff526fa`, committed `LatestBlocksDataProvider.swift`, DI registrations, consumers, and tests |
+| `F-POOL-MARKET-SCHEDULER` | `MATCH`, accepted as counterevidence from exact Git + Serena + `rg` | `MarketKit.Swift@95c92c8`, `Scheduler.swift` and composition |
 
 ## Defects and fallbacks
 
@@ -71,19 +76,26 @@ The accepted deltas are actor-owned coalescing, decoded two-role identity/freshn
 
 ### `SERENA-THR13-LANGUAGE-CACHE`
 
-- Class/severity/status: `environment_drift` / medium / workaround.
-- Actual: the target Serena registration retained `languages: []` from the pre-S1-01 checkout. Ignored workspace metadata was corrected, but the running service did not reload it.
-- Impact: target symbol navigation was unavailable in this run.
-- Fallback: target codebase-memory + Git/`rg`; all external analogs were still independently verified with Serena and `rg`.
+- Class/severity/status: `environment_drift` / medium / fixed.
+- Historical actual: the target Serena registration retained `languages: []` from the pre-S1-01 checkout until its service reloaded.
+- Current status: target Serena resolves the exact Swift workspace in revision-13 rework.
+- Fallback used for the affected earlier claims: target codebase-memory + Git/`rg`; analogs were independently verified with Serena and `rg`.
+
+### `GIMLE-THR13-LIFECYCLE-COVERAGE`
+
+- Class/severity/status: `coverage_gap` / medium / workaround.
+- Actual: ZcashLightClientKit is absent from Palace; MarketKit identity is valid but explicit indexed commit/freshness are unavailable.
+- Impact: Gimle cannot carry the lifecycle-primary or scheduler-counterexample decision.
+- Fallback: codebase-memory first, then exact committed-file Git reads, Serena symbols/references, and targeted `rg` at Zcash `ff526fa` and MarketKit `95c92c8`.
 
 ## Adversarial decisions and verification
 
-Five stable revision-12 decisions are `ACCEPT`: freshness/identity, family coherence, deterministic identity-versus-staleness semantics, cancellation/generation/failover ownership, and minimum surface/test coverage.
+Independent discovery 1/2 returned ten stable High findings. Their latest state entries remain `REVISE` while revision 13 awaits discovery 2/2: `S02-EVID-001`, `S102-SEC-001`, `S102-SEC-002`, `S02-ARCH-001`, `S102-SEC-003`, `VOP-S02-01`, `VOP-S02-02`, `VOP-S02-03`, `VOP-S02-04`, and `VOP-S02-06`.
 
 Pre-approval checks:
 
 - `git diff --check` — pass.
-- `swift test` — pass, 18 tests and 0 failures.
+- `swift test` — pass at the revision-12 review head, 18 tests and 0 failures; revision-13 documentation re-verification is recorded at its pushed head.
 - Absolute-path/credential scan of the changed design files — pass; no new operator path or secret was added.
 
-No implementation-specific S1-02 test, Maestro, or live probe was run because implementation remains blocked pending explicit approval of revision 12.
+No implementation-specific S1-02 test, Maestro, or live probe was run because implementation remains blocked pending independent discovery 2/2 and explicit approval of revision 13.
