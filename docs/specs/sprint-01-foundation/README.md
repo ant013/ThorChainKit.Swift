@@ -81,18 +81,20 @@ The user term `Meteora` means **Maestro**. Its scope is limited to `ThorChainKit
 
 ## Integrity Manifest
 
-SHA-256 pins the exact versions of the seven slice specs, the active S1-02 implementation plan, and the consolidated test plan. Values are updated after any design edit; a plan pin does not imply approval.
+SHA-256 pins the exact versions of the seven slice specs, the S1-02 recovery spec, both approved S1-02 implementation plans, and the consolidated test plan. Values are updated after any design edit; a plan pin does not imply approval.
 
 <!-- SPEC_HASHES_START -->
 | Artifact | SHA-256 |
 |---|---|
 | `S1-01-package-public-api.md` | `a1dc63ef44b40f2e778bd1c86df0de42846fa9e119c2c12989268a455257dd4d` |
-| `S1-02-network-endpoint-policy.md` | `28bbb0dbcc1571418643e9080908d81c0765db324751df1b2230e80da4b640c8` |
+| `S1-02-network-endpoint-policy.md` | `48f88590331c5cfca24c39632a690d69417c3be979ed61a3df355262091909cf` |
+| `S1-02-swiftui-integration-recovery.md` | `13382503e6b60fd60839039794da636617a6eddfbb31abd3982a2b8860ed4569` |
 | `S1-03-derivation-address-codec.md` | `429e894c2144c6f1b4b65f7fbc48838ee663472e036c4061df444df1f91c609c` |
 | `S1-04-thornode-read-client.md` | `c17f04ea8d4343f558af745a58666ce3122757919a6a27600fa54d849e4ff886` |
 | `S1-05-rune-account-sync.md` | `5345c4ef169d4c39187bef7371a16cae5a779164ddecbbe97a99ff12b471a0ff` |
 | `S1-06-unstoppable-lifecycle-composition.md` | `0a598cdc320e5da99c805bb676241b9c1924eb2a4d9078f68a21896681fa1703` |
 | `S1-07-unstoppable-rune-surface.md` | `9da09bfc288bf9e43565f503d2db06b29f57291f0870c1d9729f9d092e2f502c` |
 | `docs/superpowers/plans/2026-07-19-THR-13-s1-02-network-endpoint-policy.md` | `b6f98cda1a9e6c04107633a871e63b5c47be7e456150288ca63f716a814fd497` |
+| `docs/superpowers/plans/2026-07-20-THR-32-s1-02-swiftui-integration-recovery.md` | `02078fd98f9bdea0c064e91d1449524eb8ca943e0b10458f323cfaadf886635a` |
 | `test-plan.md` | `e504823b0b22ae202fd453d0bec7283e79e04ee0b39b985c86535a0fccbc8ce8` |
 <!-- SPEC_HASHES_END -->

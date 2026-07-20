@@ -1,6 +1,6 @@
 # S1-02 — Network and Endpoint Policy
 
-**Status:** revision 16 closes the live-winner finding and binds the final hosted gate's executing workflow definition, event SHA, checkout, and PR head to one exact product revision; implementation remains blocked pending independent closure review and explicit revision-bound approval.
+**Status:** revision 16 approved; the SwiftUI recovery implementation is complete through documentation reconciliation, with exact-head local verification and independent review still pending.
 **Risk:** high/security boundary.
 **Observable outcome:** the kit accepts only provider families consistent with `Network`; wrong-chain, stale, mixed-family, retryable, terminal, and cancelled operations have deterministic, distinct outcomes.
 
@@ -41,7 +41,6 @@ Out of scope:
 Sources/ThorChainKit/Network/EndpointHealth.swift
 Sources/ThorChainKit/Network/EndpointLease.swift
 Sources/ThorChainKit/Network/EndpointPool.swift
-Sources/ThorChainKit/Network/ProviderError.swift
 Sources/ThorChainKit/Network/NodeProbing.swift
 Sources/ThorChainKit/Network/LiveNodeProbe.swift
 Sources/ThorChainKit/Network/EndpointDiagnostics.swift
@@ -49,8 +48,11 @@ Sources/ThorChainKit/Core/TestingEndpointPolicySession.swift
 Tests/ThorChainKitTests/EndpointPoolTests.swift
 Tests/ThorChainKitTests/LiveNodeProbeTests.swift
 Tests/ThorChainKitTests/EndpointDiagnosticsTests.swift
+Tests/ThorChainKitTests/TestingEndpointPolicySessionTests.swift
 Tests/ThorChainKitTests/Fixtures/S1-02-public-symbols.txt
+Tests/ThorChainKitTests/Fixtures/S1-02-spi-syntax.txt
 iOS Example/Sources/Core/ExampleRuntime.swift
+iOS Example/Sources/Presentation/DiagnosticsViewModel.swift
 iOS Example/Sources/Presentation/EndpointsViewModel.swift
 iOS Example/Sources/Views/EndpointsView.swift
 iOS Example/Sources/Views/DiagnosticsView.swift
@@ -60,6 +62,7 @@ iOS Example/iOS Example.xcodeproj/project.pbxproj
 .maestro/config.yaml
 Scripts/run-maestro.sh
 Scripts/test-run-maestro.sh
+Scripts/verify-s1-01.sh
 Scripts/verify-s1-02.sh
 Scripts/verify-s1-02-ci-policy.sh
 Scripts/verify-s1-02-live.sh
