@@ -1,8 +1,9 @@
 # S1-03 — Analog Delta Matrix and Test Plan
 
 This document is the review-bound delta matrix for
-`S1-03-derivation-address-codec.md`. It is design-only; implementation remains
-blocked until this revision is adversarially accepted and explicitly approved.
+`S1-03-derivation-address-codec.md`. It is revision 3 after discovery 2/2
+REVISE; implementation remains blocked until closure review and explicit
+approval.
 
 ## Assumptions and scope
 
@@ -23,40 +24,45 @@ blocked until this revision is adversarially accepted and explicitly approved.
 
 | Field | Decision |
 |---|---|
-| Analog family | Primary: HdWalletKit host path/public-key API. Supporting: HsCryptoKit secp256k1/hash primitives and the pinned Vultisig THOR public-key assertion. Rejected: HsCryptoKit private-key convenience API as a kit boundary. |
+| Analog family | Primary: HdWalletKit commit `163b4e253aa763babeb6d14f246e1d81cfa0473e`, `Sources/HdWalletKit/HDWallet.swift:4-49` and `HDKeychain.swift:37-59`; supporting: HsCryptoKit `7c11ad0e690cbb178a70f3b9d1116d0a37a51a41`, `Crypto.swift:72-107,194-209`, and Vultisig `d3123dbe6ef1103937c272a8b1cd81f613af0acc`, `VultisigApp/VultisigAppTests/Chains/PublicKeyTest.swift:11-19`. Rejected: HsCryptoKit private-key convenience API as a kit boundary. |
 | Coverage | Responsibility, boundary, dependency direction, lifecycle/error, trust, consumer, composition, and test roles are covered by the evidence checkpoint. Vultisig is supporting THOR-specific evidence only. |
 | Invariants to preserve | Exact `m/44'/931'/0'/0/0`; secp256k1; compressed 33-byte public key; host-only seed/private ownership; typed errors; no fallback strings or `try?`. |
-| Required differences | Introduce `DerivationPath.defaultAccount`, the internal derivation seam, the sole public `AccountAddressFactory.address(compressedPublicKey:network:)` boundary, and real full-input secp256k1 parsing. |
+| Required differences | Introduce immutable `DerivationPath.rawValue` plus typed grammar errors, the internal derivation/context seams, the sole public `AccountAddressFactory.address(compressedPublicKey:network:)` boundary with explicit network selection, and real full-input secp256k1 parsing. |
 | Rejected differences | No mnemonic/seed/private-key parameter, wallet object, signing helper, extended-public-key policy, curve auto-detection, or alternate path fallback. |
 | Failure modes | Reject wrong length/prefix, invalid curve point, and unavailable parser context with typed errors; never hash malformed input or continue with an empty value. `DerivationPath.defaultAccount` is a non-trapping exact value; host path parsing failures remain S1-06 scope. |
-| Tests before code | Exact path/coin assertions; independent compressed-key vector; wrong length/prefix; invalid curve point; parser-context failure; no-trap and typed-error assertions; repeated-call/public-state retention check; public-symbol baseline. |
-| Verification | `swift test --filter DerivationTests`, full `swift test`, exact S1-03 dependency/source/platform/secret verifier, strict-concurrency/public-consumer checks, and provenance audit. Host derivation is verified only in its later S1-06 integration slice. |
+| Tests before code | Exact path/coin assertions and host-adapter call shape; independent compressed-key vector with bound values; wrong length/prefix; invalid curve point; injected parser-context failure; no-trap and typed-error assertions; repeated-call/public-state retention check; public-symbol baseline. |
+| Verification | `swift test --filter DerivationTests`, full `swift test`, exact expected-base/head/clean-worktree verifier, dependency/source/platform/secret verifier, strict-concurrency/public-consumer checks, and provenance audit. Host derivation is verified only in its later S1-06 integration slice, with the S1-03 test binding the exact raw path and adapter call shape. |
 
 ## Slice B — HASH160 and network-bound classic Bech32 codec
 
 | Field | Decision |
 |---|---|
-| Analog family | Primary: current S1-01 `Address`/`Network`/`Bech32Codec`/`BitConversion` family. Supporting: HsCryptoKit `ripeMd160Sha256` and BitcoinCore classic checksum implementation. Rejected: BitcoinCore SegWit wrapper. |
+| Analog family | Primary: current S1-01 `Address`/`Network`/`Bech32Codec`/`BitConversion` family. Supporting: HsCryptoKit commit `7c11ad0e690cbb178a70f3b9d1116d0a37a51a41`, `Crypto.swift:194-209`, and BitcoinCore commit `5b49f424f495904cf06519b1a7b861ef37b45b50`, `Bech32.swift:14-147,188-205`. Rejected: BitcoinCore SegWit wrapper. |
 | Coverage | Responsibility, boundary, dependency direction, lifecycle/error, trust, consumer, composition, and test roles are covered by the evidence checkpoint. |
 | Invariants to preserve | Network selects the exact HRP; classic Bech32 only; strict convertBits padding; exact 20-byte payload; canonical lowercase storage; wrong HRP/checksum/mixed case fail closed. |
-| Required differences | Add payload encoding and public `AddressCodec`; hash a validated compressed key as `RIPEMD160(SHA256(key))`; expose only the approved public symbols. |
+| Required differences | Add payload encoding and public `AddressCodec`; hash a validated compressed key as `RIPEMD160(SHA256(key))`; delegate decode directly to `Address.init`; expose no Boolean error-erasing parser wrapper and only the approved public symbols. |
 | Rejected differences | No second decoder, unchecked initializer, Bech32m, SegWit witness version/program handling, arbitrary HRP, public payload storage, or silent canonicalization of invalid input. |
 | Failure modes | Reject invalid payload lengths before bit conversion, invalid padding, checksum/case/HRP mismatch, and all unsupported network combinations with existing typed `AddressError`. Include a valid `tthor` wrong-HRP negative oracle; no mocknet address is added to the public `Network` set. |
 | Tests before code | Encode/decode round trip for all supported networks; isolated SHA256/HASH160 KATs; exact independent public vectors; uppercase canonicalization; all S1-01 negative cases through `AddressCodec`; BIP173 valid/invalid vectors; direct padding and malformed-length tests; arbitrary UTF-8/property tests; public-symbol subset test. |
-| Verification | `swift test --filter AddressCodecTests`, full `swift test`, exact S1-03 dependency/source/platform/secret verifier, Example platform scan, real-call-path Maestro mutant checks, provenance audit, and `THORCHAIN_SIMULATOR_UDID=<exact-udid> Scripts/run-maestro.sh` for the Example only. |
+| Verification | `swift test --filter AddressCodecTests`, full `swift test`, exact expected-base/head/clean-worktree verifier, dependency/source/platform/secret verifier, Xcode target/navigation check, real-call-path Maestro mutant checks, deterministic fuzz replay, provenance audit, and `THORCHAIN_SIMULATOR_UDID=<exact-udid> Scripts/run-maestro.sh s1-03` for the Example only. |
 
-## Open design questions before approval
+## Frozen blocker closure map — discovery 2/2
 
-1. The fixture must name at least three independent public sources and record
-   immutable repository URL, commit, path, tool/version, command, input origin,
-   and output digest; a vector generated only by this implementation is not
-   acceptable.
-2. The exact `secp256k1.swift` parser API and HsCryptoKit hash call signatures
-   must be pinned by the implementation PR without expanding the public API;
-   the dependency/source closure verifier must reject undeclared crypto,
-   wallet, UI, I/O, logging, task, or static-key capabilities.
-3. The S1-03 verifier must authenticate the exact baseline/HEAD, package
-   resolution, cumulative public-symbol and test baselines, iOS 13 public
-   consumer, platform imports, and the reachable Example Maestro manifest.
-4. Any mismatch between this matrix and the authoritative S1-03 spec requires
-   a new revision and fresh approval.
+| Frozen IDs | Mechanical closure in revision 3 |
+|---|---|
+| `S103-ARCH-01` | Committed analog manifest records exact repository, commit, path, and role for HdWalletKit, HsCryptoKit, BitcoinCore, and Vultisig. |
+| `S103-ARCH-02`, `THR62-SEC-B02` | `DerivationPath.rawValue`, exact five-component grammar, typed `DerivationPathError`, host adapter call shape, and exact `m/44'/931'/0'/0/0` test are normative. |
+| `S103-ARCH-03` | `AddressCodec.decode` delegates to `Address.init`; `isValid` is removed, so inherited typed errors are not erased. |
+| `S103-ARCH-04`, `VOP-01` | Xcode project target membership, root navigation, runtime composition, non-`@testable` build, and real-call-path mutants are required. |
+| `S103-ARCH-05` | S1-02 CI policy remains cumulative authority; exact three-flow manifest and runner transition are specified together. |
+| `THR62-SEC-B01` | Factory has no default `.mainnet`; inherited S1-01 trap is recorded as baseline and cannot be introduced into the S1-03 call path. |
+| `THR62-SEC-B03`, `VOP-04` | Exact bound vector values, output digest, pinned source commits/paths, independent hash/checksum sources, and oracle provenance are specified. |
+| `THR62-SEC-B04` | Capability allowlist, forbidden-edge mutants, exact package products, and resolved-SHA fixture are mandatory and fail closed. |
+| `THR62-SEC-B05`, `VOP-05` | Internal context-provider seam has production and deterministic injected-failure providers; fuzz seed/count is committed and replayable. |
+| `VOP-02` | Verifier requires literal expected base/head, exact `HEAD`, exact `origin/main`, clean worktree, and ancestor relation. |
+| `VOP-03` | `S1-03-dependency-revisions.txt` is compared to `Package.resolved`; no version-only or movable-HEAD acceptance. |
+| All IDs | Any mismatch is a closure finding on the exact changed head, not a new discovery cycle or blocker-list expansion. |
+
+Revision 3 is documentation-only and preserves the accepted protocol choices.
+Any implementation PR must populate the declared fixture/provenance artifacts
+with exact values and fail closed if a schema field is absent.

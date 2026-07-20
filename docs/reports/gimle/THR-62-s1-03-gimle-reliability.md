@@ -59,6 +59,31 @@ baseline/platform/CI checks, and making the Example Maestro path reachable and
 real-call-path dependent. Explicit approval is still required before
 implementation.
 
+## Discovery 2/2 frozen allowlist and revision 3 closure
+
+ThorChainCodeReviewer independently re-ran the three bounded read-only lanes
+on the pushed revision-2 head and returned `REVISE`. Discovery 2/2 is now
+frozen; no new discovery IDs may be opened. The operator accepted the following
+allowlist for closure-only rework:
+
+- `S103-ARCH-01..05`: exact analog commit/path/role manifest; path raw-value and
+  typed-error consumer contract; direct Address delegation without an
+  error-erasing Boolean parser; Example Xcode target/navigation composition;
+  cumulative S1-02 CI authority and exact three-flow transition.
+- `THR62-SEC-B01..05`: no hidden `.mainnet` default trap; operational BIP44
+  path binding; exact vector values/provenance; falsifiable dependency/capability
+  closure; deterministic parser-context failure seam.
+- `VOP-01..05`: reachable Example call path; authenticated expected base/head
+  and clean-worktree identity; fixed resolved dependency SHAs; schema-proven
+  independent-source provenance; deterministic fuzz/context-failure replay.
+
+Revision 3 closes these IDs in the spec, delta matrix, and plan with exact
+values, pinned commits and paths, explicit public contracts, named fixture and
+verifier files, literal command arguments, and fail-closed mutant checks. The
+revision preserves the accepted protocol choices and remains documentation-only.
+The next authorized action is closure review 1/5 on the exact pushed head;
+approval and implementation remain prohibited until CodeReviewer ACCEPT.
+
 ## Reproduction and verification record
 
 The evidence sequence was: activate the exact target workspace; query

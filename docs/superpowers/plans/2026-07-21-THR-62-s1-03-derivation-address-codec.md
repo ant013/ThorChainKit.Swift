@@ -1,7 +1,7 @@
 # THR-62 — S1-03 Derivation and Address Codec Plan
 
-Status: discovery 1/2; revision 2 resolves the first adversarial review's
-Critical/High findings; implementation remains approval-gated.
+Status: discovery 2/2 is frozen after REVISE; revision 3 closes the frozen
+allowlist mechanically; closure review 1/5 is required before approval.
 
 ## Goal and acceptance
 
@@ -30,18 +30,24 @@ and S1-02, SwiftUI-only Example presentation, and the bounded Maestro flow.
   immutable vector provenance, crypto capability/source closure, typed
   unavailable-context behavior, exact baseline/platform/CI authentication,
   and a reachable real-call-path Example runner.
-- Push the spec, Gimle report, delta matrix, and this plan, then obtain
-  explicit approval for the bound revision.
+- Close the frozen `S103-ARCH-01..05`, `THR62-SEC-B01..05`, and `VOP-01..05`
+  IDs with exact analog commits/paths, path/error contracts, fixture values and
+  provenance, dependency/context seams, Xcode/CI/runner wiring, and literal
+  base/head/clean-worktree checks.
+- Push the spec, Gimle report, delta matrix, and this plan, then hand the exact
+  head to ThorChainCodeReviewer for closure 1/5. Approval remains prohibited
+  until an exact-head CodeReviewer ACCEPT.
 
 Affected paths: `docs/specs/sprint-01-foundation/S1-03-derivation-address-codec.md`,
 `docs/superpowers/plans/2026-07-21-THR-62-s1-03-derivation-address-codec.md`,
 and `docs/reports/gimle/`. The Gimle checkpoint is external to this
 repository, is never committed, and is not an affected repository path.
 
-Acceptance: the approved revision names the exact public boundary,
+Acceptance: the revision names the exact public boundary,
 dependency/source closure, secret-handling boundary, independent vector
-provenance, failure behavior, and exact verification commands. No
-implementation files change.
+values/provenance, failure behavior, Xcode/CI/runner composition, and exact
+base/head verification commands. The frozen allowlist maps to mechanical
+checks. No implementation files change.
 
 Dependency: none.
 
@@ -51,6 +57,8 @@ Dependency: none.
   the slice spec.
 - Keep mnemonic/seed/private-key derivation outside the kit; accept only the
   `compressedPublicKey` boundary.
+- Implement the exact immutable `DerivationPath.rawValue` grammar and typed
+  errors, and remove the factory's default `.mainnet` argument.
 - Use a failure-reporting secp256k1 context/parser API; public entry points have
   no `try!`, force unwrap, `fatalError`, `precondition`, empty fallback, or
   `try?` suppression. Run the approved dependency/capability/source-closure
@@ -69,8 +77,8 @@ Dependency: Step 1 explicit approval.
 
 ### 3. Tests, fixtures, Example, and Maestro acceptance — ThorChainSwiftEngineer
 
-- Add independent public vectors with provenance and explicitly public,
-  unfunded fixture data; implementation-generated-only vectors do not count.
+- Add the bound public vector values and independent provenance records; the
+  committed fixture must contain no placeholders, secrets, or host-local paths.
   Store no mnemonic, seed, private key, credentials, or host-local paths, and
   record immutable source/tool/command/input/digest metadata.
 - Add derivation/codec negative, property/fuzz, round-trip, and public-symbol
@@ -80,7 +88,9 @@ Dependency: Step 1 explicit approval.
 - Extend the exact verifier and runner/CI policy together so the flow is
   reachable, invokes the real presentation call path, and is not satisfied by
   static labels or hard-coded outputs. Include the authenticated baseline,
-  package-resolution, platform-import, public-consumer, and secret scans.
+  package-resolution SHA, platform-import, public-consumer, deterministic fuzz,
+  context-failure, Xcode target-membership, and secret scans. Update the
+  cumulative S1-02 CI authority and exact three-flow manifest together.
 
 Affected paths: `Tests/ThorChainKitTests/DerivationTests.swift`,
 `Tests/ThorChainKitTests/AddressCodecTests.swift`,
@@ -102,8 +112,8 @@ Dependency: Step 2 implementation shape and Step 1 approval.
   scope.
 - Run the project-equivalent narrow/full checks and inspect public-symbol,
   dependency, secret, platform, and diff boundaries.
-- Recheck only discovery-2 blocker IDs and direct changed-line Critical/High
-  regressions during closure; record closure N/5.
+- Recheck only the frozen discovery-2 blocker IDs and direct changed-line
+  Critical/High regressions during closure; record closure 1/5.
 
 Affected paths: exact PR diff and CI/verification artifacts.
 

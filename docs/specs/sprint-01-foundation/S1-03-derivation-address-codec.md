@@ -1,6 +1,6 @@
 # S1-03 — Account Derivation and Address Codec
 
-**Status:** revision 2 after discovery-1 adversarial REVISE; implementation blocked pending fresh review and approval.
+**Status:** revision 3 after discovery-2 adversarial REVISE; frozen blocker allowlist is being closed by documentation only. Implementation remains blocked pending closure review and approval.
 **Risk:** high/cryptographic boundary.
 **Observable outcome:** an independent seed/public-key vector produces the expected THORChain address; checksum, payload length, mixed case, and wrong-network HRP are rejected before any network/signing call.
 
@@ -65,13 +65,18 @@ Tests/ThorChainKitTests/Fixtures/AddressVectors.json
 iOS Example/Sources/Presentation/AddressViewModel.swift
 iOS Example/Sources/Views/AddressView.swift
 .maestro/flows/02-address-codec.yaml
+.maestro/S1-03-analog-manifest.txt
 Scripts/verify-s1-03.sh
 Tests/ThorChainKitTests/Fixtures/S1-03-public-symbols.txt
 Tests/ThorChainKitTests/Fixtures/S1-03-tests.txt
+Tests/ThorChainKitTests/Fixtures/S1-03-dependency-revisions.txt
+Tests/ThorChainKitTests/Fixtures/S1-03-capability-closure.txt
+Tests/ThorChainKitTests/Fixtures/S1-03-fuzz-seed.txt
 .maestro/config.yaml
 Scripts/run-maestro.sh
 Scripts/test-run-maestro.sh
 Scripts/scan-s1-01-artifacts.swift
+iOS Example/iOS Example.xcodeproj/project.pbxproj
 .github/workflows/ci.yml
 Scripts/verify-s1-02-ci-policy.sh
 ```
@@ -82,6 +87,17 @@ Scripts/verify-s1-02-ci-policy.sh
 public struct DerivationPath: Hashable, Sendable {
     public static let defaultAccount: DerivationPath
     public init(_ raw: String) throws
+    public var rawValue: String { get }
+}
+
+public enum DerivationPathError: Error, Equatable {
+    case invalidComponentCount
+    case invalidPurpose
+    case invalidCoinType
+    case invalidAccount
+    case invalidChain
+    case invalidIndex
+    case malformedComponent
 }
 
 protocol AccountAddressDeriving: Sendable {
@@ -94,7 +110,7 @@ protocol AccountAddressDeriving: Sendable {
 public enum AccountAddressFactory {
     public static func address(
         compressedPublicKey: Data,
-        network: Network = .mainnet
+        network: Network
     ) throws -> Address
 }
 
@@ -102,17 +118,34 @@ public struct AddressCodec: Sendable {
     public init()
     public func encode(payload: Data, network: Network) throws -> Address
     public func decode(_ string: String, network: Network) throws -> Address
-    public func isValid(_ string: String, network: Network) -> Bool
 }
 ```
 
 `DerivationPath.defaultAccount` is the exact non-trapping value contract for
 the later host integration. Its construction must not use `try!`, force
 unwraps, `fatalError`, or preconditions; a private validated literal
-initializer is permitted. S1-03 does not derive a private key and the public
-factory does not accept a path.
+initializer is permitted. The representation is the immutable exact
+`rawValue` string. `init(_:)` accepts only five slash-separated components:
+`m/44'/931'/<account>'/<chain>/<index>`, with hardened purpose/coin/account,
+decimal non-negative account/chain/index components, no whitespace, and no
+leading-zero aliases. It throws the specific `DerivationPathError` case for
+the first invalid component and never normalizes an alternate path. S1-03
+does not derive a private key and the public factory does not accept a path.
 
-`AddressCodec.decode` delegates to the fail-closed `Address.init(_:, network:)` delivered in S1-01. S1-03 adds the public payload-to-address encoder plus derivation; it does not add a second parser, unchecked initializer, or alternate network-binding rule.
+The operational consumer is the later host adapter
+`AccountAddress.thorChainAddress(account:)`: it passes
+`DerivationPath.defaultAccount.rawValue` to the existing HdWalletKit path
+contract and passes only the resulting compressed public key to the kit. The
+S1-03 contract test asserts the exact raw value and records this adapter call
+shape; the host adapter must not silently substitute account, chain, index, or
+coin type.
+
+`AddressCodec.decode` delegates directly to the fail-closed
+`Address.init(_:, network:)` delivered in S1-01. S1-03 adds the public
+payload-to-address encoder plus derivation; it does not add a second parser,
+unchecked initializer, alternate network-binding rule, or Boolean validation
+wrapper. Callers that need diagnostics use the typed throwing initializer;
+there is no `AddressCodec.isValid` surface that erases the inherited error.
 
 `AccountAddressDeriving` remains an internal DI seam. The only public derivation boundary is `AccountAddressFactory.address(compressedPublicKey:network:)`; the parameter name is exactly `compressedPublicKey` everywhere so the caller cannot assume support for the uncompressed form.
 
@@ -168,6 +201,15 @@ can trap during initialization. It must create or obtain the secp256k1 parser
 context through a failure-reporting API and map unavailable context/parser
 setup to `.secp256k1ContextUnavailable`; no `try!`, force unwrap, `fatalError`,
 or precondition may be reachable from `AccountAddressFactory.address`.
+The internal `Secp256k1ContextProviding` seam has a production provider and a
+deterministic failure provider used by tests; the latter must prove the typed
+error without global state, environment dependence, or process termination.
+
+The factory has no default `network` argument. Callers must select an explicit
+`Network`, so S1-03 cannot introduce a hidden evaluation of the inherited
+S1-01 `Network.mainnet` `try!` during default-argument evaluation. The S1-03
+verifier records the inherited S1-01 initializer as a baseline dependency and
+fails if S1-03 adds any new static initialization or trap path.
 
 ## Secret-Handling Rules
 
@@ -184,36 +226,73 @@ or precondition may be reachable from `AccountAddressFactory.address`.
 
 ## Analog Delta
 
-| Source | Use | Do not use |
-|---|---|---|
-| HdWalletKit | host-side purpose/coin/path derivation contract | dependency or wallet object inside ThorChainKit |
-| HsCryptoKit | compressed secp256k1 public key, SHA256/RIPEMD160 | recovery-signature assumptions |
-| BitcoinCore `Bech32` | polymod/checksum/charset reference | SegWit witness version/program rules |
-| Vultisig | path/HRP vectors | WalletCore opaque derivation, TSS helper, duplicate validators |
+| Source (pinned commit) | Path and role | Use | Do not use |
+|---|---|---|---|
+| HdWalletKit `163b4e253aa763babeb6d14f246e1d81cfa0473e` | `Sources/HdWalletKit/HDWallet.swift:4-49`, `HDKeychain.swift:37-59`; primary host path/lifecycle analog | host-side purpose/coin/path derivation contract | dependency or wallet object inside ThorChainKit |
+| HsCryptoKit `7c11ad0e690cbb178a70f3b9d1116d0a37a51a41` | `Sources/HsCryptoKit/Crypto.swift:72-107,194-209`; crypto/hash support | SHA256/RIPEMD160 and public-key support | private-key convenience ownership or signing |
+| BitcoinCore `5b49f424f495904cf06519b1a7b861ef37b45b50` | `Sources/BitcoinCore/Bech32.swift:14-147,188-205`; checksum counter-reference | classic polymod/checksum/charset reference | SegWit witness version/program rules |
+| Vultisig iOS `d3123dbe6ef1103937c272a8b1cd81f613af0acc` | `VultisigApp/VultisigAppTests/Chains/PublicKeyTest.swift:11-19`; THOR-specific public vector support | path/public-key vector support | WalletCore opaque derivation, TSS helper, duplicate validators |
+
+The committed analog manifest must reproduce these repository URLs, commits,
+paths, and roles. A changed analog commit is a design revision, not an
+implementation detail.
 
 ## Vector Policy
 
 At least three independent sources:
 
 1. Vultisig pinned public-key fixture for `m/44'/931'/0'/0/0`.
-2. Cosmos/THORChain-compatible external implementation fixture: public key → address; provenance and tool version are recorded alongside the JSON.
-3. Round-trip payload vector from the Cosmos Bech32 reference.
+2. HsCryptoKit and BitcoinCore pinned implementations for independent
+   HASH160/classic-Bech32 calculation.
+3. The THOR address oracle in the pinned Vultisig public test data, kept
+   separate from the implementation-generated result.
 
 A vector generated only by the implementation under test is not permitted.
 
-`AddressVectors.json` fields:
+The first bound vector is not a placeholder:
+
+| Field | Value |
+|---|---|
+| `path` | `m/44'/931'/0'/0/0` |
+| `compressedPublicKeyHex` | `02a9ac9f7a97da41559e1684011b6a9b0b9c0445297d5f51dea0897fd4a39c31c7` |
+| `sha256Hex` | `3cc06d8afebb6ba8310671a54c5c616b7b6c87e0dcdccf2a5bf33356e6a59a49` |
+| `payloadHex` | `5a0dba49dab8fec87c6dd7c01b564ee72a8515a6` |
+| `mainnetAddress` | `thor1tgxm5jw6hrlvslrd6lqpk4jwuu4g29dxytrean` |
+| `stagenetAddress` | `sthor1tgxm5jw6hrlvslrd6lqpk4jwuu4g29dxsjl0td` |
+| `chainnetAddress` | `cthor1tgxm5jw6hrlvslrd6lqpk4jwuu4g29dxgmq2h0` |
+
+Its primary provenance is Vultisig commit
+`d3123dbe6ef1103937c272a8b1cd81f613af0acc`,
+`VultisigApp/VultisigAppTests/Chains/PublicKeyTest.swift:11-19`, where the
+public compressed key is asserted for the exact path. The THOR address oracle
+is independently present at that checkout in
+`VultisigApp/VultisigAppTests/TestData/thorchain.json`; the implementation PR
+must record the exact matching line and digest. HsCryptoKit commit
+`7c11ad0e690cbb178a70f3b9d1116d0a37a51a41` at
+`Sources/HsCryptoKit/Crypto.swift:194-209` supplies the independent
+`ripeMd160Sha256` calculation, and BitcoinCore commit
+`5b49f424f495904cf06519b1a7b861ef37b45b50` at
+`Sources/BitcoinCore/Bech32.swift:14-147,188-205` supplies the independent
+classic checksum calculation. Their exact commands and output digest must be
+recorded in the fixture; a missing command, digest, or source identity is a
+hard failure.
+
+`AddressVectors.json` schema (the schema itself is not a fixture and contains
+no placeholder vector values):
 
 ```json
 {
-  "source": {
-    "repository": "...",
-    "commit": "...",
-    "path": "...",
-    "tool": "...",
-    "version": "...",
-    "command": "...",
-    "digest": "..."
-  },
+  "sources": [{
+    "role": "string",
+    "repository": "url",
+    "commit": "40-hex revision",
+    "path": "repository-relative path and line",
+    "tool": "string",
+    "version": "string",
+    "command": "exact shell command",
+    "inputOrigin": "public input description",
+    "outputDigest": "64-hex SHA256"
+  }],
   "path": "m/44'/931'/0'/0/0",
   "compressedPublicKeyHex": "...",
   "sha256Hex": "...",
@@ -231,6 +310,12 @@ At least two algorithmically independent implementations must agree on the
 compressed-key → SHA256 → RIPEMD160 → classic-Bech32 result; the independent
 THORNode payload/address vector remains a separate oracle.
 
+For the bound vector, the canonical output digest is
+`c198c6f92f12029403394759ee6fde166758a9e1916da333ef84f4e685966b10`, the
+SHA256 of the pipe-delimited compressed key, hash, payload, and three network
+addresses shown above. The fixture test must recompute and compare this digest
+before accepting any vector.
+
 ## Tests Before Implementation
 
 `DerivationTests.swift` in ThorChainKit and the corresponding host test in S1-06:
@@ -247,6 +332,8 @@ THORNode payload/address vector remains a separate oracle.
 - a 33-byte compressed form with an x-coordinate outside secp256k1 is rejected by a real parser;
 - parser context setup failure maps to `.secp256k1ContextUnavailable` without a trap;
 - no `try!`, force unwrap, `fatalError`, or precondition is reachable from the public factory;
+- the production context provider and injected failure provider both execute
+  deterministically, with no environment or global-state switch;
 - isolated SHA256 and HASH160 known-answer values match independent provenance;
 - non-20-byte public encoder payloads fail before bit conversion with
   `AddressError.invalidPayloadLength`;
@@ -261,6 +348,9 @@ THORNode payload/address vector remains a separate oracle.
 - BIP173 generic valid/invalid checksum vectors;
 - fuzz/property: random 20-byte payload `decode(encode(x)) == x`;
 - the parser never crashes on arbitrary UTF-8 strings;
+- deterministic fuzz replay uses the committed seed/count in
+  `S1-03-fuzz-seed.txt` and records the first failing input; it does not use
+  wall-clock randomness or an unrecorded random seed;
 - direct 8→5 padding known-answer tests and strict residual-bit rejection;
 - malformed payload lengths (0, 19, 21, and bounded large input) fail closed;
 - the exact S1-03 test-discovery baseline, cumulative public-symbol subset,
@@ -269,14 +359,40 @@ THORNode payload/address vector remains a separate oracle.
 
 ### Example/Maestro Acceptance
 
-`AddressViewModel` and `AddressView` accept a public compressed-key fixture or watch-only address, but not a mnemonic/seed. They extend the SwiftUI + Combine Example and import no UIKit. Flow `02-address-codec.yaml` verifies the full expected `thor1…`, canonical uppercase normalization, bad checksum, mixed case, and wrong HRP. Values are read through stable accessibility IDs; a prefix-only assertion is prohibited. The verifier must prove each displayed result has a reachable call path through `AddressCodec`/`AccountAddressFactory`; static-output, hard-coded-error, prefix-only, bypass, and unreachable-fixture mutants must fail.
+`AddressViewModel` and `AddressView` accept a public compressed-key fixture or
+watch-only address, but not a mnemonic/seed. They extend the SwiftUI + Combine
+Example and import no UIKit. The Xcode project must contain the new files in
+the existing application target's Sources build phase and group hierarchy;
+`ThorChainExampleApp` must navigate from its existing root to `AddressView`
+with the same `ExampleRuntime` instance, and the view model must call
+`AccountAddressFactory.address(compressedPublicKey:network:)` rather than
+displaying fixture text directly. The implementation PR must include a
+non-`@testable` Xcode build/target-membership check and a navigation test that
+fails when any of those edges is removed.
+
+Flow `02-address-codec.yaml` verifies the full expected `thor1…`, canonical
+uppercase normalization, bad checksum, mixed case, and wrong HRP. Values are
+read through stable accessibility IDs; a prefix-only assertion is prohibited.
+The verifier must prove each displayed result has a reachable call path
+through `AddressCodec`/`AccountAddressFactory`; static-output, hard-coded-error,
+prefix-only, bypass, and unreachable-fixture mutants must fail.
 
 The S1-03 verifier directly includes the recursive platform-boundary checks,
 the exact test/symbol/dependency/source closure, and the runner/manifest/CI
-updates needed to make the single S1-03 Maestro flow reachable while retaining
-the exact S1-01 and S1-02 flow selections. Its local recipe binds every
-transcript to `$(git rev-parse HEAD)` and records pre/post HEAD, worktree
-status, command status, artifact hashes, and hosted workflow head identity.
+updates needed to make the three-flow S1-01 → S1-02 → S1-03 Maestro sequence
+reachable. `Scripts/verify-s1-02-ci-policy.sh` remains the cumulative CI
+authority: its expected workflow block is updated in the same implementation
+change and must still prove the prior two flows before S1-03. The exact
+manifest contains exactly `00-launch-foundation.yaml`,
+`01-endpoint-policy.yaml`, and `02-address-codec.yaml`; `run-maestro.sh`
+accepts exactly `s1-01`, `s1-02`, and `s1-03`.
+
+Its local recipe requires literal `--expected-base` and `--expected-head`
+arguments, checks `git rev-parse HEAD`, `git rev-parse origin/main`,
+`git status --porcelain` (empty), and the expected base/head relationship
+before any test. It records pre/post HEAD, worktree status, command status,
+artifact hashes, and hosted workflow head identity; there is no movable-HEAD
+fallback.
 
 ## Host Verification
 
@@ -302,14 +418,35 @@ Changing `xPrivKey`, account, index, chain, or curve is a fixture-breaking desig
 ## Slice-versioned contract gates
 
 S1-03 adds exact public-symbol and test-discovery baselines plus
-`Scripts/verify-s1-03.sh`. The verifier compares the generated public graph
-exactly with the S1-03 baseline and requires every canonical declaration in
-both S1-01 and S1-02 baselines to remain an unchanged subset. It also checks
-the exact package/import/source closure, resolved dependency revisions, the
+`Scripts/verify-s1-03.sh`. The verifier requires literal invocation:
+
+```text
+Scripts/verify-s1-03.sh \
+  --expected-base 7fd9663442a0e6dcd9c01c4ab04d35f3abd96fc4 \
+  --expected-head <immutable-pr-head>
+```
+
+It fails unless the worktree is clean, `HEAD` equals the expected head,
+`origin/main` equals the expected base, and the expected base is an ancestor
+of the expected head. It compares the generated public graph exactly with the
+S1-03 baseline and requires every canonical declaration in both S1-01 and
+S1-02 baselines to remain an unchanged subset. It also checks the exact
+package/import/source closure, the committed
+`S1-03-dependency-revisions.txt` SHA list against `Package.resolved`, the
 non-`@testable` iOS 13 consumer, no disabling constructs, the recursive
-UIKit/SwiftUI platform boundary, fixture/provenance/secret scans, and the
-reachable Example call path. New codec/derivation declarations appear only in
-the S1-03 exact baseline; prior removal or signature mutation fails.
+UIKit/SwiftUI platform boundary, fixture/provenance/secret scans, the
+deterministic fuzz seed, injected context-failure test, and reachable Example
+call path. New codec/derivation declarations appear only in the S1-03 exact
+baseline; prior removal or signature mutation fails.
+
+The capability closure is falsifiable, not narrative: the committed
+`S1-03-capability-closure.txt` allowlist names the only permitted module
+imports (`ThorChainKit`, `HsCryptoKit`, `secp256k1`, Foundation/Data) and
+permitted crypto/hash symbols. The verifier rejects any `HdWalletKit`,
+WalletCore, Vultisig, UI, logging, I/O, task, static-key, signing, or
+unlisted-callee edge in the executable closure of
+`AccountAddressFactory`/`AddressCodec`, and a mutant test adds each forbidden
+edge to prove the verifier fails closed.
 
 ## Acceptance Criteria
 
