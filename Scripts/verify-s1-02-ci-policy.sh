@@ -216,7 +216,8 @@ def verify_dispatch_policy(workflow):
 def verify_ripgrep_provisioning(workflow):
     if workflow.count(RIPGREP_PROVISION_BLOCK) != 1:
         fail("workflow must contain exactly one pinned ripgrep provisioning block")
-    if RIPGREP_FALLBACK_RE.search(workflow):
+    normalized_workflow = re.sub(r"\\[ \t]*\r?\n[ \t]*", " ", workflow)
+    if RIPGREP_FALLBACK_RE.search(normalized_workflow):
         fail("workflow must not contain a mutable ripgrep package-manager fallback")
     provision_at = workflow.find(RIPGREP_PROVISION_BLOCK)
     if workflow.count(PACKAGE_CONTRACT_BLOCK) != 1:
@@ -224,7 +225,11 @@ def verify_ripgrep_provisioning(workflow):
     consumer_at = workflow.find(PACKAGE_CONTRACT_BLOCK)
     if provision_at > consumer_at:
         fail("ripgrep provisioning must precede the S1-02 verifier consumer")
-    outside_provision = workflow.replace(RIPGREP_PROVISION_BLOCK, "", 1)
+    outside_provision = re.sub(
+        r"\\[ \t]*\r?\n[ \t]*",
+        " ",
+        workflow.replace(RIPGREP_PROVISION_BLOCK, "", 1),
+    )
     if RIPGREP_DOWNLOAD_RE.search(outside_provision):
         fail("workflow must not contain a second ripgrep download")
     if RIPGREP_PATH_RE.search(outside_provision):
@@ -406,9 +411,21 @@ def run_ripgrep_mutants(workflow):
         ),
     )
     expect_mutant_failure(
+        "multiline mutable package-manager fallback",
+        lambda: verify_ripgrep_provisioning(
+            workflow + "\n      - run: |\n          brew install \\\n            ripgrep\n"
+        ),
+    )
+    expect_mutant_failure(
         "second ripgrep download",
         lambda: verify_ripgrep_provisioning(
             workflow + "\n      - run: curl -fsSL https://example.test/ripgrep.tar.gz\n"
+        ),
+    )
+    expect_mutant_failure(
+        "multiline second ripgrep download",
+        lambda: verify_ripgrep_provisioning(
+            workflow + "\n      - run: |\n          curl -fsSL \\\n            https://example.test/ripgrep.tar.gz\n"
         ),
     )
     expect_mutant_failure(
