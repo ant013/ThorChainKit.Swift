@@ -5,7 +5,8 @@
 This report covers a spec-only correction after exact local toolchain evidence
 invalidated revision 9's local iOS 26.2 prerequisite. The implementation base
 remains `64575a9aea42201b31f3549ba517f1e02017199d`; the new spec-only revision
-head and spec SHA-256 are recorded after this closure commit. No
+head is `d6bfd87`. Spec SHA-256:
+`182c088d98be8fdc09730f1a3c6d5563d6ef1b1dd89b9ed9e69c951015beb762`. No
 implementation, hosted rerun, merge, or approval interaction was created
 before adversarial review.
 
