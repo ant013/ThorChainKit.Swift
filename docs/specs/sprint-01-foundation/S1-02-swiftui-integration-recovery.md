@@ -1,6 +1,6 @@
 # S1-02 SwiftUI Integration Recovery
 
-**Status:** draft revision 1; evidence complete; adversarial review and explicit revision-bound approval pending.
+**Status:** draft revision 2; evidence complete; adversarial closure review and explicit revision-bound approval pending.
 **Risk:** high because this recovery changes the Example lifecycle immediately before the final S1-02 gate.
 **Bindings:** `main` `28c2852cbcf194971b755cc52c911ebd94890b3f`; PR #3 reviewed head `422043e893f01237b4eca89b26676b356d31ab5c`; S1-02 endpoint-policy spec SHA-256 `66da80580e202a5789d6b8026fed694c77030aaacccfe525e25a6f499ab7f486`; accepted recovery interaction `808336db-a3d9-42bf-8694-14cf04e969ae`.
 
@@ -58,10 +58,10 @@ iOS Example/Sources/
 ```
 
 - `ThorChainExampleApp` creates the Example-owned runtime and the diagnostics presentation model once through SwiftUI lifecycle ownership.
-- `DiagnosticsViewModel` observes the existing S1-01 Combine publishers and supplies `DiagnosticsView`; it does not own kit state.
-- `EndpointsViewModel` invokes the bounded Testing SPI session and supplies sanitized snapshots to `EndpointsView`; it does not reimplement classification, selection, retries, or endpoint ownership.
+- `DiagnosticsViewModel` subscribes to the real `lastBlockHeightPublisher`, `syncStatePublisher`, and `accountStatePublisher`, retains their cancellation tokens for its lifetime, and publishes UI state on `MainActor`; it does not own kit state.
+- `ExampleRuntime` is the sole Testing SPI importer and session owner. `EndpointsViewModel` requests sanitized snapshots through `ExampleRuntime.endpointSnapshot` and supplies them to `EndpointsView`; it does not import the SPI or reimplement classification, selection, retries, or endpoint ownership.
 - `DiagnosticsView` owns navigation/presentation to `EndpointsView`. Stable accessibility identifiers and fixture labels remain unchanged.
-- Cancellation and task lifetime are tied to presentation-model ownership so view recomputation cannot create duplicate sessions or stale publication.
+- `EndpointsViewModel` owns at most one snapshot operation. A new request and model teardown cancel the prior operation, and a model-owned generation guard rejects late completion from any cancelled or superseded request, so view recomputation cannot create duplicate sessions or stale publication.
 - No repository-owned Swift file imports UIKit. No library Swift file imports SwiftUI.
 
 ## Affected Areas
@@ -82,9 +82,9 @@ The endpoint pool/probe/health/lease/diagnostic implementation and its existing 
 1. PR #3 is based on current `main`, has `mergeStateStatus=CLEAN`, and contains no conflict markers.
 2. `Sources/ThorChainKit` imports neither UIKit nor SwiftUI; `iOS Example/Sources` contains no UIKit import, lifecycle/view-controller type, or UIKit representable wrapper.
 3. The library floor remains iOS 13 and the Example target is iOS 14 or later.
-4. The Example has a SwiftUI `App` entry point, uses SwiftUI views, and observes through Combine-backed presentation models without becoming a second state owner.
+4. The Example has a SwiftUI `App` entry point and SwiftUI views; its diagnostics model retains subscriptions to all three real kit publishers and publishes their values on `MainActor` without becoming a second state owner.
 5. Existing S1-01 fixture output, accessibility identifiers, workspace/root-package linkage, exact-UDID runner, and Maestro flow remain green.
-6. The S1-02 view renders real sanitized Testing SPI snapshots and preserves the accepted endpoint acceptance matrix without duplicated classification or static outcomes.
+6. The S1-02 view renders real sanitized Testing SPI snapshots requested through the sole SPI-owning `ExampleRuntime`; one model-owned operation is cancelled on supersession and teardown, and late results cannot publish. The accepted endpoint acceptance matrix remains unchanged, with no duplicated classification or static outcomes.
 7. Existing endpoint tests and every revision-16 verifier/mutant remain green; no endpoint-policy source changes occur unless a direct integration regression is first reproduced.
 8. Documentation retains accepted endpoint semantics, incorporates the current platform boundary, updates integrity hashes, and does not claim the source migration shipped before the implementation head exists.
 9. Reviewer and QA independently accept the same immutable head. Any push invalidates both attestations.
@@ -92,7 +92,7 @@ The endpoint pool/probe/health/lease/diagnostic implementation and its existing 
 
 ## Tests Before Product Code
 
-The platform verifier is added before migration and must fail against the legacy Example. Temporary-copy mutants must prove failure for:
+The named `Scripts/verify-s1-01.sh --platform-only` mode is added before migration and must fail against the legacy Example. It runs the shared platform boundary, Example observation, and their mutant gates without invoking S1-01's exact source/test/public-symbol closure. Temporary-copy mutants must prove failure for:
 
 - UIKit import in library or Example;
 - `UIApplicationDelegate`, `UIWindow`, `UIViewController`, or UIKit representable use;
@@ -101,12 +101,17 @@ The platform verifier is added before migration and must fail against the legacy
 - Example deployment target below iOS 14;
 - library deployment target above or below the approved iOS 13 floor;
 - controller-era paths reintroduced into the Xcode project;
-- a static endpoint view or a second endpoint-classification owner.
+- a diagnostics model disconnected from any of the three real kit publishers or replaced by scalar launch snapshots;
+- a missing retained Combine cancellation token or missing main-actor UI publication hop;
+- a second Testing SPI importer/session owner, a static endpoint view, or a second endpoint-classification owner;
+- endpoint operation overlap without cancellation, teardown without cancellation, or late publication after supersession; removing either the cancellation path or generation guard must make the focused S1-02 contract/mutant fail.
+
+After the migration, `Scripts/verify-s1-01.sh --platform-only` must pass. The full no-argument S1-01 verifier remains the historical S1-01 exact-closure gate and is not run against the expanded S1-02 source tree. `Scripts/verify-s1-02.sh` remains the sole exact current-tree source/test/public-symbol closure authority and invokes or duplicates no competing platform scanner.
 
 After implementation, run in this order:
 
 ```bash
-Scripts/verify-s1-01.sh
+Scripts/verify-s1-01.sh --platform-only
 swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
 swift test --filter LiveNodeProbeTests
 swift test --filter EndpointPoolTests
@@ -131,7 +136,7 @@ The opt-in two-provider live gate remains separate. Missing credentials remain `
 | Required differences | SwiftUI `App`; SwiftUI views; thin Combine-backed presentation models; no UIKit; Example iOS 14+; fail-closed platform gate; refreshed exact-head evidence. |
 | Rejected differences | Endpoint refactor, duplicate state/classification, new retries or network calls, new public API, UIKit wrappers, SwiftUI in the library, Unstoppable work, or hosted runs before the head is frozen. |
 | Failure modes | Duplicate runtime/session, stale task publication, static fixture output, UIKit leakage, accidental library-floor bump, path/hash drift, stale review/QA, or dispatch against a non-mergeable head. |
-| Tests before code | Platform verifier plus temporary-copy mutants, then migration, Example build, S1-01 Maestro, S1-02 SPI/source audit, and S1-02 Maestro. |
+| Tests before code | Named S1-01 platform-only verifier plus temporary-copy observation mutants; focused S1-02 SPI-ownership/cancellation/stale-result contract mutants; then migration, Example build, both Maestro flows, and S1-02 exact-tree closure. |
 | Verification | Narrow-to-broad commands above; diff audit against this matrix; exact GitHub/Paperclip head checks; one hosted run only after local acceptance. |
 
 ## Evidence Reliability

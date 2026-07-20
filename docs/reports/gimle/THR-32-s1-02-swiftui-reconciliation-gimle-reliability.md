@@ -97,6 +97,10 @@ Bug statuses: {'workaround': 3}
 
 ## Adversarial decisions
 
+- ARCH-001@1 REVISE: Testing SPI ownership is contradictory
+- VER-001@1 REVISE: Ordered final verifier cannot pass
+- VER-002@1 REVISE: Combine-backed observation is required but unproved
+- VER-003@1 REVISE: Cancellation and stale-result suppression are required but unproved
 
 ## Verification and acceptance
 
