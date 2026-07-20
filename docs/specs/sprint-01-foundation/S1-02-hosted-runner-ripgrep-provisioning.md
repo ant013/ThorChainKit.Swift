@@ -1,11 +1,43 @@
 # S1-02 — Hosted runner ripgrep provisioning
 
-Status: design revision 10, spec-only. Revision 7 remains the frozen
+Status: design revision 11, spec-only. Revision 7 remains the frozen
 ripgrep-provisioning design and exact-head CR/QA baseline; revisions 8 and 9's
 Maestro diagnosis and selector evidence are preserved. This revision replaces
 revision 9's impossible local iOS 26.2 prerequisite with deterministic
 verifier/mutant proof and one post-implementation hosted acceptance gate.
-Explicit user approval is required before any recovery implementation.
+It incorporates the closure-3/5 review corrections for hosted version evidence,
+post-provisioning shadowing, and committed-path hygiene. Explicit user approval
+is required before any recovery implementation.
+
+## Revision 11 review correction
+
+The latest closure review identified three high blockers in the prior revision:
+the validated `rg --version` line was not required to be emitted to hosted
+logs; the policy contract did not reject a later `$GITHUB_ENV` PATH mutation or
+replacement of the extracted binary; and committed spec/report text contained
+operator-local absolute paths. This revision adds those requirements and
+sanitizes the committed paths. It remains spec-only: no workflow, verifier,
+hosted-run, merge, or approval action is authorized here. The exact-head
+Reviewer/QA/hosted merge gate remains open.
+
+### Normative closure of review findings 1–2
+
+Finding 1 is closed in the design by requiring the already validated first
+`rg --version` line to be emitted as `rg_version_line=...` after the fail-closed
+assertion, and by requiring a mutant that removes that log emission to fail the
+policy gate. A source-text match is not hosted execution evidence.
+
+Finding 2 is closed in the design by requiring the policy verifier to treat the
+complete interval between the pinned provisioning block and the S1-02 consumer
+as an exact allowed contract: only the approved simulator-selection block may
+remain, with no `$GITHUB_ENV` PATH mutation and no write, removal, or replacement
+of the extracted binary or its exported directory. Mutants for `$GITHUB_ENV`
+PATH shadowing and extracted-binary replacement must fail before product
+verification. These are implementation requirements for the already approved
+workflow/verifier paths, not authorization to edit them in this spec phase.
+
+Finding 3 is handled only by the four-path documentation sanitation in this
+revision; it does not expand the implementation boundary.
 
 ## Goal and assumptions
 
@@ -39,7 +71,8 @@ In scope: move the existing exact-SHA policy command to the first line of the
 existing `Verify package and S1-02 contract` step; extend the existing
 `Scripts/verify-s1-02-ci-policy.sh` with an exact command-block assertion,
 late-order mutants, exact-SHA binding, and protection against later ripgrep
-installs or PATH shadowing; and record static/hosted verification. The existing
+installs or PATH/binary shadowing; require the validated version line to be
+emitted in hosted logs; and record static/hosted verification. The existing
 fixed release URL, archive name, SHA-256, arm64 guard, `$RUNNER_TEMP` staging,
 PATH export, and version check are preserved and policy-checked.
 
@@ -79,12 +112,18 @@ output with an explicit fail-closed status check; require its first line to
 match exactly `ripgrep 15.2.0 (rev <lowercase-hex>)`, not a prefix such as
 `ripgrep 15.2.0-extra`.
 
+After the exact version assertion succeeds, emit the validated line to the
+hosted log with a stable field such as
+`printf 'rg_version_line=%s\\n' "$rg_version_line"`. The log line is evidence
+of the checked absolute binary, not a replacement for the fail-closed check.
+
 The required version check shape is equivalent to:
 
 ```text
 if ! rg_version_output=$("$rg_path" --version); then exit 1; fi
 rg_version_line="${rg_version_output%%$'\n'*}"
 [[ "$rg_version_line" =~ ^ripgrep\ 15\.2\.0\ \(rev\ [0-9a-f]+\)$ ]]
+printf 'rg_version_line=%s\\n' "$rg_version_line"
 ```
 
 ## Proposed workflow shape
@@ -131,7 +170,8 @@ verification command runs.
 5. Assert the extracted absolute `rg` exists and, with an explicit checked
    command status, reports the exact `15.2.0` version line.
 6. Append only the extracted release directory to `$GITHUB_PATH` for later
-   steps; no later ripgrep install or shadowing PATH mutation is permitted.
+   steps; no later ripgrep install, `$GITHUB_PATH`/`$GITHUB_ENV` PATH mutation,
+   or replacement of the extracted `$rg_path` is permitted.
 
 Do not invoke `rg` before PATH update except by its explicit absolute extracted
 path. Exact-head preflight, `workflow_sha` equality, checkout equality,
@@ -156,6 +196,24 @@ force the verifier to resolve an ambient symbolic ref. Neither behavior binds
 the policy result to the exact checkout SHA proved by the workflow. The
 verifier must remain fail-closed and SHA-bound.
 
+## Post-provisioning shadowing contract
+
+Between the pinned provisioning block and the S1-02 consumer, the policy must
+reject both of these workflow mutations:
+
+- any `$GITHUB_ENV` assignment that changes `PATH` (the existing simulator
+  identity export remains allowed because it does not alter `PATH`);
+- any `cp`, `mv`, `install`, redirection, or equivalent write that can replace
+  `$RUNNER_TEMP/ripgrep-15.2.0-aarch64-apple-darwin/rg` or the directory later
+  appended to `$GITHUB_PATH`.
+
+The mutant suite must add one temporary-copy mutant for each class and run the
+policy gate before product verification. A later download/install mutant and
+the existing direct/`$GITHUB_PATH` PATH mutants remain required. The positive
+workflow must therefore have one verified binary identity, one logged version
+line, and no mutable route to change the executable consumed by
+`Scripts/verify-s1-02.sh`.
+
 ## Analog delta matrix
 
 | Dimension | Verified invariant | Required delta | Rejected difference/failure |
@@ -175,8 +233,9 @@ verifier must remain fail-closed and SHA-bound.
   five-command workflow-block assertion, the four late-order mutants, the
   symbolic-`HEAD` mutant, no-second-install/no-shadowing checks, and assertions
   for the preserved URL, version, archive, digest, arm64 guard,
-  verify-before-extract/PATH, `$GITHUB_PATH`, and exact checked-out SHA
-  expression.
+  verify-before-extract/PATH, `$GITHUB_PATH`, exact checked-out SHA expression,
+  and required `rg_version_line` output. Add a mutant that removes the version
+  log emission; it must fail the policy gate before product verification.
 - Use temporary-copy mutants for missing provisioning, provisioning moved after
   the consumer, the policy invocation moved after the first `swift build`,
   after the strict-concurrency `swift build`, after `swift test`, or after
@@ -406,7 +465,7 @@ The next recovery slice may proceed only when its approved design provides:
 ### Spec-only verification and open decision
 
 Verified for this revision: codebase-memory index status is `ready`; Serena is
-activated for `/Users/ant013/Data/AI/thorchain`; targeted `rg` and Git reads
+activated for `<repo-root>`; targeted `rg` and Git reads
 confirm the current Maestro lifecycle; local runtime/toolchain observations
 are recorded above; and the two primary upstream issue records were checked.
 Gimle trust remains RED because the target project mapping is unavailable.

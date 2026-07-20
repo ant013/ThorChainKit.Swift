@@ -77,7 +77,7 @@ git log -3 --format='%H %s'
 shasum -a 256 docs/specs/sprint-01-foundation/S1-02-hosted-runner-ripgrep-provisioning.md
 codebase-memory index_status(project=Users-ant013-Data-AI-thorchain)
 codebase-memory search_graph(query=run Maestro simulator permissions)
-Serena activate_project(/Users/ant013/Data/AI/thorchain)
+Serena activate_project(<repo-root>)
 targeted rg of Scripts/run-maestro.sh, .maestro, and .github/workflows/ci.yml
 xcrun simctl list runtimes
 xcodebuild -version

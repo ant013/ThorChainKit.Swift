@@ -60,7 +60,7 @@ Completed:
 ```text
 codebase-memory index_status(project=Users-ant013-Data-AI-thorchain)
 codebase-memory search_graph/search_code for simulator selector and Maestro lifecycle
-Serena activate_project(/Users/ant013/Data/AI/thorchain)
+Serena activate_project(<repo-root>)
 git status --short --branch
 git log -2 --format='%H %s'
 targeted rg and Git reads of .github/workflows/ci.yml and Scripts/run-maestro.sh

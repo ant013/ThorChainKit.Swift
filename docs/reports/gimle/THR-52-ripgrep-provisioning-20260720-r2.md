@@ -3,7 +3,7 @@
 - Task: 04ee70d8-5cc8-415a-9df6-bc65ede0dc37
 - Workflow/phase: analog_change / awaiting_approval
 - Trust: **RED**
-- Repository: /Users/ant013/Data/AI/thorchain
+- Repository: <repo-root>
 - Base HEAD: e9c667a07ab46ecbc7116e1f8e1fa932ff956b8d
 - Final HEAD: n/a
 - Gimle runtime: 0e9cf57c00ff970f584256126b500166580e7a72
