@@ -1,8 +1,8 @@
 # S1-02 — Hosted runner ripgrep provisioning
 
-Status: design revision 2, spec-only. Revision 1 approval is superseded by this
-SHA-binding correction. Explicit user approval is required before workflow or
-verifier implementation.
+Status: design revision 3, spec-only. Revision 2 is superseded by this
+workflow-gating correction. Explicit user approval is required before workflow
+or verifier implementation.
 
 ## Goal and assumptions
 
@@ -57,7 +57,23 @@ fallback.
 
 ## Proposed workflow shape
 
-Add the step immediately before the existing package/S1-02 contract step:
+Add the provisioning step immediately before the existing package/S1-02
+contract step. Within that contract step, the exact-SHA policy gate must be the
+first command, before any build, test, or product-verifier command:
+
+```text
+Scripts/verify-s1-02-ci-policy.sh steady-state --ref "$(git rev-parse HEAD)"
+swift build
+swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
+swift test
+Scripts/verify-s1-02.sh
+```
+
+This ordering is required so a malformed provisioning block is rejected by the
+policy authority before the hosted consumer can fail or produce misleading
+product-verification evidence. The policy verifier must also retain the static
+mutant that rejects a workflow with its policy invocation after
+`Scripts/verify-s1-02.sh`.
 
 1. Run with `set -euo pipefail` and assert `uname -m` is `arm64`.
 2. Download the exact URL to `$RUNNER_TEMP` with `curl -fsSL`.
@@ -109,10 +125,12 @@ verifier must remain fail-closed and SHA-bound.
   `Scripts/verify-s1-02.sh`, verify-before-extract/PATH, `$GITHUB_PATH`, and
   the exact checked-out SHA expression passed to the steady-state verifier.
 - Use temporary-copy mutants for missing provisioning, provisioning moved after
-  the consumer, wrong URL/version/digest, verification after extraction or PATH,
-  mutable package-manager fallback, invalid architecture/version assertions, and
-  replacing `--ref "$(git rev-parse HEAD)"` with `--ref HEAD`;
-  each must fail before product verification.
+  the consumer, the policy invocation moved after `Scripts/verify-s1-02.sh`,
+  wrong URL/version/digest, verification after extraction or PATH, mutable
+  package-manager fallback, invalid architecture/version assertions, and
+  replacing `--ref "$(git rev-parse HEAD)"` with `--ref HEAD`. Run the policy
+  check as the first gate against each mutant; every mutant must fail there,
+  before product verification is invoked.
 - The positive hosted run must reach the existing discovery command and retain
   the prior 42-test result. No allowlist changes are introduced.
 
@@ -123,9 +141,11 @@ verifier must remain fail-closed and SHA-bound.
 2. URL, version, archive name, and digest match the official 15.2.0 asset.
 3. Non-arm64, download/checksum/extract, missing-binary, and version failures
    fail closed; PATH is not updated before checksum verification.
-4. Provisioning precedes `Scripts/verify-s1-02.sh`; its existing allowlist
-   check passes on the hosted runner; and the steady-state policy receives the
-   exact checked-out SHA expression rather than symbolic `HEAD`.
+4. The exact-SHA policy gate runs before build, test, and
+   `Scripts/verify-s1-02.sh`; its static ordering mutant fails when the policy
+   invocation is moved after the consumer; the existing allowlist check passes
+   on the hosted runner; and the steady-state policy receives the exact
+   checked-out SHA expression rather than symbolic `HEAD`.
 5. Exact-head, checkout, build/test, dispatch, permissions, and Maestro pins
    remain unchanged.
 6. No package-manager path, action, trigger, secret, binary, or unrelated file
@@ -165,22 +185,24 @@ head SHA, successful `rg --version`, and unchanged S1-02 discovery output.
 
 ## Adversarial review and open questions
 
-- **D-001 Freshness/identity — ACCEPT.** Workflow and verifier anchors exist at
-  exact head `e9c667a07ab46ecbc7116e1f8e1fa932ff956b8d` on the assigned branch.
+- **D-001 Freshness/identity — ACCEPT.** The incident baseline is exact PR head
+  `e9c667a07ab46ecbc7116e1f8e1fa932ff956b8d`; the revision-3 review head is
+  `b63e0990d9424c132c0c99e209230b1fdcbce051`. Workflow and verifier anchors
+  remain present on the assigned branch, and the baseline/current-head
+  distinction is explicit.
 - **D-002 Supply chain — ACCEPT.** The official digest is independently
   reproduced; verify-before-extract and no package-manager fallback are fixed.
 - **D-003 Minimum scope — ACCEPT.** One workflow step plus assertions in the
   existing CI-policy verifier is the smallest coherent regression surface; no
   new script and no product-verifier change are needed.
-- **D-004 Verification validity — REVISED/ACCEPT.** The actual failing `rg`
-  pipeline remains the acceptance probe, while the existing CI-policy verifier
-  durably rejects missing/moved provisioning, wrong URL/version/digest,
-  verify-after-extract/PATH, mutable package-manager fallback, and invalid
-  architecture/version assertions.
-- **D-005 Exact-head binding — PENDING ThorChainCodeReviewer review.** Revision
-  2 requires the steady-state policy command to pass `$(git rev-parse HEAD)` and
-  adds a mutant that rejects symbolic `--ref HEAD`; revision 1 did not cover
-  this masked defect.
+- **D-004 Verification validity — REVISED in revision 3; pending closure.** The
+  policy gate is now required before build, test, and the actual failing `rg`
+  pipeline. Its ordering mutant must fail when the policy invocation is moved
+  after `Scripts/verify-s1-02.sh`, so the policy guard cannot be bypassed by a
+  late workflow command.
+- **D-005 Exact-head binding — ACCEPT.** The steady-state policy command passes
+  `$(git rev-parse HEAD)` and the exact-SHA mutant rejects symbolic `--ref HEAD`;
+  revision 1 did not cover this masked defect.
 
 Open question: if `macos-26` becomes x86_64, approve a separately pinned asset
 or keep this gate unavailable. This spec chooses fail-closed and does not guess.
