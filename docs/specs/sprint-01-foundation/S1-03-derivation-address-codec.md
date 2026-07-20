@@ -1,6 +1,6 @@
 # S1-03 — Account Derivation and Address Codec
 
-**Status:** synchronized to S1-01 revision 11 after revision-10 adversarial REVISE; implementation blocked pending fresh review and approval.
+**Status:** revision 2 after discovery-1 adversarial REVISE; implementation blocked pending fresh review and approval.
 **Risk:** high/cryptographic boundary.
 **Observable outcome:** an independent seed/public-key vector produces the expected THORChain address; checksum, payload length, mixed case, and wrong-network HRP are rejected before any network/signing call.
 
@@ -33,7 +33,13 @@ In scope:
 - public Cosmos-compatible Bech32 payload encoding built on the S1-01 decoder/convertBits implementation;
 - reuse of S1-01's strict network-aware parser/normalizer;
 - official, cross-library, and negative vectors;
-- zeroization/retention rules for temporary private material.
+- a fail-closed capability/source-closure gate proving that no seed, mnemonic,
+  private key, wallet dependency, logging, I/O, or retained secret capability
+  enters the kit.
+
+Executable mnemonic/private-key lifetime and zeroization remain host-owned
+acceptance for S1-06. S1-03 must not add host derivation merely to satisfy that
+later integration requirement.
 
 Out of scope:
 
@@ -59,13 +65,22 @@ Tests/ThorChainKitTests/Fixtures/AddressVectors.json
 iOS Example/Sources/Presentation/AddressViewModel.swift
 iOS Example/Sources/Views/AddressView.swift
 .maestro/flows/02-address-codec.yaml
+Scripts/verify-s1-03.sh
+Tests/ThorChainKitTests/Fixtures/S1-03-public-symbols.txt
+Tests/ThorChainKitTests/Fixtures/S1-03-tests.txt
+.maestro/config.yaml
+Scripts/run-maestro.sh
+Scripts/test-run-maestro.sh
+Scripts/scan-s1-01-artifacts.swift
+.github/workflows/ci.yml
+Scripts/verify-s1-02-ci-policy.sh
 ```
 
 ## API and Ownership
 
 ```swift
 public struct DerivationPath: Hashable, Sendable {
-    public static let defaultAccount = try! DerivationPath("m/44'/931'/0'/0/0")
+    public static let defaultAccount: DerivationPath
     public init(_ raw: String) throws
 }
 
@@ -90,6 +105,12 @@ public struct AddressCodec: Sendable {
     public func isValid(_ string: String, network: Network) -> Bool
 }
 ```
+
+`DerivationPath.defaultAccount` is the exact non-trapping value contract for
+the later host integration. Its construction must not use `try!`, force
+unwraps, `fatalError`, or preconditions; a private validated literal
+initializer is permitted. S1-03 does not derive a private key and the public
+factory does not accept a path.
 
 `AddressCodec.decode` delegates to the fail-closed `Address.init(_:, network:)` delivered in S1-01. S1-03 adds the public payload-to-address encoder plus derivation; it does not add a second parser, unchecked initializer, or alternate network-binding rule.
 
@@ -132,19 +153,34 @@ public enum AccountAddressError: Error, Equatable {
     case invalidCompressedPublicKeyLength(Int)
     case invalidCompressedPublicKeyPrefix(UInt8)
     case invalidSecp256k1Point
-    case derivationFailed
+    case secp256k1ContextUnavailable
 }
 ```
 
-S1-01's `AddressError` remains the public codec/validation error surface. `AccountAddressError` is limited to S1-03 public-key derivation. No `return ""`, `try?`, `Bool isDerived`, or string-only errors. `Secp256k1PublicKeyValidator` performs C parsing through `secp256k1.Context.raw`; it does not accept a key merely because its length looks correct.
+S1-01's `AddressError` remains the public codec/validation error surface.
+`AccountAddressError` is limited to S1-03 public-key validation and parser
+setup. No `return ""`, `try?`, `Bool isDerived`, or string-only errors.
+`Secp256k1PublicKeyValidator` parses the entire input through secp256k1 C
+APIs; it does not accept a key merely because its length looks correct.
+
+The implementation must not rely on a dependency static context accessor that
+can trap during initialization. It must create or obtain the secp256k1 parser
+context through a failure-reporting API and map unavailable context/parser
+setup to `.secp256k1ContextUnavailable`; no `try!`, force unwrap, `fatalError`,
+or precondition may be reachable from `AccountAddressFactory.address`.
 
 ## Secret-Handling Rules
 
 - Public `Kit` neither accepts nor stores a mnemonic, seed, or private key.
-- A temporary private key is created in the smallest lexical scope of the host factory.
-- Logs do not contain seed/private/public-key bytes. An address may be logged only in accordance with the app privacy policy.
-- `Data` zeroization in Swift does not guarantee destruction of copies; the spec does not claim a false absolute guarantee. Where possible, use the HsCrypto/HdWallet API without additional copies and clear owned mutable buffers through `resetBytes`.
-- Derivation errors are not replaced with an empty string or fallback path.
+- No S1-03 library source accepts or stores a mnemonic, seed, or private key;
+  no S1-03 source imports HdWalletKit or WalletCore.
+- The complete executable closure of `AccountAddressFactory` and
+  `AddressCodec` is audited for allowed imports/callees and rejects logging,
+  I/O, tasks, static key retention, UI imports, and bypasses of `Address.init`.
+- Host-side temporary-key lifetime and zeroization are specified and tested in
+  S1-06, not implemented in this kit slice.
+- Derivation/public-key errors are never replaced with an empty string,
+  `try?`, or a fallback path.
 
 ## Analog Delta
 
@@ -160,7 +196,7 @@ S1-01's `AddressError` remains the public codec/validation error surface. `Accou
 At least three independent sources:
 
 1. Vultisig pinned public-key fixture for `m/44'/931'/0'/0/0`.
-2. Cosmos/THORChain-compatible external implementation fixture: mnemonic → public key → address; provenance and tool version are recorded alongside the JSON.
+2. Cosmos/THORChain-compatible external implementation fixture: public key → address; provenance and tool version are recorded alongside the JSON.
 3. Round-trip payload vector from the Cosmos Bech32 reference.
 
 A vector generated only by the implementation under test is not permitted.
@@ -169,10 +205,18 @@ A vector generated only by the implementation under test is not permitted.
 
 ```json
 {
-  "source": "...",
-  "mnemonic": "test fixture only",
+  "source": {
+    "repository": "...",
+    "commit": "...",
+    "path": "...",
+    "tool": "...",
+    "version": "...",
+    "command": "...",
+    "digest": "..."
+  },
   "path": "m/44'/931'/0'/0/0",
   "compressedPublicKeyHex": "...",
+  "sha256Hex": "...",
   "payloadHex": "...",
   "mainnetAddress": "thor1...",
   "stagenetAddress": "sthor1...",
@@ -180,7 +224,12 @@ A vector generated only by the implementation under test is not permitted.
 }
 ```
 
-The fixture mnemonic must be an explicitly public test mnemonic with no funds.
+Fixtures contain no mnemonic, seed, private key, credentials, or host-local
+path. Every expected field records immutable provenance (repository URL and
+commit or tag, path, tool/version, invocation, input origin, and digest).
+At least two algorithmically independent implementations must agree on the
+compressed-key → SHA256 → RIPEMD160 → classic-Bech32 result; the independent
+THORNode payload/address vector remains a separate oracle.
 
 ## Tests Before Implementation
 
@@ -192,9 +241,17 @@ The fixture mnemonic must be an explicitly public test mnemonic with no funds.
 - a different HRP changes the string, not the payload;
 - invalid public-key/path input returns a typed error;
 - repeated calls do not retain public-key input through observable public state;
-- host HdWalletKit derivation from the public fixture mnemonic matches the expected compressed key;
+- host HdWalletKit derivation remains an S1-06-only integration check and is
+  not implemented or fixture-backed by this kit slice;
 - a public key with a prefix other than `0x02/0x03` is rejected before hashing;
-- a 33-byte compressed form with an x-coordinate outside secp256k1 is rejected by a real parser.
+- a 33-byte compressed form with an x-coordinate outside secp256k1 is rejected by a real parser;
+- parser context setup failure maps to `.secp256k1ContextUnavailable` without a trap;
+- no `try!`, force unwrap, `fatalError`, or precondition is reachable from the public factory;
+- isolated SHA256 and HASH160 known-answer values match independent provenance;
+- non-20-byte public encoder payloads fail before bit conversion with
+  `AddressError.invalidPayloadLength`;
+- a valid classic-Bech32 `tthor` oracle is rejected by `.mainnet` with the
+  exact wrong-HRP error, without adding public mocknet support.
 
 `AddressCodecTests.swift`:
 
@@ -203,11 +260,23 @@ The fixture mnemonic must be an explicitly public test mnemonic with no funds.
 - S1-01 negative vectors are rerun through the public `AddressCodec.decode` wrapper to prove there is no divergent parser;
 - BIP173 generic valid/invalid checksum vectors;
 - fuzz/property: random 20-byte payload `decode(encode(x)) == x`;
-- the parser never crashes on arbitrary UTF-8 strings.
+- the parser never crashes on arbitrary UTF-8 strings;
+- direct 8→5 padding known-answer tests and strict residual-bit rejection;
+- malformed payload lengths (0, 19, 21, and bounded large input) fail closed;
+- the exact S1-03 test-discovery baseline, cumulative public-symbol subset,
+  package/import/source closure, resolved dependency revisions, and public-only
+  iOS 13 consumer are enforced by `Scripts/verify-s1-03.sh`.
 
 ### Example/Maestro Acceptance
 
-`AddressViewModel` and `AddressView` accept a public compressed-key fixture or watch-only address, but not a mnemonic/seed. They extend the SwiftUI + Combine Example and import no UIKit. Flow `02-address-codec.yaml` verifies the full expected `thor1…`, canonical uppercase normalization, bad checksum, mixed case, and wrong HRP. Values are read through stable accessibility IDs; a prefix-only assertion is prohibited.
+`AddressViewModel` and `AddressView` accept a public compressed-key fixture or watch-only address, but not a mnemonic/seed. They extend the SwiftUI + Combine Example and import no UIKit. Flow `02-address-codec.yaml` verifies the full expected `thor1…`, canonical uppercase normalization, bad checksum, mixed case, and wrong HRP. Values are read through stable accessibility IDs; a prefix-only assertion is prohibited. The verifier must prove each displayed result has a reachable call path through `AddressCodec`/`AccountAddressFactory`; static-output, hard-coded-error, prefix-only, bypass, and unreachable-fixture mutants must fail.
+
+The S1-03 verifier directly includes the recursive platform-boundary checks,
+the exact test/symbol/dependency/source closure, and the runner/manifest/CI
+updates needed to make the single S1-03 Maestro flow reachable while retaining
+the exact S1-01 and S1-02 flow selections. Its local recipe binds every
+transcript to `$(git rev-parse HEAD)` and records pre/post HEAD, worktree
+status, command status, artifact hashes, and hosted workflow head identity.
 
 ## Host Verification
 
@@ -232,7 +301,15 @@ Changing `xPrivKey`, account, index, chain, or curve is a fixture-breaking desig
 
 ## Slice-versioned contract gates
 
-S1-03 adds `Tests/ThorChainKitTests/Fixtures/S1-03-public-symbols.txt` and `Scripts/verify-s1-03.sh`; its CI job compares the generated public graph exactly with the S1-03 baseline and requires every canonical declaration in both S1-01 and S1-02 baselines to remain an unchanged subset. New codec/derivation declarations appear only in the S1-03 exact baseline; prior removal or signature mutation fails. S1-03 repeats S1-01's exact production factory capability audit because derivation remains a separate public value operation and does not change `Kit.instance` composition.
+S1-03 adds exact public-symbol and test-discovery baselines plus
+`Scripts/verify-s1-03.sh`. The verifier compares the generated public graph
+exactly with the S1-03 baseline and requires every canonical declaration in
+both S1-01 and S1-02 baselines to remain an unchanged subset. It also checks
+the exact package/import/source closure, resolved dependency revisions, the
+non-`@testable` iOS 13 consumer, no disabling constructs, the recursive
+UIKit/SwiftUI platform boundary, fixture/provenance/secret scans, and the
+reachable Example call path. New codec/derivation declarations appear only in
+the S1-03 exact baseline; prior removal or signature mutation fails.
 
 ## Acceptance Criteria
 
