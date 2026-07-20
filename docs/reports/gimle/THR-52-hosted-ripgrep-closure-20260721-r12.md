@@ -5,8 +5,8 @@
 This is the narrow revision-12 report for the specification at
 `docs/specs/sprint-01-foundation/S1-02-hosted-runner-ripgrep-provisioning.md`.
 The exact pushed spec-content head is
-`6e6c4ec4629050e149e4b96fbb850c0f3a6672ed`; the spec SHA-256 is
-`6773130b2df15e8dc0cd2814966d3faab26dae51a7772e6557bbb2fea515473a`.
+`555329369cea86dd303a854b81363d1f26489009`; the spec SHA-256 is
+`d85c6035bf08dabfbc03e2a71c21b56007106e91d30df475352e347bc6971f9b`.
 This report is spec-only: no workflow, verifier, hosted-run, approval, merge,
 or implementation action was performed.
 
@@ -34,8 +34,9 @@ demonstrated artifact has three tab fields: job, step, and a BOM-prefixed
 timestamp-plus-payload remainder. The revision-12 plan now strips ANSI
 escapes, splits each line on tabs with `maxsplit=2`, removes an optional BOM,
 parses a fractional-or-whole-second UTC timestamp, and emits only the payload
-while preserving payload tabs. Malformed or under-columned lines fail visibly.
-It then requires exactly one validated `rg_version_line` and exactly one exact
+while preserving payload tabs. Timestamped blank payloads are valid and emit
+empty normalized lines; malformed or under-columned lines fail visibly. It
+then requires exactly one validated `rg_version_line` and exactly one exact
 40-hex field matching the approved head for each of `workflow_sha`,
 `event_sha`, `pr_head_sha`, and `checkout_sha`. The replay fixture covers the
 verified `s1-02` / `Set up job` shape; the version-log-removal mutant remains
@@ -83,7 +84,11 @@ git status --short --branch
 shasum -a 256 docs/specs/sprint-01-foundation/S1-02-hosted-runner-ripgrep-provisioning.md
 rg -n 'gh run view|split\("\\t", 2\)|malformed hosted log|prefix-fixture' docs/specs/sprint-01-foundation/S1-02-hosted-runner-ripgrep-provisioning.md
 rg -n 'jobs:|s1-02|Verify package and S1-02 contract' .github/workflows/ci.yml
-git show --stat --oneline 3625dec45c3143e5af0c9563015c05d1fcc55b5e
+git show --stat --oneline 555329369cea86dd303a854b81363d1f26489009
+gh run view 29764294250 --log > <historical-full-hosted-log>
+python3 <normalizer-script> <historical-full-hosted-log> > <historical-normalized-log>
+test "$(wc -l < <historical-normalized-log)" = 1592
+test "$(rg -c '^$' <historical-normalized-log)" = 351
 ```
 
 The spec-content commit is pushed on the assigned feature branch, the worktree
