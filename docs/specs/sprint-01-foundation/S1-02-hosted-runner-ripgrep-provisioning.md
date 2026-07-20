@@ -1,8 +1,9 @@
 # S1-02 — Hosted runner ripgrep provisioning
 
-Status: design revision 6, spec-only. Revision 5 is superseded by this
-current-tree boundary reconciliation. Explicit user approval is required
-before workflow or verifier implementation.
+Status: design revision 7, spec-only. Revision 6 is superseded by this
+checkpoint and closure-evidence correction; its current-tree boundary remains
+unchanged. Explicit user approval is required before workflow or verifier
+implementation.
 
 ## Goal and assumptions
 
@@ -301,13 +302,19 @@ the target under that name, but Gimle does not register it. This is mapping bug
 `G-0001` and makes Gimle trust RED. Current-tree conclusions use codebase-memory,
 Serena, targeted `rg`, Git, and direct official release verification.
 
+The Gimle checkpoint for this revision is external to the repository at
+`<GIMLE_SKILLS_ROOT>/audit/runs/THR-52-ripgrep-provisioning-20260720-r6/`; the
+repository-local `audit/` directory is not a deliverable or implementation
+path. The deliberate repository report under `docs/reports/gimle/` records the
+closure freeze, remaining evidence status, impact, workaround, and follow-up.
+
 The existing `THR-52-ripgrep-provisioning-20260720-r2.md` report is historical
 incident evidence anchored to the pre-provisioning baseline; its statement that
 provisioning is absent must not be used as a current-tree claim. Current-tree
 presence and policy gaps are verified directly at the assigned head and must be
 rechecked at the exact pushed review head.
 
-This is the complete spec-only deliverable for THR-52 revision 6. The prior
+This is the complete spec-only deliverable for THR-52 revision 7. The prior
 hosted failure is recorded above, and symbolic `HEAD` is explicitly rejected
 as a policy input. Explicit user approval of this revision is required before
 workflow or verifier implementation.

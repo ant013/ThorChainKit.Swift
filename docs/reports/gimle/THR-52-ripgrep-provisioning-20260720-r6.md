@@ -8,6 +8,11 @@ The reviewed ThorChainKit worktree is on branch
 `40e945b65e7f600f7d2a147d0a6932fb8a336acf` before the revision-6 spec edit.
 No workflow or verifier implementation was authorized or changed.
 
+The external checkpoint is
+`<GIMLE_SKILLS_ROOT>/audit/runs/THR-52-ripgrep-provisioning-20260720-r6/`
+(`state.json` and `gimle-report.md`); no repository-local `audit/` content is
+part of this deliverable.
+
 ## Gimle substrate
 
 - `palace.health.status`: reachable; runtime git SHA
@@ -45,6 +50,13 @@ architecture guard, staging, extraction order, PATH ownership, and consumer
 position, while explicitly authorizing only the minimal version-assertion
 tightening in both existing implementation paths. No new script, installer,
 asset, or lifecycle redesign is in scope.
+
+Closure review 5/5 froze this boundary. The repository-local checkpoint was an
+operational residue, not product scope: its impact was an invalid repository
+delta and an unportable audit location. The state and generated report were
+moved to the external checkpoint above; the committed report remains the
+deliberate reliability artifact. Follow-up is to initialize future Gimle runs
+under the external root and keep hosted/implementation evidence approval-gated.
 
 ## Independent current-tree evidence
 
