@@ -13,6 +13,7 @@
 		A20000000000000000000004 /* MainController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000004 /* MainController.swift */; };
 		A20000000000000000000005 /* DiagnosticsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000005 /* DiagnosticsController.swift */; };
 		A20000000000000000000006 /* ThorChainKit in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000002 /* ThorChainKit */; };
+		A20000000000000000000007 /* EndpointsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000007 /* EndpointsController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,6 +23,7 @@
 		A30000000000000000000004 /* MainController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainController.swift; sourceTree = "<group>"; };
 		A30000000000000000000005 /* DiagnosticsController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsController.swift; sourceTree = "<group>"; };
 		A30000000000000000000006 /* iOS Example.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "iOS Example.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A30000000000000000000007 /* EndpointsController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndpointsController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -68,6 +70,7 @@
 			children = (
 				A30000000000000000000004 /* MainController.swift */,
 				A30000000000000000000005 /* DiagnosticsController.swift */,
+				A30000000000000000000007 /* EndpointsController.swift */,
 			);
 			path = Controllers;
 			sourceTree = "<group>";
@@ -161,6 +164,7 @@
 				A20000000000000000000003 /* ExampleRuntime.swift in Sources */,
 				A20000000000000000000004 /* MainController.swift in Sources */,
 				A20000000000000000000005 /* DiagnosticsController.swift in Sources */,
+				A20000000000000000000007 /* EndpointsController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

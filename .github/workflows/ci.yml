@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 jobs:
-  s1-01:
+  s1-02:
     runs-on: macos-26
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
@@ -75,8 +75,13 @@ jobs:
         with:
           distribution: temurin
           java-version: 17.0.19+10
-      - name: Verify S1-01 package contract
-        run: Scripts/verify-s1-01.sh
+      - name: Verify package and S1-02 contract
+        run: |
+          swift build
+          swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
+          swift test
+          Scripts/verify-s1-02.sh
+          Scripts/verify-s1-02-ci-policy.sh steady-state --ref HEAD
       - name: Verify guarded Maestro runner
         run: Scripts/test-run-maestro.sh
       - name: Install pinned Maestro CLI
@@ -93,4 +98,5 @@ jobs:
           THORCHAIN_SIMULATOR_UDID=$(xcrun simctl list devices available -j \
             | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for ds in d["devices"].values() for x in ds if x.get("isAvailable") and x.get("state")=="Shutdown" and x["name"].startswith("iPhone")))')
           export THORCHAIN_SIMULATOR_UDID
-          Scripts/run-maestro.sh
+          Scripts/run-maestro.sh s1-01
+          Scripts/run-maestro.sh s1-02

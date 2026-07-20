@@ -1,2 +1,3 @@
 flows:
   - flows/00-launch-foundation.yaml
+  - flows/01-endpoint-policy.yaml

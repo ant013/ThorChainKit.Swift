@@ -18,6 +18,14 @@ final class DiagnosticsController: UIViewController {
         super.viewDidLoad()
         title = "THORChainKit"
         view.backgroundColor = .systemBackground
+        let endpoints = UIBarButtonItem(
+            title: "Endpoints",
+            style: .plain,
+            target: self,
+            action: #selector(showEndpoints)
+        )
+        endpoints.accessibilityIdentifier = "endpoint-policy-open"
+        navigationItem.rightBarButtonItem = endpoints
 
         let kit = runtime.kit
         let rows = [
@@ -62,6 +70,13 @@ final class DiagnosticsController: UIViewController {
             stack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -20),
             stack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -40),
         ])
+    }
+
+    @objc private func showEndpoints() {
+        navigationController?.pushViewController(
+            EndpointsController(runtime: runtime),
+            animated: true
+        )
     }
 
     private func row(_ title: String, value: String, identifier: String) -> UIView {
