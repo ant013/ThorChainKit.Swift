@@ -325,17 +325,28 @@ gh api repos/<owner>/<repo>/actions/runs/<run-id> \
   --jq '{id,head_sha,head_branch,event,status,conclusion,workflow_id,run_attempt}' > <run-fields-json>
 gh run view <run-id> --log > <full-hosted-log>
 set -euo pipefail
-sed -E $'s/\033\\[[0-9;]*[[:alpha:]]//g' <full-hosted-log> |
-  awk -F '\t' '
-    NF < 4 || $1 == "" || $2 == "" || $3 !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z$/ || $4 == "" {
-      printf "malformed hosted log prefix at line %d\\n", NR > "/dev/stderr"; exit 1
-    }
-    {
-      printf "%s", $4
-      for (i = 5; i <= NF; i++) printf "\\t%s", $i
-      print ""
-    }
-  ' > <normalized-hosted-log>
+python3 - "<full-hosted-log>" > "<normalized-hosted-log>" <<'PY'
+import re
+import sys
+
+ansi = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+timestamp = re.compile(
+    r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)[ \t]+(.+)$"
+)
+
+with open(sys.argv[1], encoding="utf-8", newline="") as source:
+    for line_number, raw_line in enumerate(source, 1):
+        line = ansi.sub("", raw_line.rstrip("\r\n"))
+        fields = line.split("\t", 2)
+        if len(fields) != 3:
+            raise SystemExit(f"malformed hosted log at line {line_number}: expected 3 tab fields")
+        job, step, remainder = fields
+        remainder = remainder.removeprefix("\ufeff")
+        match = timestamp.match(remainder)
+        if not job or not step or not match or not match.group(2).strip():
+            raise SystemExit(f"malformed hosted log at line {line_number}: invalid prefix or payload")
+        print(match.group(2))
+PY
 rg -n 'workflow_ref=|workflow_sha=|event_sha=|pr_head_sha=|checkout_sha=|PASS verify-s1-02-test-discovery' <normalized-hosted-log>
 test "$(rg -c '^rg_version_line=ripgrep 15\.2\.0 \(rev [0-9a-f]+\)$' <normalized-hosted-log>)" = 1
 jq -e --arg approved '<exact-head>' '.head_sha == $approved and .conclusion == "success"' <run-fields-json>
@@ -344,15 +355,39 @@ for field in workflow_sha event_sha pr_head_sha checkout_sha; do
   test "$(rg -c "^${field}=<exact-head>$" <normalized-hosted-log>)" = 1
   test "$(awk -F= -v key="$field" '$1 == key {print $2; found=1; exit} END {if (!found) exit 1}' <normalized-hosted-log)" = '<exact-head>'
 done
-printf '%s\t%s\t%s\t%s\n' s1-02 'Verify package and S1-02 contract' \
-  2026-07-21T00:00:00Z 'rg_version_line=ripgrep 15.2.0 (rev abcdef0)' > <prefix-fixture>
-printf '%s\n' 'rg_version_line=ripgrep 15.2.0 (rev abcdef0)' > <fixture-expected>
-sed -E $'s/\033\\[[0-9;]*[[:alpha:]]//g' <prefix-fixture> |
-  awk -F '\t' 'NF < 4 || $3 !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z$/ { exit 1 } { print $4 }' > <fixture-normalized>
+printf '%s\t%s\t\357\273\277%s %s\t%s\n' s1-02 'Set up job' \
+  2026-07-20T17:36:01.3714820Z workflow_sha=<exact-head> checkout_sha=<exact-head> > <prefix-fixture>
+printf '%s\t%s\n' 'workflow_sha=<exact-head>' 'checkout_sha=<exact-head>' > <fixture-expected>
+python3 - "<prefix-fixture>" > <fixture-normalized> <<'PY'
+import re
+import sys
+
+ansi = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+timestamp = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z[ \t]+(.+)$")
+with open(sys.argv[1], encoding="utf-8", newline="") as source:
+    for raw_line in source:
+        fields = ansi.sub("", raw_line.rstrip("\r\n")).split("\t", 2)
+        if len(fields) != 3:
+            raise SystemExit(1)
+        match = timestamp.match(fields[2].removeprefix("\ufeff"))
+        if not match:
+            raise SystemExit(1)
+        print(match.group(1))
+PY
 diff -u <fixture-expected> <fixture-normalized>
-printf '%s\t%s\n' s1-02 'malformed' > <malformed-fixture>
-if sed -E $'s/\033\\[[0-9;]*[[:alpha:]]//g' <malformed-fixture> | awk -F '\t' 'NF < 4 { exit 1 }'; then
-  printf 'malformed fixture unexpectedly passed\n' >&2; exit 1
+printf '%s\t%s\t%s\n' s1-02 'Set up job' 'not-a-timestamp payload' > <malformed-timestamp-fixture>
+if python3 - "<malformed-timestamp-fixture>" <<'PY'
+import sys
+import re
+
+timestamp = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z[ \t]+.+$")
+for line in open(sys.argv[1], encoding="utf-8"):
+    fields = line.rstrip("\r\n").split("\t", 2)
+    if len(fields) != 3 or not timestamp.match(fields[2].removeprefix("\ufeff")):
+        raise SystemExit(1)
+PY
+then
+  printf 'malformed timestamp fixture unexpectedly passed\n' >&2; exit 1
 fi
 ```
 
@@ -367,8 +402,8 @@ contain exactly one validated `rg_version_line` and exactly one exact 40-hex
 value for each SHA key, with each value matching the approved head. The
 normalized log must also show unchanged S1-02 discovery output. A replay fixture
 with the demonstrated `s1-02<TAB>Verify package and S1-02
-contract<TAB><UTC timestamp><TAB><payload>` shape must pass, while a
-missing-tab or malformed-timestamp fixture must fail before assertions. A push
+contract<TAB><UTC timestamp+payload>` shape must pass, while a
+malformed-timestamp fixture must fail before assertions. A push
 after the run, or any change to the reviewed head, invalidates the run and all
 local review/QA attestations; repeat them against the new exact head.
 
