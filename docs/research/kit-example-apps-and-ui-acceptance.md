@@ -7,7 +7,7 @@
 ThorChainKit adopts a composite model:
 
 1. `ThorChainKitTests` establishes deterministic correctness.
-2. `iOS Example` becomes the permanent manual/live harness and is based on TronKit.
+2. `iOS Example` becomes the permanent SwiftUI + Combine manual/live harness; TronKit contributes only its project/workspace/package topology and functional scenarios.
 3. Maestro flows perform UI acceptance of the Example app for every slice.
 4. `Unstoppable/AppTests` establishes host contracts.
 5. Unstoppable is verified through `AppTests` and a manual product checklist; Maestro is not used in the host repository.
@@ -59,7 +59,7 @@ Not carried over:
 - logout without established `stop()`/cancellation;
 - an “all features covered” claim without assertions.
 
-Thus, the Example is carried over as an application/workspace and UX skeleton, while its lifecycle and secret handling are aligned with the approved ThorChainKit contract.
+Thus, only the Example application/workspace topology and functional scenario inventory are carried over. UIKit lifecycle/controllers are rejected; the repository-owned Example uses a SwiftUI `App`, SwiftUI views, and Combine-backed observation under the approved ThorChainKit contract.
 
 ## Verification of the general Horizontal Systems convention
 
@@ -67,14 +67,16 @@ A runnable app exists in most chain kits: BitcoinKit, BitcoinCashKit, DashKit, B
 
 The most useful combination is:
 
-- TronKit — chain-demo structure and functional scenarios;
-- TonKit `DemoApp` — a more modern SwiftUI shell if a later decision is made to update the UIKit base;
+- TronKit — chain-demo topology and functional scenarios, not its UIKit implementation;
+- TonKit `DemoApp` — the SwiftUI shell reference for the already approved UIKit-free presentation boundary;
 - HdWalletKit — proper separation of a small runnable demo and independent derivation XCTest;
 - current Unstoppable contracts — the only authoritative production adapter lifecycle.
 
 ## ThorChainKit `iOS Example`
 
 S1-01 creates the app; subsequent slices extend it:
+
+The target presentation architecture is SwiftUI + Combine. `Sources/ThorChainKit` remains UI-agnostic; UIKit is prohibited in both the library and Example, while SwiftUI is confined to the Example. The already merged UIKit scaffold is migration debt and must be replaced before the next Example screen is added.
 
 | Slice | Screen/outcome |
 |---|---|

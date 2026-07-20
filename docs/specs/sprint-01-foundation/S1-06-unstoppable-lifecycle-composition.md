@@ -31,6 +31,8 @@ Excluded:
 - private-key/watch-only accounts;
 - default-enable RUNE.
 
+The Combine→Rx bridge is strictly an Unstoppable host integration boundary. It does not authorize UIKit in ThorChainKit or its repository-owned Example: the kit core stays UI-agnostic, and the Example stays SwiftUI + Combine.
+
 ## New host files
 
 ```text

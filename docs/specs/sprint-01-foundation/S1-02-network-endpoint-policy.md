@@ -50,9 +50,11 @@ Tests/ThorChainKitTests/EndpointPoolTests.swift
 Tests/ThorChainKitTests/LiveNodeProbeTests.swift
 Tests/ThorChainKitTests/EndpointDiagnosticsTests.swift
 Tests/ThorChainKitTests/Fixtures/S1-02-public-symbols.txt
-iOS Example/Sources/Controllers/EndpointsController.swift
 iOS Example/Sources/Core/ExampleRuntime.swift
-iOS Example/Sources/AppDelegate.swift
+iOS Example/Sources/Presentation/EndpointsViewModel.swift
+iOS Example/Sources/Views/EndpointsView.swift
+iOS Example/Sources/Views/DiagnosticsView.swift
+iOS Example/Sources/ThorChainExampleApp.swift
 iOS Example/iOS Example.xcodeproj/project.pbxproj
 .maestro/flows/01-endpoint-policy.yaml
 .maestro/config.yaml
@@ -370,7 +372,7 @@ Each family is used at most once per logical read. Broadcast receives a separate
 
 Production `Kit.instance` remains inert. The package adds one `@_spi(Testing) public TestingEndpointPolicySession` in `Core/TestingEndpointPolicySession.swift`, available only to `ThorChainKitTests` and `iOS Example`. It accepts an S1-01 `Network`/`EndpointConfiguration` plus an enumerated fixture script, constructs the real `EndpointPool`, and returns only sanitized `TestingEndpointPolicySnapshot` values. It cannot expose `EndpointPool`, accept arbitrary closures/raw bodies, perform business reads, mutate `Kit`, or be imported by Unstoppable. A syntax fixture pins this sole SPI root and its call into the real pool.
 
-`ExampleRuntime` imports `@_spi(Testing) ThorChainKit`, owns that session beside the unchanged inert `Kit`, and injects the selected fixture scenario into `EndpointsController`. The controller renders actual pool snapshots—never duplicated classification or static labels—and displays selected family, origin-only Cosmos/Comet projections, local expected identity, identity classification, both role heights, cross-role skew, catching-up, and fixed rejection reason. In fixture mode, flow `01-endpoint-policy.yaml`:
+`ExampleRuntime` is the sole `@_spi(Testing) ThorChainKit` importer and session owner beside the unchanged inert `Kit`. `EndpointsViewModel` requests sanitized snapshots through `ExampleRuntime.endpointSnapshot`, owns at most one cancellable operation, and rejects late completion with a generation guard. It does not duplicate classification, retries, or endpoint state. `EndpointsView` renders the real sanitized snapshot with the existing accessibility identifiers, including selected family, origin-only Cosmos/Comet projections, local expected identity, identity classification, both role heights, cross-role skew, catching-up, and fixed rejection reason. The Example remains SwiftUI-only and imports no UIKit. In fixture mode, flow `01-endpoint-policy.yaml`:
 
 - selects a family with matching identity;
 - rejects mixed Cosmos/Comet identity;

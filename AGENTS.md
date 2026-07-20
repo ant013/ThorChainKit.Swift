@@ -45,6 +45,13 @@ with direct database writes.
 
 - Preserve Horizontal Systems kit conventions where current-tree evidence
   supports them; do not copy demo-only lifecycle or secret-storage shortcuts.
+- `Sources/ThorChainKit` is UI-agnostic: Combine is permitted for state
+  publication, while both UIKit and SwiftUI imports are prohibited there.
+- The repository-owned `iOS Example` uses only the SwiftUI `App` lifecycle,
+  SwiftUI views, and Combine-backed observation. Do not add UIKit imports,
+  UIKit lifecycle/view-controller types, or UIKit representable wrappers.
+- The library retains its iOS 13 floor. A UIKit-free SwiftUI Example targets
+  iOS 14 or later; changing either floor requires a separately approved task.
 - Native THORChain support belongs in this kit. The existing multichain swap
   provider is not reimplemented in the initial slices.
 - Maestro acceptance belongs only in the ThorChainKit `iOS Example`.

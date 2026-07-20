@@ -13,8 +13,9 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 | Storage | routine local with temporary DB; one final hosted gate | migrations, atomic replace, restart/cache namespaces |
 | Package integration | routine local; one final hosted gate | facade composition, publishers, real dependencies |
 | Contract audit | routine local; one final hosted gate | parsed manifest topology, import allowlist, public symbol allowlist, exact test discovery, and public-only iOS consumer |
+| Platform boundary | routine local; one final hosted gate | library remains UI-agnostic at iOS 13; Example uses a SwiftUI `App` at iOS 14+ with Combine observation and no UIKit |
 | WalletCore integration | host branch CI | manager/adapter/factory/consumer lifecycle |
-| Example UI acceptance | routine local Maestro; one final hosted gate | public user-visible state, accessibility contract, cross-slice scenario |
+| Example UI acceptance | routine local Maestro; one final hosted gate | SwiftUI user-visible state, accessibility contract, cross-slice scenario |
 | Opt-in live | manual/release gate | current endpoint/API compatibility and chain identity |
 | Host product acceptance | manual `Development` checklist | observable create/import/enable/receive/relaunch/App Status behavior without Maestro |
 
@@ -32,7 +33,7 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 | Persistence/restart | temporary GRDB reconstruction | AppTests reconstruction + manual app terminate/relaunch/offline observation |
 | Generic adapter lifecycle | manager/adapter call counters | wallet enable/remove/refresh |
 | MarketKit metadata | UID/cache/token tests | Manage Wallets discovery after cold launch |
-| Cross-slice Example | package/component tests | Maestro fixture flows launch→address→endpoint→read→restart |
+| Cross-slice Example | package/component tests plus fail-closed platform scan | SwiftUI Maestro fixture flows launch→address→endpoint→read→restart without UIKit |
 
 ## Mandatory failure scenarios
 
@@ -76,6 +77,7 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 - Random/property tests log seed on failure.
 - Network live tests are local opt-in only, excluded from the hosted gate, and never make the deterministic suite flaky.
 - Maestro selectors use accessibility identifiers, not localized labels or screen coordinates.
+- The platform gate rejects UIKit imports, lifecycle/view-controller symbols, and UIKit representable wrappers under both `Sources/ThorChainKit` and `iOS Example/Sources`; it separately rejects SwiftUI under `Sources/ThorChainKit`, requires a SwiftUI `App` entry point, preserves the library iOS 13 floor, and requires an iOS 14-or-later Example target.
 - Committed Maestro YAML contains no mnemonic, API key or endpoint credential; runtime values arrive via environment.
 - Fixture and live modes expose an explicit `data-source` badge so fixture success cannot masquerade as live evidence.
 - S1-01's sole UI gate is `THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh`; raw `maestro test` is not accepted. Boot, build, install, launch, and Maestro use that same UDID.
@@ -89,7 +91,7 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 - S1-01 runs the 18 allowlisted XCTest cases with `--parallel --num-workers 1 --xunit-output` under pipefail, requires the Swift process itself to exit zero, and captures the runner transcript. The xUnit parser requires exactly 18 cases and zero failures/errors; the independent transcript parser requires exactly one terminal `passed` status for every allowlisted case and rejects skipped/disabled/failed status. Source/command gates reject `XCTSkip`, `XCTExpectFailure`, conditional/availability disabling, and `--skip`; a temporary `XCTSkip` canary must fail the transcript/status gate even though SwiftPM xUnit cannot encode skips. Method 18 binds `wallet-01\0mainnet\0thorchain-1` to `e2df225b7a00d471b1b09ec2d3344df89a11e9cfe116c05f5290683480623015`, and the outer mutant harness must fail separator/order source changes.
 - S1-01 commits the default BigInt resolution at `5.7.0`/`e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe` while preserving the manifest range from `5.0.0`. A temporary-copy minimum-version gate resolves exact `5.0.0`/`19f5e8a48be155e34abb98a2bcf4a343316f0343` and builds/tests it with strict-concurrency warnings as errors without changing the repository lock.
 - Public surface, factory, and value-construction audits are slice-versioned: S1-01 is exact only at S1-01; each S1-02…S1-05 script compares its exact current baseline and cumulatively preserves every earlier declaration as an unchanged subset. S1-02/S1-03 repeat the positive inert factory baseline. S1-04 preserves that exact positive production baseline; its SPI construction fixture starts only at `Core/TestingKitFactory.swift` and pins the exact enumerated `TestingHttpTransportAdapter`, `EndpointPool`, `RequestBuilder`, `LiveThorNodeClient`, `ReadOperationCoordinator`, `KitDependencies`, `Kit`, `TestingKitInstance`, and `Network.persistenceKey` initializer/getter bodies. A separate SPI read fixture pins one `TestingKitInstance.readAccount` → `AccountReading.read` → `TestingAccountReadProjection` path and rejects Kit publication, a second read, or an out-of-closure helper. S1-05 replaces the construction partitions with the approved positive production read/storage/lifecycle composition allowlist while retaining no-auto-start/no-request/no-task construction.
-- S1-04's fixture AccountReadController must obtain `TestingKitInstance`, execute exactly one `readAccount()`, and render its balance/existence/height/family projection while `instance.kit` remains at the immutable S1-01 nil/idle/zero/no-account snapshot; fixture request counts and the SPI read syntax gate prevent static-label or unreachable-transport acceptance.
+- S1-04's fixture `AccountReadViewModel` must obtain `TestingKitInstance`, execute exactly one `readAccount()`, and provide its balance/existence/height/family projection to `AccountReadView` while `instance.kit` remains at the immutable S1-01 nil/idle/zero/no-account snapshot; fixture request counts and the SPI read syntax gate prevent static-label or unreachable-transport acceptance.
 - S1-04's reader actor returns only internal `Sendable` canonical-decimal transport records whose amounts are at most 256 bits; exact `2^256 - 1` passes and `2^256` fails. S1-05 storage accepts/returns only an internal `Sendable` `StorageRecord`, and `LifecycleGate` requires its address and chain ID to exactly match the active Address before reconstructing bounded `BigUInt` plus the frozen public `AccountState` inside the S1-01 facade-dispatcher turn. Different-address, tampered-chain, and cached-`2^256` tests must fail before publication. `Scripts/test-s1-04-s1-05-isolation.sh` compiles the actual sources under Swift-5 complete concurrency warnings-as-errors at the exact BigInt `5.0.0` floor, then separately mutates the actual reader result and storage boundary to `AccountState`; both non-`Sendable` mutants must fail compilation. `@unchecked Sendable` and text-only substitutes are forbidden.
 - The committed S1-01 Gimle report contains project labels, commits, and repository-relative paths only; `/Users/`, `/Users/Shared/`, `/private/`, and `file://` fail the documentation gate. Machine-local roots remain only in the external canonical audit.
 - The named `verify-s1-01-example-workspace` subgate parses the workspace and asserts exactly `container:iOS Example.xcodeproj` plus `group:..` before the exact-destination build.
@@ -142,7 +144,7 @@ The steady-state verifier locally mutates the event context so the bootstrap/def
 1. `swift build` / compile of changed target.
 2. Narrow new test class.
 3. Full ThorChainKit test target.
-4. Parsed package topology, import allowlist, generated symbol graph, exact test discovery, strict-concurrency build, and temporary public-only iOS consumer.
+4. Parsed package topology, import allowlist, generated symbol graph, exact test discovery, strict-concurrency build, temporary public-only iOS 13 consumer, and the fail-closed no-UIKit/no-core-SwiftUI platform scan with an iOS 14-or-later SwiftUI Example target.
 5. WalletCore narrow tests for S1-06/S1-07.
 6. WalletCore/App build.
 7. Maestro deterministic Example flow for the slice.
@@ -177,6 +179,7 @@ The mnemonic/private key must not appear in the evidence. Use a public fixture m
 - Mainnet identity and balance reads have been completed against at least two endpoint providers, or only one approved provider is documented as available.
 - App create/import/relaunch paths have been completed on a physical device or release-equivalent simulator where the process was actually terminated.
 - All deterministic Example Maestro flows are green; live flows are either green or explicitly unrun with a reason.
+- Repository-owned library and Example source pass the platform boundary: no UIKit in either, no SwiftUI in the library, a SwiftUI `App` lifecycle in the Example, library iOS 13 preserved, and Example iOS 14 or later.
 - After an offline relaunch, the wallet/address/cache are preserved, and state truthfully shows failure/stale.
 - Unstoppable contains no `.maestro`, acceptance transport, or test launch-argument branches.
 - All high/critical adversarial findings are closed.
