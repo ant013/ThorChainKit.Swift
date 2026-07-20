@@ -75,6 +75,23 @@ jobs:
         with:
           distribution: temurin
           java-version: 17.0.19+10
+      - name: Provision pinned ripgrep
+        run: |
+          set -euo pipefail
+          [[ "$(uname -m)" == "arm64" ]]
+          rg_version=15.2.0
+          rg_archive="ripgrep-${rg_version}-aarch64-apple-darwin.tar.gz"
+          rg_url="https://github.com/BurntSushi/ripgrep/releases/download/${rg_version}/${rg_archive}"
+          rg_sha256=3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4
+          rg_archive_path="$RUNNER_TEMP/$rg_archive"
+          curl -fsSL "$rg_url" -o "$rg_archive_path"
+          echo "$rg_sha256  $rg_archive_path" | shasum -a 256 -c -
+          tar -xzf "$rg_archive_path" -C "$RUNNER_TEMP"
+          rg_dir="$RUNNER_TEMP/ripgrep-${rg_version}-aarch64-apple-darwin"
+          rg_path="$rg_dir/rg"
+          [[ -x "$rg_path" ]]
+          [[ "$("$rg_path" --version)" == "ripgrep 15.2.0"* ]]
+          echo "$rg_dir" >> "$GITHUB_PATH"
       - name: Verify package and S1-02 contract
         run: |
           swift build

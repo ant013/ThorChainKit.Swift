@@ -74,6 +74,28 @@ DISPATCH_BLOCK = """on:
 """
 
 BASE_CHECKOUT = "      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5\n"
+RIPGREP_PROVISION_BLOCK = r"""      - name: Provision pinned ripgrep
+        run: |
+          set -euo pipefail
+          [[ "$(uname -m)" == "arm64" ]]
+          rg_version=15.2.0
+          rg_archive="ripgrep-${rg_version}-aarch64-apple-darwin.tar.gz"
+          rg_url="https://github.com/BurntSushi/ripgrep/releases/download/${rg_version}/${rg_archive}"
+          rg_sha256=3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4
+          rg_archive_path="$RUNNER_TEMP/$rg_archive"
+          curl -fsSL "$rg_url" -o "$rg_archive_path"
+          echo "$rg_sha256  $rg_archive_path" | shasum -a 256 -c -
+          tar -xzf "$rg_archive_path" -C "$RUNNER_TEMP"
+          rg_dir="$RUNNER_TEMP/ripgrep-${rg_version}-aarch64-apple-darwin"
+          rg_path="$rg_dir/rg"
+          [[ -x "$rg_path" ]]
+          [[ "$("$rg_path" --version)" == "ripgrep 15.2.0"* ]]
+          echo "$rg_dir" >> "$GITHUB_PATH"
+"""
+RIPGREP_CONSUMER_LINE = "          Scripts/verify-s1-02.sh\n"
+RIPGREP_FALLBACK_RE = re.compile(
+    r"(?im)^\s*(?:run:\s*)?(?:brew|port|apt(?:-get)?|yum|dnf|pacman)\b[^\n]*\bripgrep\b"
+)
 DISPATCH_PREFLIGHT = r"""      - name: Preflight exact pull request head
         env:
           GH_TOKEN: ${{ github.token }}
@@ -170,6 +192,19 @@ def verify_dispatch_policy(workflow):
     top_level_jobs = re.findall(r"(?m)^  ([A-Za-z0-9_-]+):\n(?=    )", workflow.split("\njobs:\n", 1)[-1])
     if len(top_level_jobs) != 1:
         fail("workflow must contain exactly one job")
+
+
+def verify_ripgrep_provisioning(workflow):
+    if workflow.count(RIPGREP_PROVISION_BLOCK) != 1:
+        fail("workflow must contain exactly one pinned ripgrep provisioning block")
+    if RIPGREP_FALLBACK_RE.search(workflow):
+        fail("workflow must not contain a mutable ripgrep package-manager fallback")
+    consumer_at = workflow.find(RIPGREP_CONSUMER_LINE)
+    provision_at = workflow.find(RIPGREP_PROVISION_BLOCK)
+    if consumer_at == -1:
+        fail("workflow must retain the S1-02 verifier consumer")
+    if provision_at > consumer_at:
+        fail("ripgrep provisioning must precede the S1-02 verifier consumer")
 
 
 def expected_bootstrap_workflow(base_workflow):
@@ -294,6 +329,45 @@ def run_bootstrap_mutants(base_workflow, candidate_workflow, changed_paths):
     run_policy_mutants(candidate_workflow)
 
 
+def run_ripgrep_mutants(workflow):
+    expect_mutant_failure(
+        "missing ripgrep provisioning",
+        lambda: verify_ripgrep_provisioning(workflow.replace(RIPGREP_PROVISION_BLOCK, "", 1)),
+    )
+    without_provision = workflow.replace(RIPGREP_PROVISION_BLOCK, "", 1)
+    expect_mutant_failure(
+        "ripgrep provisioning after consumer",
+        lambda: verify_ripgrep_provisioning(
+            without_provision.replace(RIPGREP_CONSUMER_LINE, RIPGREP_CONSUMER_LINE + RIPGREP_PROVISION_BLOCK, 1)
+        ),
+    )
+    for label, needle, replacement in (
+        ("wrong ripgrep URL", "BurntSushi/ripgrep/releases/download", "wrong/ripgrep/releases/download"),
+        ("wrong ripgrep digest", "3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4", "0" * 64),
+        ("verify after extraction", "shasum -a 256 -c -\n          tar -xzf", "tar -xzf"),
+        ("PATH before verification", "shasum -a 256 -c -\n          tar -xzf", "echo \"$rg_dir\" >> \"$GITHUB_PATH\"\n          tar -xzf"),
+        ("mutable package-manager fallback", "curl -fsSL", "brew install ripgrep\n          # curl -fsSL"),
+        ("missing arm64 guard", "          [[ \"$(uname -m)\" == \"arm64\" ]]\n", ""),
+        ("wrong ripgrep version", "rg_version=15.2.0", "rg_version=15.3.0"),
+        ("missing binary assertion", "          [[ -x \"$rg_path\" ]]\n", ""),
+        (
+            "corrupt rg version assertion",
+            "          [[ \"$(\"$rg_path\" --version)\" == \"ripgrep 15.2.0\"* ]]\n",
+            "          [[ \"$(\"$rg_path\" --version)\" == \"ripgrep 15.3.0\"* ]]\n",
+        ),
+    ):
+        expect_mutant_failure(
+            label,
+            lambda needle=needle, replacement=replacement: verify_ripgrep_provisioning(
+                workflow.replace(needle, replacement, 1)
+        ),
+    )
+    expect_mutant_failure(
+        "separate mutable package-manager fallback",
+        lambda: verify_ripgrep_provisioning(
+            workflow + "\n      - name: Mutable ripgrep fallback\n        run: brew install ripgrep\n"
+        ),
+    )
 mode, base_ref, candidate_ref, ref = sys.argv[1:]
 try:
     if mode == "bootstrap":
@@ -313,7 +387,9 @@ try:
         commit = exact_commit(ref, "ref")
         workflow = workflow_at(commit)
         verify_dispatch_policy(workflow)
+        verify_ripgrep_provisioning(workflow)
         run_policy_mutants(workflow)
+        run_ripgrep_mutants(workflow)
         print(f"steady-state policy verified: ref={commit}")
 except PolicyFailure as error:
     print(f"S1-02 CI policy verification failed: {error}", file=sys.stderr)
