@@ -59,7 +59,7 @@ baseline/platform/CI checks, and making the Example Maestro path reachable and
 real-call-path dependent. Explicit approval is still required before
 implementation.
 
-## Discovery 2/2 frozen allowlist and revision 4 closure
+## Discovery 2/2 frozen allowlist and revision 5 closure
 
 ThorChainCodeReviewer independently re-ran the three bounded read-only lanes
 on the pushed revision-2 head and returned `REVISE`. Discovery 2/2 is now
@@ -78,15 +78,18 @@ allowlist for closure-only rework:
   independent-source provenance; deterministic fuzz/context-failure replay.
 
 Revision 3 closed the security IDs and the non-allowlisted review items, but
-closure 1/5 returned seven frozen High IDs for revision. Revision 4 addresses
-only those IDs: repository URLs are now literal, the host sample consumes the
-validated raw path through `privateKey(path:)`, the root App/Xcode and complete
-runner/manifest/CI paths are named, the mutant harness and expected workflow
-block are executable contracts, dependency revisions are fixed to literal
-SHAs, and the fuzz fixture has a literal schema/seed/count/replay command. The
-revision preserves the accepted protocol choices and remains documentation-only.
-The next authorized action is closure review 2/5 on the exact pushed head;
-approval and implementation remain prohibited until CodeReviewer ACCEPT.
+closure 1/5 returned seven frozen High IDs for revision. Revision 4 addressed
+the first closure pass. Closure 2/5 retained four frozen High IDs, so revision
+5 addresses only those IDs: the BitcoinCore path is now the reproducible
+`Sources/BitcoinCore/Classes/SegWit/Bech32.swift` path; the CI contract now
+requires full-history checkout plus an authenticated exact `origin/main`
+refspec/equality check; dependency provenance now freezes the inherited
+S1-01 baseline and all four direct/transitive S1-03 closure pins; and the fuzz
+fixture now specifies the 3072-output SplitMix64 stream, little-endian packing,
+four-byte truncation, and `count == 1024`. The revision preserves the accepted
+protocol choices and remains documentation-only. The next authorized action is
+closure review 3/5 on the exact pushed head; approval and implementation remain
+prohibited until CodeReviewer ACCEPT.
 
 ## Reproduction and verification record
 

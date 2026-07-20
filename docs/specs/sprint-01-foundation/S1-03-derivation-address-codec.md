@@ -1,6 +1,6 @@
 # S1-03 — Account Derivation and Address Codec
 
-**Status:** revision 4 after closure-1 adversarial REVISE; frozen blocker allowlist is being closed by documentation only. Implementation remains blocked pending closure review and approval.
+**Status:** revision 5 after closure-2 adversarial REVISE; frozen blocker allowlist is being closed by documentation only. Implementation remains blocked pending closure review and approval.
 **Risk:** high/cryptographic boundary.
 **Observable outcome:** an independent seed/public-key vector produces the expected THORChain address; checksum, payload length, mixed case, and wrong-network HRP are rejected before any network/signing call.
 
@@ -170,18 +170,31 @@ S1-03 changes `Package.swift`:
 .product(name: "secp256k1", package: "secp256k1.swift")
 ```
 
-`Tests/ThorChainKitTests/Fixtures/S1-03-dependency-revisions.txt` has this
-exact, order-independent package/repository/revision set; the verifier fails
-if a package is missing, added, or paired with any other revision:
+`Tests/ThorChainKitTests/Fixtures/S1-03-dependency-revisions.txt` is a complete
+two-section lock contract. The `inherited-s1-01` section is immutable baseline
+state and the `s1-03-closure` section is the exact direct-plus-transitive
+addition set. The fixture contains exactly these five rows:
 
 ```text
+# inherited-s1-01
+bigint|https://github.com/attaswift/BigInt.git|5.7.0|e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe
+
+# s1-03-closure
 hscryptokit.swift|https://github.com/horizontalsystems/HsCryptoKit.Swift.git|1.3.2|7c11ad0e690cbb178a70f3b9d1116d0a37a51a41
+hsextensions.swift|https://github.com/horizontalsystems/HsExtensions.Swift.git|1.0.6|0012014f98ae81ffb89b0d3a2e9c204559e1c278
 secp256k1.swift|https://github.com/GigaBitcoin/secp256k1.swift.git|0.10.0|48fb20fce4ca3aad89180448a127d5bc16f0e44c
+swift-crypto|https://github.com/apple/swift-crypto.git|2.6.0|60f13f60c4d093691934dc6cfdf5f508ada1f894
 ```
 
-The implementation verifier compares package identity, repository URL, pinned
-version, and resolved revision from `Package.resolved` against these literal
-rows; changing both the lockfile and fixture together is rejected.
+The implementation verifier parses the expected-base `Package.resolved` from
+Git and requires the
+`inherited-s1-01` section to equal that immutable baseline. It then compares the
+current `Package.resolved` pin set, including every transitive pin, to the exact
+union of both sections by identity, URL, version, and revision; missing, extra,
+reordered-section, or duplicate rows fail. The verifier also contains the
+literal S1-03 closure rows above, so changing the fixture and lockfile together
+cannot move a dependency. Any new direct or transitive package requires a new
+spec revision.
 
 In S1-06, private derivation is performed in `AccountAddress.thorChainAddress(account:)` through the existing HdWalletKit, after which the compressed public key is passed to `ThorChainKit`.
 
@@ -246,7 +259,7 @@ fails if S1-03 adds any new static initialization or trap path.
 |---|---|---|---|---|
 | HdWalletKit `163b4e253aa763babeb6d14f246e1d81cfa0473e` | `https://github.com/horizontalsystems/HdWalletKit.Swift.git` | `Sources/HdWalletKit/HDWallet.swift:4-49`, `HDKeychain.swift:37-59`; primary host path/lifecycle analog | host-side purpose/coin/path derivation contract | dependency or wallet object inside ThorChainKit |
 | HsCryptoKit `7c11ad0e690cbb178a70f3b9d1116d0a37a51a41` | `https://github.com/horizontalsystems/HsCryptoKit.Swift.git` | `Sources/HsCryptoKit/Crypto.swift:72-107,194-209`; crypto/hash support | SHA256/RIPEMD160 and public-key support | private-key convenience ownership or signing |
-| BitcoinCore `5b49f424f495904cf06519b1a7b861ef37b45b50` | `https://github.com/horizontalsystems/BitcoinCore.Swift.git` | `Sources/BitcoinCore/Bech32.swift:14-147,188-205`; checksum counter-reference | classic polymod/checksum/charset reference | SegWit witness version/program rules |
+| BitcoinCore `5b49f424f495904cf06519b1a7b861ef37b45b50` | `https://github.com/horizontalsystems/BitcoinCore.Swift.git` | `Sources/BitcoinCore/Classes/SegWit/Bech32.swift:14-147,188-205`; checksum counter-reference | classic polymod/checksum/charset reference | SegWit witness version/program rules |
 | Vultisig iOS `d3123dbe6ef1103937c272a8b1cd81f613af0acc` | `https://github.com/vultisig/vultisig-ios.git` | `VultisigApp/VultisigAppTests/Chains/PublicKeyTest.swift:11-19`; THOR-specific public vector support | path/public-key vector support | WalletCore opaque derivation, TSS helper, duplicate validators |
 
 The committed analog manifest must reproduce these repository URLs, commits,
@@ -288,7 +301,7 @@ must record the exact matching line and digest. HsCryptoKit commit
 `Sources/HsCryptoKit/Crypto.swift:194-209` supplies the independent
 `ripeMd160Sha256` calculation, and BitcoinCore commit
 `5b49f424f495904cf06519b1a7b861ef37b45b50` at
-`Sources/BitcoinCore/Bech32.swift:14-147,188-205` supplies the independent
+`Sources/BitcoinCore/Classes/SegWit/Bech32.swift:14-147,188-205` supplies the independent
 classic checksum calculation. Their exact commands and output digest must be
 recorded in the fixture; a missing command, digest, or source identity is a
 hard failure.
@@ -383,11 +396,20 @@ seed=0x534c30332d46555a
 count=1024
 ```
 
-Each case derives one 20-byte payload from the next deterministic SplitMix64
-outputs, and the test must replay the same sequence with
-`swift test --filter AddressCodecTests.testDeterministicFuzzReplay`. The
-verifier rejects a missing/duplicate field, a seed outside the unsigned
-64-bit range, a count below `1024`, or any alternate generator/encoding.
+The replay is canonical and byte-exact: initialize one unsigned 64-bit
+`state` to `seed`; for each case in order, advance the state exactly three
+times by `0x9E3779B97F4A7C15`, apply the standard SplitMix64 mix
+(`z = state; z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9; z = (z ^ (z >> 27))
+&* 0x94D049BB133111EB; z ^= z >> 31`), and append each `z` as eight
+little-endian bytes. The first 20 bytes of the resulting 24-byte buffer are
+the payload; the final four bytes are discarded. Thus the corpus consumes
+exactly `3 * 1024 = 3072` SplitMix64 outputs, with no case reseeding,
+endianness choice, or variable truncation. The test must replay the same
+sequence with `swift test --filter
+AddressCodecTests.testDeterministicFuzzReplay`. The verifier requires the
+four fields exactly once, a seed in the unsigned 64-bit range, and
+`count == 1024`; any alternate generator, output count, byte order, or
+payload packing fails.
 
 ### Example/Maestro Acceptance
 
@@ -423,8 +445,28 @@ manifest contains exactly `00-launch-foundation.yaml`,
 accepts exactly `s1-01`, `s1-02`, and `s1-03`.
 
 The expected CI contract is literal: the existing exact-head preflight and
-pinned tool setup remain unchanged, then the following two steps appear
-exactly once, with no additional job or flow:
+pinned tool setup remain unchanged. The checkout and base-ref establishment
+must be exactly these steps before package verification:
+
+```yaml
+- uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+  with:
+    ref: ${{ inputs.expected_head_sha }}
+    fetch-depth: 0
+    persist-credentials: true
+- name: Establish exact expected base ref
+  env:
+    EXPECTED_BASE_SHA: 7fd9663442a0e6dcd9c01c4ab04d35f3abd96fc4
+  run: |
+    set -euo pipefail
+    git fetch --no-tags --prune origin "+refs/heads/main:refs/remotes/origin/main"
+    test "$(git rev-parse refs/remotes/origin/main)" = "$EXPECTED_BASE_SHA"
+```
+
+The cumulative CI-policy matcher includes the checkout `fetch-depth` and
+credential settings plus the literal fetch refspec and equality check; a
+shallow checkout or an unverified remote-tracking ref is rejected. Then the
+following two steps appear exactly once, with no additional job or flow:
 
 ```yaml
 - name: Verify package and S1-03 contract
@@ -461,11 +503,13 @@ error, factory-bypass, prefix-only, and unreachable-fixture mutants are never
 accepted as test substitutes.
 
 Its local recipe requires literal `--expected-base` and `--expected-head`
-arguments, checks `git rev-parse HEAD`, `git rev-parse origin/main`,
-`git status --porcelain` (empty), and the expected base/head relationship
-before any test. It records pre/post HEAD, worktree status, command status,
-artifact hashes, and hosted workflow head identity; there is no movable-HEAD
-fallback.
+arguments, checks `git rev-parse HEAD`, `git rev-parse
+refs/remotes/origin/main`, `git status --porcelain` (empty), and the expected
+base/head relationship before any test. Hosted CI must establish that exact
+remote-tracking ref with the fetch step above; the verifier and cumulative
+policy matcher both reject a missing or differently named ref. It records
+pre/post HEAD, worktree status, command status, artifact hashes, and hosted
+workflow head identity; there is no movable-HEAD fallback.
 
 ## Host Verification
 
