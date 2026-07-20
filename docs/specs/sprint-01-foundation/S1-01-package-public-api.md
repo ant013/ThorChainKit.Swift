@@ -24,11 +24,11 @@ Create the minimal scaffold in this authoritative `ThorChainKit.Swift` repositor
 
 - This repository is the product authority for the standalone package; Unstoppable Wallet remains a separate future consumer.
 - Toolchain: Swift tools `5.10`. CI selects Xcode `26.3` (`17C529`) with Apple Swift `6.2.4`, asserts those exact identities, and compiles in Swift 5 language mode.
-- Minimum platform: iOS 13, matching TronKit/EvmKit; actors/async require back-deployment verification in CI. If a dependency genuinely requires a newer iOS version, the platform bump is a separate change requiring approval.
+- Minimum library platform: iOS 13, matching TronKit/EvmKit; actors/async require back-deployment verification in CI. The repository-owned UIKit-free SwiftUI Example targets iOS 14 or later. If a dependency genuinely requires a newer library version, that library-platform bump is a separate change requiring approval.
 - Protocol bounds: THORNode `a759cb4f99b1a13d5d94ace1dddcaf25c165641f` pins CometBFT `v0.38.21` and Cosmos SDK `v0.53.0`; S1-01 mirrors their [chain-ID](https://github.com/cometbft/cometbft/blob/v0.38.21/types/genesis.go) and [denom](https://github.com/cosmos/cosmos-sdk/blob/v0.53.0/types/coin.go) validation limits exactly. The same THORNode head supplies mainnet address `thor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhudkmnn2`; independent classic-Bech32 encoding of its decoded payload produces the matching valid `sthor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhue08995` and `cthor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhupxcqek` vectors. All three decode to `33e56601b755fe1c896da0884b79f38e526d6efc`.
 - UI acceptance runtime: default CI downloads [Maestro CLI `2.6.1`](https://github.com/mobile-dev-inc/Maestro/releases/tag/cli-2.6.1) `maestro.zip` directly and verifies the official asset SHA-256 `3440825f514f537c6a96bcf5de995780c2a4a7f83a43208fdc95d4f1fecfad3b` before extraction. It pins `actions/checkout` to `34e114876b0b11c390a56381ad16ebd13914f8d5` and `actions/setup-java` to `c1e323688fd81a25caa38c78aa6df2d33d3e20d9`, installs Temurin `17.0.19+10`, and rejects a different CLI, Java version, or Java vendor before the fixture gate. Output handling follows Maestro's [separate report/artifact contract](https://docs.maestro.dev/maestro-flows/workspace-management/test-reports-and-artifacts).
 - XCTest, not Swift Testing: it is compatible with the selected toolchain and existing ecosystem.
-- The public module does not import `MarketKit`, `RxSwift`, `SwiftUI`, `WalletCore`, or app localization.
+- The public module is UI-agnostic and does not import `MarketKit`, `RxSwift`, `UIKit`, `SwiftUI`, `WalletCore`, or app localization. Combine remains its state-publication framework.
 
 ## Scope
 
@@ -43,7 +43,7 @@ In scope:
 - `start()`, `stop()`, `refresh()` with an injected lifecycle implementation for now;
 - internal dependency-injection initializer for deterministic tests;
 - API documentation and compile smoke;
-- runnable `iOS Example` application/workspace based on the verified TronKit structure;
+- runnable SwiftUI + Combine `iOS Example` application/workspace retaining the verified TronKit project/workspace/package topology only;
 - `.maestro` workspace and the first deterministic launch/public-API acceptance flow.
 
 Out of scope:
@@ -86,11 +86,11 @@ iOS Example/
   iOS Example.xcodeproj/
   iOS Example.xcworkspace/
   Sources/
-    AppDelegate.swift
+    ThorChainExampleApp.swift
     Configuration.swift
     Core/ExampleRuntime.swift
-    Controllers/MainController.swift
-    Controllers/DiagnosticsController.swift
+    Presentation/DiagnosticsViewModel.swift
+    Views/DiagnosticsView.swift
 .maestro/
   config.yaml
   flows/00-launch-foundation.yaml
@@ -108,7 +108,9 @@ Scripts/scan-s1-01-artifacts.swift
 
 Files for S1-02…S1-05 are added by subsequent specs; S1-01 does not create empty speculative classes.
 
-The workspace follows the verified kit contract: `container:iOS Example.xcodeproj` plus `group:..`, so the app target consumes the current root Swift Package rather than a released binary. The original UIKit/app-target structure from TronKit is used as a foundation, but chain-specific send/history screens appear only in the corresponding future slices.
+The workspace follows the verified kit contract: `container:iOS Example.xcodeproj` plus `group:..`, so the app target consumes the current root Swift Package rather than a released binary. TronKit contributes only this topology and its scenario inventory. The Example uses the SwiftUI `App` lifecycle, SwiftUI views, and Combine-backed observation; UIKit imports, UIKit lifecycle/view-controller types, and UIKit representable wrappers are prohibited. Chain-specific send/history views appear only in the corresponding future slices.
+
+PR #1 historically delivered `AppDelegate.swift`, `MainController.swift`, and `DiagnosticsController.swift` at an iOS 13 Example floor. That completed evidence is not rewritten as if it were SwiftUI. Before S1-02 adds an Example view, the approved platform-correction slice replaces those files, raises only the Example floor to iOS 14 or later, preserves the library's iOS 13 floor and existing Maestro/accessibility contract, and proves the UIKit-free source scan.
 
 ## Package.swift
 
@@ -430,11 +432,11 @@ ThorChainKit → WalletCore / MarketKit / RxSwift / UI
 
 | Field | Decision |
 |---|---|
-| Analog family | Primary: TronKit Example project/workspace/shared scheme. Supporting: EvmKit's independent `group:..` workspace. Rejected: persisted demo mnemonics/duplicate starts and Vultisig's zero-case-green fixture filter. |
+| Analog family | Primary: TronKit Example project/workspace/shared scheme for topology only. Supporting: EvmKit's independent `group:..` workspace and TonKit's SwiftUI shell. Rejected: TronKit/EvmKit UIKit lifecycle/controllers, persisted demo mnemonics/duplicate starts, and Vultisig's zero-case-green fixture filter. |
 | Coverage | App implementation, composition, consumer, package boundary, and dependency direction are verified. No applicable UI-test/Maestro analog exists in TronKit/EvmKit; the test role is explicitly waived as an analog and introduced as a task-specific delta. |
 | Invariants to preserve | Separate app project, shared runnable scheme, workspace link to the root package, and a thin Example-only runtime. |
-| Required differences | Fixture-only default, stable accessibility IDs, visible `FIXTURE` badge, no secret or namespace entry/storage/output, one exact-UDID runner, repo-root-absolute artifact paths, immutable Maestro/action pins, argv-observable device canaries, strict manifest/JUnit-count guards, and recursive fail-closed Vision OCR over screenshots. |
-| Rejected differences | Hardcoded or persisted mnemonic, provider credential, manager-owned start plus adapter start, localized/coordinate selectors, fixed sleeps, and a green zero-test result. |
+| Required differences | SwiftUI `App` lifecycle at an iOS 14-or-later Example floor, SwiftUI views, one Combine-backed presentation model without duplicate state ownership, fixture-only default, stable accessibility IDs, visible `FIXTURE` badge, no secret or namespace entry/storage/output, one exact-UDID runner, repo-root-absolute artifact paths, immutable Maestro/action pins, argv-observable device canaries, strict manifest/JUnit-count guards, recursive fail-closed Vision OCR, and a fail-closed UIKit/core-SwiftUI import/type scan. |
+| Rejected differences | UIKit imports/lifecycle/controllers/representables, SwiftUI in `Sources/ThorChainKit`, hardcoded or persisted mnemonic, provider credential, manager-owned start plus adapter start, localized/coordinate selectors, fixed sleeps, and a green zero-test result. |
 | Failure modes | Wrong app ID, package not linked, nonbooted simulator ambiguity, workspace-relative, sibling-prefix, or symlink-root artifact escape, unverified Maestro archive, floating action tag, undiscovered flow, zero JUnit cases, skipped PNG through symlink/path escape, OCR read/decode/request failure treated as success, fixture labeled live, or secret leakage in YAML/logs/screenshots. |
 | Tests before code | Named workspace-structure subgate plus exact build; one visible fixture flow; command-shim tests for one exact UDID and canonical component-contained artifact paths; zero/extra/skipped/error/failure JUnit canaries; recursive regular-PNG enumeration with enumerated-equals-processed assertion; `artifacts-escape`, symlinked-root, inner-symlink/path-escape, malformed-PNG, safe-first/secret-second, raw-text, and rendered-image canaries in a temporary copy. |
 | Verification | SHA-256-verified Maestro `2.6.1` on Temurin `17.0.19+10` through full-SHA actions; one `THORCHAIN_SIMULATOR_UDID` for boot/build/install/launch/`maestro --device`; repo-root-absolute JUnit/test/debug paths; JUnit attributes `tests=1 failures=0 errors=0 skipped=0`; tracked-input, raw-artifact, and recursive fail-closed Vision-OCR text scans; canaries injected only into a temporary copy; and explicit recording when Maestro is unavailable. |
@@ -443,11 +445,11 @@ ThorChainKit → WalletCore / MarketKit / RxSwift / UI
 
 1. `Address.init(_:, network:)` owns strict minimum classic-Bech32 decode/canonical validation in S1-01. No unchecked fixture path exists. S1-03 owns any separately approved public payload exposure/encoding and public-key derivation only.
 2. The implementation PR changes the roadmap marker to contain its real PR number only. Reviewer, QA, and CI evidence bind to one final `headRefOid`; any push invalidates prior review/QA. After squash merge, the CTO records `mergeCommit.oid` in Paperclip, verifies it is on `origin/main`, and verifies the PR-number marker there before closing the slice. No `TBD`, merge-SHA placeholder, head mislabeled as merge, direct push, or roadmap-only follow-up PR is permitted.
-3. The iOS 13 floor remains pinned. Endpoint durations are finite positive `TimeInterval` seconds, not iOS-16-only `Duration`; `Denom` keeps a throwing validator without claiming `RawRepresentable`.
+3. The library iOS 13 floor remains pinned; the UIKit-free SwiftUI Example targets iOS 14 or later. Endpoint durations are finite positive `TimeInterval` seconds, not iOS-16-only `Duration`; `Denom` keeps a throwing validator without claiming `RawRepresentable`.
 4. Stagenet and chainnet fix HRPs to `sthor` and `cthor` respectively and use coin type `931`. The canonical addresses `sthor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhue08995` and `cthor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhupxcqek` decode to the same exact 20-byte payload as the mainnet vector. `AccountState`, `SyncState`, and `SyncError` are owned and tested in S1-01.
 5. The persistence digest and decoded address payload are internal. The S1-01 public factory composes only a no-op lifecycle and inert initial snapshot; an exact positive normalized declaration/import/identifier/member/call-shape fixture also pins the transitive `Network.persistenceKey` getter, and equivalent-capability, alias, wrapper, unaudited-helper, and transitive-I/O canaries prove the path creates no work or hidden capability.
 6. One serial facade dispatcher owns snapshots, desired state, sequence assignment, FIFO append, collaborator invocation, and reentry post-draining; the rejected lock-plus-dispatcher design adds a second state owner without enabling any required trace. One retained `DispatchSpecificKey<UInt8>` identifies dispatcher context. Ordinary effective calls synchronously enter and wait through their collaborator return; true dispatcher-context reentry appends and returns so the active turn can post-drain before yielding. The deterministic `C0, R, C1` trace and deferred-async mutant prove that a waiting external caller cannot overtake a reentrant command. S1-05 extends the same owner with publication turns and adds no lock or second dispatcher.
-7. The standalone consumer targets iOS 13 under the pinned CI Xcode/Swift identity and a separately named Swift-5 strict-concurrency warnings-as-errors gate. The exact-device runner verifies Maestro archive SHA-256, uses full-SHA checkout/setup-java actions, exposes every device-bearing argv and resolved artifact path to shim canaries, and recursively fails closed on screenshot enumeration/read/decode/OCR errors before secret/namespace acceptance.
+7. The standalone library consumer targets iOS 13 under the pinned CI Xcode/Swift identity and a separately named Swift-5 strict-concurrency warnings-as-errors gate. The SwiftUI Example targets iOS 14 or later. The exact-device runner verifies Maestro archive SHA-256, uses full-SHA checkout/setup-java actions, exposes every device-bearing argv and resolved artifact path to shim canaries, and recursively fails closed on screenshot enumeration/read/decode/OCR errors before secret/namespace acceptance.
 8. Network chain IDs are `1...50` UTF-8 bytes under CometBFT `v0.38.21`; denoms match Cosmos SDK `v0.53.0`'s `3...128`-byte ASCII grammar; endpoint tests enumerate every construction rule; an absent account rejects every nonempty balance set.
 9. Protocol values use EvmKit's throwing validate-before-store shape as the primary analog, TronKit as independent fail-closed support, and Vultisig only for pinned THOR HRP vocabulary. Raw-data constructors, force-unwrapped endpoints, and print-only tests are rejected.
 10. The valid canonical addresses `thor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhudkmnn2`, `sthor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhue08995`, and `cthor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhupxcqek` must each decode under its matching Network to internal payload `33e56601b755fe1c896da0884b79f38e526d6efc`; round-trip-only convertBits tests or a mainnet-only hardcode are insufficient.
@@ -492,6 +494,7 @@ Manifest topology, source-import allowlist, generated public symbol graph, exact
 - parse `swift package dump-package` JSON and require exactly one `.library` product named `ThorChainKit`, one `ThorChainKit` target, and one `ThorChainKitTests` test target;
 - assert `xcodebuild -version` is exactly Xcode `26.3` / build `17C529`, assert `xcrun swift --version` contains Apple Swift `6.2.4`, and require CI to select that developer directory before any build;
 - compare source imports to the system/BigInt allowlist;
+- reject UIKit imports/types in `Sources/ThorChainKit` and `iOS Example/Sources`, reject SwiftUI in `Sources/ThorChainKit`, and require the Example's SwiftUI `App` lifecycle plus iOS 14-or-later deployment target;
 - run `swift package dump-symbol-graph`, canonicalize public declarations, and compare them with `Tests/ThorChainKitTests/Fixtures/S1-01-public-symbols.txt`;
 - run `swift test list` and compare the discovered `PublicApiTests` names/count with `Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt`;
 - run `swift test --enable-xctest --disable-swift-testing --parallel --num-workers 1 --filter ThorChainKitTests.PublicApiTests --xunit-output "$tmp/public-api.xml" 2>&1 | tee "$tmp/public-api.log"` under `set -o pipefail` and require the Swift process itself to exit zero, then invoke non-executable `Scripts/verify-s1-01-xunit.swift` through `xcrun swift`; require exactly the 18 allowlisted names in xUnit with zero failures/errors and exactly one terminal `passed` transcript status per name. Reject any skipped/disabled/failed terminal status, `XCTSkip`, `XCTExpectFailure`, conditional/availability disabling, or test-command `--skip`; a temporary-copy `XCTSkip` mutation must fail the transcript/status gate even though SwiftPM xUnit omits skip state;
@@ -568,9 +571,9 @@ THORCHAIN_SIMULATOR_UDID=<exact-udid> Scripts/run-maestro.sh
 - The exact positive public-value construction closure passes for every enumerated initializer, stored/static root, transitive body, and default expression; all seven Address/endpoint/Network/Denom/default-path canaries fail before the external consumer build.
 - The exact positive factory syntax/callee allowlist, including the exact transitive `Network.persistenceKey` getter and dispatcher-specific key operations, passes; the factory does not start network/sync or create a network/request, task, operation/global queue, timer, dispatch-source, file, storage/database, wrapper, alias, or unaudited-helper capability.
 - Initial getters and mandatory replaying publishers are exactly nil/idle/zero/no-account, without a fabricated account/balance or zero-as-height shortcut.
-- There is no seed/private key, MarketKit, RxSwift, SwiftUI, or WalletCore in the public API.
+- There is no seed/private key, MarketKit, RxSwift, UIKit, SwiftUI, or WalletCore in the public API; Combine is the public state-publication framework.
 - Parsed manifest topology, committed BigInt `5.7.0` default lock, isolated exact-`5.0.0` floor build/test, pinned Xcode/Swift identity, Swift-5 strict-concurrency warnings-as-errors, import allowlist, public symbol graph, exact test discovery, and temporary public-only iOS-13 consumer gates are green.
-- The named Example workspace subgate proves exact `container:iOS Example.xcodeproj` plus `group:..`; the app then launches from the shared workspace/scheme and uses the local package root.
+- The named Example workspace subgate proves exact `container:iOS Example.xcodeproj` plus `group:..`; the UIKit-free SwiftUI app then launches from the shared workspace/scheme, uses the local package root, and observes kit state through Combine.
 - The sole exact-UDID Maestro runner uses immutable archive/action pins plus compatible Maestro/Temurin identities and repo-root-absolute output paths, reports one test with zero failures/errors/skips, and recursively fails closed while scanning the separate JUnit plus all raw/Vision-OCR artifacts; argv/path canaries prove one device and one artifact root end-to-end.
 - The committed S1-01 public-symbol baseline exists and is the input to the separately enforced S1-02…S1-05 compatibility invariant.
 - The committed Gimle report contains no operator-local absolute path; only the external canonical audit retains machine-local roots.

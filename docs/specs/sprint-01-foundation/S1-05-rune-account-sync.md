@@ -52,7 +52,8 @@ Tests/ThorChainKitTests/AccountStateStorageTests.swift
 Tests/ThorChainKitTests/KitLifecycleTests.swift
 Scripts/test-s1-05-lifecycle-invariants.sh
 Scripts/test-s1-04-s1-05-isolation.sh
-iOS Example/Sources/Controllers/LifecycleController.swift
+iOS Example/Sources/Presentation/LifecycleViewModel.swift
+iOS Example/Sources/Views/LifecycleView.swift
 .maestro/flows/04-lifecycle-restart.yaml
 ```
 
@@ -289,7 +290,7 @@ Storage failure policy: the network result is not published as durably `.synced`
 
 ### Example/Maestro acceptance
 
-`LifecycleController` provides only explicit `Start`, `Stop`, and `Refresh` controls plus read-only state/counter diagnostics. Flow `04-lifecycle-restart.yaml`:
+`LifecycleViewModel` observes the kit's Combine publishers and provides `LifecycleView` with only explicit `Start`, `Stop`, and `Refresh` controls plus read-only state/counter diagnostics. It does not duplicate lifecycle admission or snapshot ownership. The Example remains SwiftUI-only and imports no UIKit. Flow `04-lifecycle-restart.yaml`:
 
 - proves `start/start` coalescing through the visible request counter;
 - performs stop during a controlled pending request and observes no late publication;

@@ -13,7 +13,7 @@ At the end of Sprint 1, a mnemonic account manually enables native RUNE in Unsto
 Success is demonstrated simultaneously by four independent layers:
 
 1. deterministic Swift package tests;
-2. runnable TronKit-derived `iOS Example` and fixture Maestro flows;
+2. runnable SwiftUI `iOS Example`, retaining only the verified kit workspace topology, and fixture Maestro flows;
 3. opt-in mainnet compatibility tests;
 4. Unstoppable `AppTests` and a manual create/import/enable/relaunch checklist without Maestro.
 
@@ -43,7 +43,9 @@ Consolidated verification: [`test-plan.md`](test-plan.md).
 
 - This repository is the product authority for the standalone kit; Unstoppable Wallet is a separate future consumer.
 - The repository remains documentation-only until S1-01 receives explicit revision-bound approval.
-- `iOS Example` uses the verified TronKit project/workspace structure, but does not copy its hardcoded mnemonic, plaintext persistence, or demo lifecycle ownership.
+- `Sources/ThorChainKit` is UI-agnostic: Combine is allowed for state publication, while UIKit and SwiftUI imports are prohibited.
+- `iOS Example` retains the verified TronKit project/workspace structure only. Its lifecycle and presentation use SwiftUI + Combine, with no UIKit import/type/representable; it also does not copy TronKit's hardcoded mnemonic, plaintext persistence, or demo lifecycle ownership.
+- The library retains iOS 13; the UIKit-free SwiftUI Example targets iOS 14 or later.
 - Vultisig is used only as a THORChain-specific supporting reference and a source of missing protocol details.
 - Production integration follows the exact current-tree Unstoppable contracts; similar names do not constitute evidence.
 - Live-network and Example UI gates are opt-in; fixture success is never labeled as live evidence.
@@ -67,11 +69,11 @@ Exact files, classes, functions, and APIs are listed in each slice spec. Until S
 ## Acceptance and Verification Order
 
 1. Run unit/controlled/storage/package tests with a non-empty test manifest.
-2. Build `iOS Example` with the local root package and run all fixture Maestro flows.
+2. Prove the no-UIKit/no-core-SwiftUI platform scan, build the SwiftUI `iOS Example` with the local root package, and run all fixture Maestro flows.
 3. Separately run opt-in mainnet compatibility tests and record the chain ID/heights/provider family.
 4. Connect the kit to an Unstoppable review branch only after approval of the host spec.
 5. Run `AppTests`, then manually verify create/import/enable/terminate/relaunch/App Status in the `Development` app.
-6. Verify the absence of acceptance-only hooks in Unstoppable and secrets in Example artifacts.
+6. Verify the absence of acceptance-only hooks in Unstoppable, UIKit in repository-owned production/Example source, and secrets in Example artifacts.
 
 ## Pinned Maestro Boundary
 
@@ -84,12 +86,12 @@ SHA-256 pins the exact versions of the seven approved specs and the test plan. V
 <!-- SPEC_HASHES_START -->
 | Artifact | SHA-256 |
 |---|---|
-| `S1-01-package-public-api.md` | `3c42cf77364c6ca27388ec56a1573395ca7fba9b48ddb89f4ae371af79bbd53a` |
-| `S1-02-network-endpoint-policy.md` | `641fa0320d313c8134b8b748f3e451842eb882653b7c849e8fd0301884307585` |
-| `S1-03-derivation-address-codec.md` | `bb06bdfeae3f6b5dfa54b7b49c689ade3fc6454b7666f158e1c59b5e2554d58a` |
-| `S1-04-thornode-read-client.md` | `c2d51c8be3a19fdd96ea21e6501aed3d27489a675ef455defa444118a0db9595` |
-| `S1-05-rune-account-sync.md` | `9ce0432cc1bb75f47dd803d9db8c57f5cd24c87d86a9d7bc61ffe33a215ce305` |
-| `S1-06-unstoppable-lifecycle-composition.md` | `fc6bc88fa09aa18223e52edf22a35f129f871b5c4a9d9c59a370c91604854827` |
+| `S1-01-package-public-api.md` | `a1dc63ef44b40f2e778bd1c86df0de42846fa9e119c2c12989268a455257dd4d` |
+| `S1-02-network-endpoint-policy.md` | `1f836d8d7760e8178367eea0a64329b38d339dcc0d543bb5d8f1a7a1079a4978` |
+| `S1-03-derivation-address-codec.md` | `429e894c2144c6f1b4b65f7fbc48838ee663472e036c4061df444df1f91c609c` |
+| `S1-04-thornode-read-client.md` | `c17f04ea8d4343f558af745a58666ce3122757919a6a27600fa54d849e4ff886` |
+| `S1-05-rune-account-sync.md` | `5345c4ef169d4c39187bef7371a16cae5a779164ddecbbe97a99ff12b471a0ff` |
+| `S1-06-unstoppable-lifecycle-composition.md` | `0a598cdc320e5da99c805bb676241b9c1924eb2a4d9078f68a21896681fa1703` |
 | `S1-07-unstoppable-rune-surface.md` | `9da09bfc288bf9e43565f503d2db06b29f57291f0870c1d9729f9d092e2f502c` |
-| `test-plan.md` | `b038715f2fee6287cc12013c8b135f0dddc4adf3970797a5a141d69be40043fb` |
+| `test-plan.md` | `884d639c3878276ac5d718f6cbcfa1e141144a6d8e55514322211ccdef2bf06a` |
 <!-- SPEC_HASHES_END -->

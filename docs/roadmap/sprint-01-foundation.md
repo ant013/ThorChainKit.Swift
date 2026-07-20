@@ -22,7 +22,7 @@ The status cell is the canonical repository marker. A completed row contains `�
 
 ## End-to-End Verification Surface
 
-S1-01 creates an `iOS Example` based on the verified TronKit structure (`.xcodeproj` + shared scheme + workspace connected to the package root). Each subsequent slice extends the same app and a separate Maestro flow:
+S1-01 created an `iOS Example` using the verified TronKit project topology (`.xcodeproj` + shared scheme + workspace connected to the package root). The approved platform correction below migrates its presentation and lifecycle to SwiftUI before any subsequent slice extends the same app and adds a separate Maestro flow:
 
 ```text
 S1-01 launch/public API
@@ -34,7 +34,19 @@ S1-01 launch/public API
             → S1-07 Unstoppable AppTests + manual create/import/relaunch/App Status
 ```
 
-The Example app is a manual/live harness and UI acceptance target, not production architecture. XCTest remains the source of deterministic low-level correctness; the real Unstoppable app remains the final host gate.
+The Example app is a SwiftUI + Combine manual/live harness and UI acceptance target, not production architecture. `Sources/ThorChainKit` remains UI-agnostic and imports neither UIKit nor SwiftUI. XCTest remains the source of deterministic low-level correctness; the real Unstoppable app remains the final host gate.
+
+## Required SwiftUI Migration Before S1-02 Example Work
+
+PR #1 delivered a working UIKit-based Example. That implementation remains valid historical S1-01 evidence, but it is no longer an approved base for new UI work. Before S1-02 adds its Example screen, a bounded migration slice must:
+
+1. replace `AppDelegate`, `UIWindow`, and controller-based presentation with a SwiftUI `App`, SwiftUI views, and one Combine-backed presentation model;
+2. raise only the Example deployment target to iOS 14 or later while preserving the library's iOS 13 floor;
+3. preserve the existing workspace/package linkage, app identifier, accessibility IDs, fixture semantics, secret scanning, and Maestro flow;
+4. add a fail-closed scan proving no UIKit import or UIKit lifecycle/view-controller symbol remains under `Sources/ThorChainKit` or `iOS Example/Sources` and no SwiftUI import enters `Sources/ThorChainKit`;
+5. rebuild the Example and rerun the exact-UDID Maestro fixture flow.
+
+No S1-02…S1-05 Example feature may build on the legacy controllers before this migration is green.
 
 ## Architectural Flow
 
@@ -77,11 +89,12 @@ Wallet list / Receive / restart reconstruction
 - `CancellationError` is not converted into a user-facing sync error and does not trigger failover.
 - After `stop()`, completion from an old generation cannot change state.
 - The manager does not start the kit. The lifecycle belongs to `ThorChainAdapter` and runs through the shared `AdapterManager`.
+- The kit core publishes through Combine without importing a UI framework; the Example uses SwiftUI + Combine and contains no UIKit.
 
 ## Real Acceptance Script
 
 1. Build the standalone `ThorChainKit` and run the deterministic suite.
-2. Build `iOS Example` through the workspace and run all fixture Maestro flows.
+2. Prove the SwiftUI migration/platform scan, build `iOS Example` through the workspace, and run all fixture Maestro flows.
 3. Run the opt-in live read for a known public mainnet address; save the endpoint, chain ID, height, and RUNE amount.
 4. Connect the local package to an Unstoppable test branch only during S1-06 implementation.
 5. Create a new mnemonic account.
