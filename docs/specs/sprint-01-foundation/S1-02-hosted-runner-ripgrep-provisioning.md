@@ -1,9 +1,9 @@
 # S1-02 — Hosted runner ripgrep provisioning
 
-Status: design revision 7, spec-only. Revision 6 is superseded by this
-checkpoint and closure-evidence correction; its current-tree boundary remains
-unchanged. Explicit user approval is required before workflow or verifier
-implementation.
+Status: design revision 8, spec-only. Revision 7 remains the frozen
+ripgrep-provisioning design and exact-head CR/QA baseline. This revision adds
+only the hosted-acceptance recovery diagnosis and its approval boundary;
+explicit user approval is required before any recovery implementation.
 
 ## Goal and assumptions
 
@@ -294,6 +294,116 @@ review/QA attestations; repeat them against the new exact head.
 Open question: if `macos-26` becomes x86_64, approve a separately pinned asset
 or keep this gate unavailable. This spec chooses fail-closed and does not guess.
 
+## Revision 8 — hosted acceptance recovery design
+
+This addendum supersedes only the hosted-acceptance recovery portion of the
+prior design. It does not revise the pinned ripgrep asset, the two-file
+implementation boundary, PR head `64575a9aea42201b31f3549ba517f1e02017199d`,
+or the existing CodeReviewer/QA attestations. No hosted rerun, merge, or
+implementation change is authorized by this revision.
+
+### Observed failure and current-tree boundary
+
+Hosted run `29764294250` used the approved PR head and passed exact-head
+preflight, checkout, pinned ripgrep provisioning, the S1-02 policy/product
+contract, Swift builds/tests, the guarded Maestro runner, and pinned Maestro
+CLI installation. Xcode 26.3 built the Example against the iPhoneSimulator
+26.2 SDK; `simctl install` and `simctl launch` succeeded with
+`org.horizontalsystems.thorchainkit.example: 7990`. The first S1-01 flow then
+failed before assertions while Maestro 2.6.1 attempted to set app permissions:
+
+```text
+Unable to set permissions for app org.horizontalsystems.thorchainkit.example:
+Failed to connect to /127.0.0.1:50637
+```
+
+The current lifecycle is verified in `Scripts/run-maestro.sh:27-31` (Maestro
+2.6.1 and Temurin 17.0.19+10), `:107-135` (boot, build, install, launch, then
+`maestro test`), and `.github/workflows/ci.yml:106-120` (pinned CLI download
+followed by the two slice flows). The failure is therefore downstream of the
+ripgrep remediation and after successful app launch; it is not evidence that
+the ripgrep policy or S1-02 product contract regressed.
+
+### Local evidence and evidence limits
+
+The operator supplied an exact-pair reproduction in progress using the pinned
+Maestro/Temurin pair. An independent read-only check of this checkout's local
+shell found Xcode 26.3 (`17C529`) and iOS 26.3/18.6 runtimes, but no `maestro`
+binary and Java 21.0.1 rather than Temurin 17.0.19+10. The local shell cannot
+therefore claim to reproduce the exact hosted pair. That mismatch is recorded
+as an evidence limit, not silently treated as a successful reproduction.
+
+### Primary upstream evidence
+
+The failure shape is consistent with, but not proven identical to, two primary
+Maestro issue records:
+
+- [Maestro #3327](https://github.com/mobile-dev-inc/Maestro/issues/3327)
+  records XCUITest-driver connection failures on Maestro 2.6.0 + Xcode 26.4,
+  including repeated loopback `ConnectException` failures after driver
+  installation.
+- [Maestro #3137](https://github.com/mobile-dev-inc/Maestro/issues/3137)
+  records the driver app installing and launching on Apple Silicon/iOS 26.x
+  while opening no HTTP port; its environment includes Java 17 and iOS 26.x
+  simulators.
+
+Neither record proves that Maestro 2.6.1 + Xcode 26.3 is incompatible, and no
+alternate version or runner is approved by this spec. A version change,
+runtime change, or acceptance bypass would require a new evidence-backed
+design and approval.
+
+### Recovery design
+
+1. Preserve the exact ripgrep implementation, policy gate, PR head, and
+   existing CR/QA attestations. Do not rerun hosted CI or merge as part of
+   this revision.
+2. Complete the operator's read-only exact-pair reproduction and capture the
+   tuple (`maestro --version`, Java identity, `xcodebuild -version`, simulator
+   runtime/device), successful install/launch, driver installation state, and
+   the loopback-driver readiness/port failure. Capture Maestro debug output
+   and simulator/XCTest logs without modifying the application or skipping
+   permission setup.
+3. If the exact pair reproduces the same driver-not-listening behavior, treat
+   it as an external Maestro/XCUITest compatibility blocker. Select a future
+   slice only after primary evidence identifies either a known-good pinned
+   Maestro/runtime tuple or a compatible hosted runner. Do not guess a
+   downgrade/upgrade from issue titles alone.
+4. If the exact pair does not reproduce the failure, preserve the hosted log
+   as an environment-specific failure and require a separately approved
+   runner-diagnostics slice before changing the workflow.
+5. In both cases, fail closed: a build, install, and launch success is not a
+   Maestro acceptance pass, and no recovery may remove the permission step,
+   bypass the first flow, or convert a driver connection failure into a
+   warning.
+
+### Recovery acceptance criteria
+
+The next recovery slice may proceed only when its approved design provides:
+
+1. An exact local or hosted compatibility tuple and a reproducible driver
+   readiness observation, with the current Maestro/Temurin pins explicitly
+   preserved or replaced by a separately approved, digest-pinned tuple.
+2. A bounded failure path that retains the full diagnostic evidence for driver
+   installation, loopback readiness, and the first failing flow.
+3. Unchanged ripgrep policy behavior and unchanged exact-head/CR/QA evidence
+   until a new pushed head is independently reviewed and verified.
+4. No acceptance bypass, mutable download, unpinned runtime, or speculative
+   version change.
+
+### Spec-only verification and open decision
+
+Verified for this revision: codebase-memory index status is `ready`; Serena is
+activated for `/Users/ant013/Data/AI/thorchain`; targeted `rg` and Git reads
+confirm the current Maestro lifecycle; local runtime/toolchain observations
+are recorded above; and the two primary upstream issue records were checked.
+Gimle trust remains RED because the target project mapping is unavailable.
+
+Not run by design: hosted CI, merge, implementation tests, or any workflow or
+verifier edit. Board must choose whether to accept the current-slice hosted
+ripgrep evidence and defer the downstream Maestro issue to a new slice, or
+authorize a separate runner/fixture recovery slice after the exact-pair
+diagnosis.
+
 ## Gimle reliability and approval gate
 
 Gimle health was reachable, but `palace.memory.get_project_overview` returned
@@ -314,7 +424,8 @@ provisioning is absent must not be used as a current-tree claim. Current-tree
 presence and policy gaps are verified directly at the assigned head and must be
 rechecked at the exact pushed review head.
 
-This is the complete spec-only deliverable for THR-52 revision 7. The prior
-hosted failure is recorded above, and symbolic `HEAD` is explicitly rejected
-as a policy input. Explicit user approval of this revision is required before
-workflow or verifier implementation.
+This is the complete spec-only deliverable for THR-52 revision 8. The prior
+hosted ripgrep failure, the downstream Maestro driver failure, the evidence
+limit, and the recovery boundary are recorded above. Symbolic `HEAD` remains
+explicitly rejected as a policy input. Explicit user approval of this revision
+is required before any recovery implementation.
