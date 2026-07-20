@@ -59,7 +59,7 @@ baseline/platform/CI checks, and making the Example Maestro path reachable and
 real-call-path dependent. Explicit approval is still required before
 implementation.
 
-## Discovery 2/2 frozen allowlist and revision 3 closure
+## Discovery 2/2 frozen allowlist and revision 4 closure
 
 ThorChainCodeReviewer independently re-ran the three bounded read-only lanes
 on the pushed revision-2 head and returned `REVISE`. Discovery 2/2 is now
@@ -77,11 +77,15 @@ allowlist for closure-only rework:
   and clean-worktree identity; fixed resolved dependency SHAs; schema-proven
   independent-source provenance; deterministic fuzz/context-failure replay.
 
-Revision 3 closes these IDs in the spec, delta matrix, and plan with exact
-values, pinned commits and paths, explicit public contracts, named fixture and
-verifier files, literal command arguments, and fail-closed mutant checks. The
+Revision 3 closed the security IDs and the non-allowlisted review items, but
+closure 1/5 returned seven frozen High IDs for revision. Revision 4 addresses
+only those IDs: repository URLs are now literal, the host sample consumes the
+validated raw path through `privateKey(path:)`, the root App/Xcode and complete
+runner/manifest/CI paths are named, the mutant harness and expected workflow
+block are executable contracts, dependency revisions are fixed to literal
+SHAs, and the fuzz fixture has a literal schema/seed/count/replay command. The
 revision preserves the accepted protocol choices and remains documentation-only.
-The next authorized action is closure review 1/5 on the exact pushed head;
+The next authorized action is closure review 2/5 on the exact pushed head;
 approval and implementation remain prohibited until CodeReviewer ACCEPT.
 
 ## Reproduction and verification record

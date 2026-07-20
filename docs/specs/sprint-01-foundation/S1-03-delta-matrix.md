@@ -1,7 +1,7 @@
 # S1-03 — Analog Delta Matrix and Test Plan
 
 This document is the review-bound delta matrix for
-`S1-03-derivation-address-codec.md`. It is revision 3 after discovery 2/2
+`S1-03-derivation-address-codec.md`. It is revision 4 after discovery 2/2
 REVISE; implementation remains blocked until closure review and explicit
 approval.
 
@@ -48,21 +48,21 @@ approval.
 
 ## Frozen blocker closure map — discovery 2/2
 
-| Frozen IDs | Mechanical closure in revision 3 |
+| Frozen IDs | Mechanical closure in revision 4 |
 |---|---|
-| `S103-ARCH-01` | Committed analog manifest records exact repository, commit, path, and role for HdWalletKit, HsCryptoKit, BitcoinCore, and Vultisig. |
-| `S103-ARCH-02`, `THR62-SEC-B02` | `DerivationPath.rawValue`, exact five-component grammar, typed `DerivationPathError`, host adapter call shape, and exact `m/44'/931'/0'/0/0` test are normative. |
+| `S103-ARCH-01` | `.maestro/S1-03-analog-manifest.txt` must reproduce the literal URLs `https://github.com/horizontalsystems/HdWalletKit.Swift.git`, `https://github.com/horizontalsystems/HsCryptoKit.Swift.git`, `https://github.com/horizontalsystems/BitcoinCore.Swift.git`, and `https://github.com/vultisig/vultisig-ios.git` alongside each pinned commit, path, and role. |
+| `S103-ARCH-02`, `THR62-SEC-B02` | `DerivationPath.rawValue`, exact five-component grammar, typed `DerivationPathError`, and host `privateKey(path: DerivationPath.defaultAccount.rawValue)` call shape are normative; the host must not reconstruct the path from independent literals. |
 | `S103-ARCH-03` | `AddressCodec.decode` delegates to `Address.init`; `isValid` is removed, so inherited typed errors are not erased. |
-| `S103-ARCH-04`, `VOP-01` | Xcode project target membership, root navigation, runtime composition, non-`@testable` build, and real-call-path mutants are required. |
-| `S103-ARCH-05` | S1-02 CI policy remains cumulative authority; exact three-flow manifest and runner transition are specified together. |
+| `S103-ARCH-04`, `VOP-01` | `iOS Example/Sources/ThorChainExampleApp.swift`, Xcode project target membership, root navigation, shared runtime composition, non-`@testable` build, and `Scripts/test-s1-03-mutants.sh` real-call-path mutants are required. |
+| `S103-ARCH-05` | `.maestro/config.yaml`, both Maestro runners, `.github/workflows/ci.yml`, and `Scripts/verify-s1-02-ci-policy.sh` are one cumulative S1-02 → S1-03 change; the exact expected CI command block and three-flow manifest are fixed. |
 | `THR62-SEC-B01` | Factory has no default `.mainnet`; inherited S1-01 trap is recorded as baseline and cannot be introduced into the S1-03 call path. |
 | `THR62-SEC-B03`, `VOP-04` | Exact bound vector values, output digest, pinned source commits/paths, independent hash/checksum sources, and oracle provenance are specified. |
-| `THR62-SEC-B04` | Capability allowlist, forbidden-edge mutants, exact package products, and resolved-SHA fixture are mandatory and fail closed. |
-| `THR62-SEC-B05`, `VOP-05` | Internal context-provider seam has production and deterministic injected-failure providers; fuzz seed/count is committed and replayable. |
+| `THR62-SEC-B04` | Capability allowlist, forbidden-edge mutants, exact package products, and resolved-SHA fixture are mandatory and fail closed. The fixture fixes canonical SwiftPM identity `hscryptokit.swift` / HsCryptoKit `1.3.2` to `7c11ad0e690cbb178a70f3b9d1116d0a37a51a41` and `secp256k1.swift` `0.10.0` to `48fb20fce4ca3aad89180448a127d5bc16f0e44c`. |
+| `THR62-SEC-B05`, `VOP-05` | Internal context-provider seam has production and deterministic injected-failure providers; `S1-03-fuzz-seed.txt` is exactly `version=1`, `algorithm=splitmix64`, `seed=0x534c30332d46555a`, `count=1024`, replayed by the named test command. |
 | `VOP-02` | Verifier requires literal expected base/head, exact `HEAD`, exact `origin/main`, clean worktree, and ancestor relation. |
-| `VOP-03` | `S1-03-dependency-revisions.txt` is compared to `Package.resolved`; no version-only or movable-HEAD acceptance. |
+| `VOP-03` | `S1-03-dependency-revisions.txt` is compared to `Package.resolved` using the fixed package/URL/version/revision pairs; no version-only or movable-HEAD acceptance. |
 | All IDs | Any mismatch is a closure finding on the exact changed head, not a new discovery cycle or blocker-list expansion. |
 
-Revision 3 is documentation-only and preserves the accepted protocol choices.
+Revision 4 is documentation-only and preserves the accepted protocol choices.
 Any implementation PR must populate the declared fixture/provenance artifacts
 with exact values and fail closed if a schema field is absent.

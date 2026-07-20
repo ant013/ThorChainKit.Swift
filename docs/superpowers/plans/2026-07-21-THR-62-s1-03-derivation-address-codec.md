@@ -1,7 +1,8 @@
 # THR-62 — S1-03 Derivation and Address Codec Plan
 
-Status: discovery 2/2 is frozen after REVISE; revision 3 closes the frozen
-allowlist mechanically; closure review 1/5 is required before approval.
+Status: discovery 2/2 is frozen after REVISE; revision 4 addresses the frozen
+allowlist findings from closure 1/5; closure review 2/5 is required before
+approval.
 
 ## Goal and acceptance
 
@@ -35,7 +36,7 @@ and S1-02, SwiftUI-only Example presentation, and the bounded Maestro flow.
   provenance, dependency/context seams, Xcode/CI/runner wiring, and literal
   base/head/clean-worktree checks.
 - Push the spec, Gimle report, delta matrix, and this plan, then hand the exact
-  head to ThorChainCodeReviewer for closure 1/5. Approval remains prohibited
+  head to ThorChainCodeReviewer for closure 2/5. Approval remains prohibited
   until an exact-head CodeReviewer ACCEPT.
 
 Affected paths: `docs/specs/sprint-01-foundation/S1-03-derivation-address-codec.md`,
@@ -90,15 +91,21 @@ Dependency: Step 1 explicit approval.
   static labels or hard-coded outputs. Include the authenticated baseline,
   package-resolution SHA, platform-import, public-consumer, deterministic fuzz,
   context-failure, Xcode target-membership, and secret scans. Update the
-  cumulative S1-02 CI authority and exact three-flow manifest together.
+  cumulative S1-02 CI authority and exact three-flow manifest together. The
+  changed path set also includes `iOS Example/Sources/ThorChainExampleApp.swift`,
+  `iOS Example/iOS Example.xcodeproj/project.pbxproj`, `.maestro/config.yaml`,
+  `Scripts/run-maestro.sh`, `Scripts/test-run-maestro.sh`,
+  `Scripts/test-s1-03-mutants.sh`, `Scripts/verify-s1-03.sh`,
+  `Scripts/verify-s1-02-ci-policy.sh`, and `.github/workflows/ci.yml`.
 
 Affected paths: `Tests/ThorChainKitTests/DerivationTests.swift`,
 `Tests/ThorChainKitTests/AddressCodecTests.swift`,
 `Tests/ThorChainKitTests/Fixtures/AddressVectors.json`,
 `iOS Example/Sources/Presentation/AddressViewModel.swift`,
 `iOS Example/Sources/Views/AddressView.swift`,
-`.maestro/flows/02-address-codec.yaml`, plus the exact slice verification
-script/baseline specified by the approved revision.
+`.maestro/flows/02-address-codec.yaml`, the root Example App and Xcode project
+membership, the exact slice verifier, the named mutant harness, and the
+cumulative runner/manifest/CI policy files listed above.
 
 Acceptance: no mnemonic/private material or host-local paths are committed;
 the Example imports no UIKit; the flow checks full expected address,
@@ -113,7 +120,7 @@ Dependency: Step 2 implementation shape and Step 1 approval.
 - Run the project-equivalent narrow/full checks and inspect public-symbol,
   dependency, secret, platform, and diff boundaries.
 - Recheck only the frozen discovery-2 blocker IDs and direct changed-line
-  Critical/High regressions during closure; record closure 1/5.
+  Critical/High regressions during closure; record closure 2/5.
 
 Affected paths: exact PR diff and CI/verification artifacts.
 

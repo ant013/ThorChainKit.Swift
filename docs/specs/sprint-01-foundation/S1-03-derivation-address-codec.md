@@ -1,6 +1,6 @@
 # S1-03 — Account Derivation and Address Codec
 
-**Status:** revision 3 after discovery-2 adversarial REVISE; frozen blocker allowlist is being closed by documentation only. Implementation remains blocked pending closure review and approval.
+**Status:** revision 4 after closure-1 adversarial REVISE; frozen blocker allowlist is being closed by documentation only. Implementation remains blocked pending closure review and approval.
 **Risk:** high/cryptographic boundary.
 **Observable outcome:** an independent seed/public-key vector produces the expected THORChain address; checksum, payload length, mixed case, and wrong-network HRP are rejected before any network/signing call.
 
@@ -64,9 +64,11 @@ Tests/ThorChainKitTests/AddressCodecTests.swift
 Tests/ThorChainKitTests/Fixtures/AddressVectors.json
 iOS Example/Sources/Presentation/AddressViewModel.swift
 iOS Example/Sources/Views/AddressView.swift
+iOS Example/Sources/ThorChainExampleApp.swift
 .maestro/flows/02-address-codec.yaml
 .maestro/S1-03-analog-manifest.txt
 Scripts/verify-s1-03.sh
+Scripts/test-s1-03-mutants.sh
 Tests/ThorChainKitTests/Fixtures/S1-03-public-symbols.txt
 Tests/ThorChainKitTests/Fixtures/S1-03-tests.txt
 Tests/ThorChainKitTests/Fixtures/S1-03-dependency-revisions.txt
@@ -134,11 +136,12 @@ does not derive a private key and the public factory does not accept a path.
 
 The operational consumer is the later host adapter
 `AccountAddress.thorChainAddress(account:)`: it passes
-`DerivationPath.defaultAccount.rawValue` to the existing HdWalletKit path
-contract and passes only the resulting compressed public key to the kit. The
-S1-03 contract test asserts the exact raw value and records this adapter call
-shape; the host adapter must not silently substitute account, chain, index, or
-coin type.
+`DerivationPath.defaultAccount.rawValue` to the pinned HdWalletKit
+`privateKey(path:)` contract, converts that key to a secp256k1 public key, and
+passes only the resulting compressed public key to the kit. The S1-03 contract
+test asserts the exact raw value and the host call shape below; the host adapter
+must not independently construct a path from account, chain, index, or coin
+type literals.
 
 `AddressCodec.decode` delegates directly to the fail-closed
 `Address.init(_:, network:)` delivered in S1-01. S1-03 adds the public
@@ -166,6 +169,19 @@ S1-03 changes `Package.swift`:
 .product(name: "HsCryptoKit", package: "HsCryptoKit.Swift"),
 .product(name: "secp256k1", package: "secp256k1.swift")
 ```
+
+`Tests/ThorChainKitTests/Fixtures/S1-03-dependency-revisions.txt` has this
+exact, order-independent package/repository/revision set; the verifier fails
+if a package is missing, added, or paired with any other revision:
+
+```text
+hscryptokit.swift|https://github.com/horizontalsystems/HsCryptoKit.Swift.git|1.3.2|7c11ad0e690cbb178a70f3b9d1116d0a37a51a41
+secp256k1.swift|https://github.com/GigaBitcoin/secp256k1.swift.git|0.10.0|48fb20fce4ca3aad89180448a127d5bc16f0e44c
+```
+
+The implementation verifier compares package identity, repository URL, pinned
+version, and resolved revision from `Package.resolved` against these literal
+rows; changing both the lockfile and fixture together is rejected.
 
 In S1-06, private derivation is performed in `AccountAddress.thorChainAddress(account:)` through the existing HdWalletKit, after which the compressed public key is passed to `ThorChainKit`.
 
@@ -226,12 +242,12 @@ fails if S1-03 adds any new static initialization or trap path.
 
 ## Analog Delta
 
-| Source (pinned commit) | Path and role | Use | Do not use |
-|---|---|---|---|
-| HdWalletKit `163b4e253aa763babeb6d14f246e1d81cfa0473e` | `Sources/HdWalletKit/HDWallet.swift:4-49`, `HDKeychain.swift:37-59`; primary host path/lifecycle analog | host-side purpose/coin/path derivation contract | dependency or wallet object inside ThorChainKit |
-| HsCryptoKit `7c11ad0e690cbb178a70f3b9d1116d0a37a51a41` | `Sources/HsCryptoKit/Crypto.swift:72-107,194-209`; crypto/hash support | SHA256/RIPEMD160 and public-key support | private-key convenience ownership or signing |
-| BitcoinCore `5b49f424f495904cf06519b1a7b861ef37b45b50` | `Sources/BitcoinCore/Bech32.swift:14-147,188-205`; checksum counter-reference | classic polymod/checksum/charset reference | SegWit witness version/program rules |
-| Vultisig iOS `d3123dbe6ef1103937c272a8b1cd81f613af0acc` | `VultisigApp/VultisigAppTests/Chains/PublicKeyTest.swift:11-19`; THOR-specific public vector support | path/public-key vector support | WalletCore opaque derivation, TSS helper, duplicate validators |
+| Source (pinned commit) | Repository URL | Path and role | Use | Do not use |
+|---|---|---|---|---|
+| HdWalletKit `163b4e253aa763babeb6d14f246e1d81cfa0473e` | `https://github.com/horizontalsystems/HdWalletKit.Swift.git` | `Sources/HdWalletKit/HDWallet.swift:4-49`, `HDKeychain.swift:37-59`; primary host path/lifecycle analog | host-side purpose/coin/path derivation contract | dependency or wallet object inside ThorChainKit |
+| HsCryptoKit `7c11ad0e690cbb178a70f3b9d1116d0a37a51a41` | `https://github.com/horizontalsystems/HsCryptoKit.Swift.git` | `Sources/HsCryptoKit/Crypto.swift:72-107,194-209`; crypto/hash support | SHA256/RIPEMD160 and public-key support | private-key convenience ownership or signing |
+| BitcoinCore `5b49f424f495904cf06519b1a7b861ef37b45b50` | `https://github.com/horizontalsystems/BitcoinCore.Swift.git` | `Sources/BitcoinCore/Bech32.swift:14-147,188-205`; checksum counter-reference | classic polymod/checksum/charset reference | SegWit witness version/program rules |
+| Vultisig iOS `d3123dbe6ef1103937c272a8b1cd81f613af0acc` | `https://github.com/vultisig/vultisig-ios.git` | `VultisigApp/VultisigAppTests/Chains/PublicKeyTest.swift:11-19`; THOR-specific public vector support | path/public-key vector support | WalletCore opaque derivation, TSS helper, duplicate validators |
 
 The committed analog manifest must reproduce these repository URLs, commits,
 paths, and roles. A changed analog commit is a design revision, not an
@@ -357,8 +373,26 @@ before accepting any vector.
   package/import/source closure, resolved dependency revisions, and public-only
   iOS 13 consumer are enforced by `Scripts/verify-s1-03.sh`.
 
+`S1-03-fuzz-seed.txt` is an exact four-line UTF-8 fixture, not a descriptive
+placeholder:
+
+```text
+version=1
+algorithm=splitmix64
+seed=0x534c30332d46555a
+count=1024
+```
+
+Each case derives one 20-byte payload from the next deterministic SplitMix64
+outputs, and the test must replay the same sequence with
+`swift test --filter AddressCodecTests.testDeterministicFuzzReplay`. The
+verifier rejects a missing/duplicate field, a seed outside the unsigned
+64-bit range, a count below `1024`, or any alternate generator/encoding.
+
 ### Example/Maestro Acceptance
 
+`ThorChainExampleApp.swift` owns the existing `ExampleRuntime` instance and
+passes it through the root navigation destination to `AddressView`;
 `AddressViewModel` and `AddressView` accept a public compressed-key fixture or
 watch-only address, but not a mnemonic/seed. They extend the SwiftUI + Combine
 Example and import no UIKit. The Xcode project must contain the new files in
@@ -380,12 +414,51 @@ prefix-only, bypass, and unreachable-fixture mutants must fail.
 The S1-03 verifier directly includes the recursive platform-boundary checks,
 the exact test/symbol/dependency/source closure, and the runner/manifest/CI
 updates needed to make the three-flow S1-01 → S1-02 → S1-03 Maestro sequence
-reachable. `Scripts/verify-s1-02-ci-policy.sh` remains the cumulative CI
-authority: its expected workflow block is updated in the same implementation
-change and must still prove the prior two flows before S1-03. The exact
+reachable. The implementation changes exactly
+`.maestro/config.yaml`, `Scripts/run-maestro.sh`,
+`Scripts/test-run-maestro.sh`, `.github/workflows/ci.yml`, and
+`Scripts/verify-s1-02-ci-policy.sh` together with the S1-03 verifier. The
 manifest contains exactly `00-launch-foundation.yaml`,
 `01-endpoint-policy.yaml`, and `02-address-codec.yaml`; `run-maestro.sh`
 accepts exactly `s1-01`, `s1-02`, and `s1-03`.
+
+The expected CI contract is literal: the existing exact-head preflight and
+pinned tool setup remain unchanged, then the following two steps appear
+exactly once, with no additional job or flow:
+
+```yaml
+- name: Verify package and S1-03 contract
+  env:
+    EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+  run: |
+    set -euo pipefail
+    Scripts/verify-s1-02-ci-policy.sh steady-state --ref "$(git rev-parse HEAD)"
+    swift build
+    swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
+    swift test
+    Scripts/verify-s1-02.sh
+    Scripts/verify-s1-03.sh --expected-base 7fd9663442a0e6dcd9c01c4ab04d35f3abd96fc4 --expected-head "$EXPECTED_HEAD_SHA"
+    Scripts/test-s1-03-mutants.sh
+- name: Run fixture acceptance
+  run: |
+    set -euo pipefail
+    : "${THORCHAIN_SIMULATOR_UDID:?exact simulator selection missing}"
+    export THORCHAIN_SIMULATOR_UDID
+    Scripts/run-maestro.sh s1-01
+    Scripts/run-maestro.sh s1-02
+    Scripts/run-maestro.sh s1-03
+```
+
+`Scripts/verify-s1-02-ci-policy.sh` must compare that complete expected block
+and reject omission, reordering, or an additional job/flow.
+
+`Scripts/test-s1-03-mutants.sh` is the named executable fail-closed harness.
+Its command is run from the repository root and must mutate each of
+`ThorChainExampleApp` navigation, the view-model factory call, fixture output,
+the displayed error, and the full-address assertion; every mutant must make
+the verifier or Maestro acceptance command fail. Static-output, hard-coded
+error, factory-bypass, prefix-only, and unreachable-fixture mutants are never
+accepted as test substitutes.
 
 Its local recipe requires literal `--expected-base` and `--expected-head`
 arguments, checks `git rev-parse HEAD`, `git rev-parse origin/main`,
@@ -398,7 +471,10 @@ fallback.
 
 The S1-06 integration fixture calls `AccountAddress.thorChainAddress(account:)` twice before/after app reconstruction and asserts an identical canonical address. It must not compare only the prefix; the full expected fixture address is required.
 
-Host derivation is pinned to the exact current HdWalletKit contract:
+Host derivation is pinned to the exact current HdWalletKit contract. The raw
+path is the only derivation input; `privateKey(path:)` consumes the validated
+S1-03 value, so the host cannot silently drift by changing separate account,
+chain, index, or coin-type literals:
 
 ```swift
 let wallet = HDWallet(
@@ -408,12 +484,18 @@ let wallet = HDWallet(
     purpose: .bip44,
     curve: .secp256k1
 )
+let path = DerivationPath.defaultAccount.rawValue
 let compressedPublicKey = try wallet
-    .publicKey(account: 0, index: 0, chain: .external)
+    .privateKey(path: path)
+    .publicKey(curve: .secp256k1)
     .raw
 ```
 
-Changing `xPrivKey`, account, index, chain, or curve is a fixture-breaking design change, not an implementation detail.
+The host test asserts `path == "m/44'/931'/0'/0/0"` and the adapter source
+contains the `privateKey(path: path)` call. Changing `xPrivKey`, the validated
+path, or curve is a fixture-breaking design change, not an implementation
+detail; the constructor's `coinType: 931` and `purpose: .bip44` remain pinned
+to the same contract but cannot override the explicit raw path.
 
 ## Slice-versioned contract gates
 
