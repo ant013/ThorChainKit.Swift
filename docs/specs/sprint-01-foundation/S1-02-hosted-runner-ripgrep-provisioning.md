@@ -1,13 +1,24 @@
 # S1-02 — Hosted runner ripgrep provisioning
 
-Status: design revision 11, spec-only. Revision 7 remains the frozen
+Status: design revision 12, spec-only. Revision 7 remains the frozen
 ripgrep-provisioning design and exact-head CR/QA baseline; revisions 8 and 9's
 Maestro diagnosis and selector evidence are preserved. This revision replaces
 revision 9's impossible local iOS 26.2 prerequisite with deterministic
 verifier/mutant proof and one post-implementation hosted acceptance gate.
-It incorporates the closure-3/5 review corrections for hosted version evidence,
+It incorporates the closure-4/5 correction for hosted-log normalization plus the
+closure-3/5 review corrections for hosted version evidence,
 post-provisioning shadowing, and committed-path hygiene. Explicit user approval
 is required before any recovery implementation.
+
+## Revision 12 review correction
+
+Closure 4/5 identified that `gh run view --log` prefixes payload lines with job,
+step, timestamp, and ANSI/source text, so the prior column-zero assertions could
+not parse the artifact they required. This revision changes only the
+implementation-phase evidence extraction: obtain the selected job's raw log,
+strip ANSI escapes, extract only the declared evidence fields into a normalized
+payload, and assert the normalized payload. The implementation boundary and
+approval gate are unchanged.
 
 ## Revision 11 review correction
 
@@ -307,24 +318,31 @@ git diff --check <implementation-base>...<implementation-head>
 Scripts/verify-s1-02-ci-policy.sh steady-state --ref "$(git rev-parse HEAD)"
 Scripts/verify-s1-02.sh
 gh workflow run CI --ref <same-repository-feature-branch> -f pr_number=<PR> -f expected_head_sha=<exact-head> -f confirmation=FINAL_S1_02_GATE
-gh run view <run-id> --log > <full-hosted-log>
-gh api repos/<owner>/<repo>/actions/runs/<run-id> \
-  --jq '{id,head_sha,head_branch,event,status,conclusion,workflow_id,run_attempt}' > <run-fields-json>
-rg -n 'workflow_ref=|workflow_sha=|event_sha=|pr_head_sha=|checkout_sha=|PASS verify-s1-02-test-discovery' <full-hosted-log>
-test "$(rg -c '^rg_version_line=ripgrep 15\.2\.0 \(rev [0-9a-f]+\)$' <full-hosted-log>)" = 1
+job_id=$(gh api repos/<owner>/<repo>/actions/runs/<run-id>/jobs --paginate \
+  --jq '.jobs[] | select(.name == "s1-02") | .id')
+test "$(printf '%s\n' "$job_id" | sed '/^$/d' | wc -l | tr -d ' ')" = 1
+gh api repos/<owner>/<repo>/actions/jobs/"$job_id"/logs > <raw-hosted-job-log>
+sed -E $'s/\033\\[[0-9;]*[[:alpha:]]//g' <raw-hosted-job-log> |
+  rg -o 'rg_version_line=ripgrep 15\.2\.0 \(rev [0-9a-f]+\)|workflow_sha=[0-9a-f]{40}|event_sha=[0-9a-f]{40}|pr_head_sha=[0-9a-f]{40}|checkout_sha=[0-9a-f]{40}' \
+  > <normalized-hosted-fields>
+test "$(rg -c '^rg_version_line=ripgrep 15\.2\.0 \(rev [0-9a-f]+\)$' <normalized-hosted-fields>)" = 1
 jq -e --arg approved '<exact-head>' '.head_sha == $approved and .conclusion == "success"' <run-fields-json>
 for field in workflow_sha event_sha pr_head_sha checkout_sha; do
-  test "$(rg -c "^${field}=<exact-head>$" <full-hosted-log>)" = 1
-  test "$(awk -F= -v key="$field" '$1 == key {print $2; found=1; exit} END {if (!found) exit 1}' <full-hosted-log)" = '<exact-head>'
+  test "$(rg -c "^${field}=<exact-head>$" <normalized-hosted-fields>)" = 1
+  test "$(awk -F= -v key="$field" '$1 == key {print $2; found=1; exit} END {if (!found) exit 1}' <normalized-hosted-fields)" = '<exact-head>'
 done
 ```
 
 The hosted result must cite workflow SHA, event SHA, PR head, checkout SHA, and
 run `head_sha`; each recorded SHA must be compared explicitly with the approved
-exact head, and the run conclusion must be successful. The full log must show
-successful `rg --version` and unchanged S1-02 discovery output. A push after
-the run, or any change to the reviewed head, invalidates the run and all local
-review/QA attestations; repeat them against the new exact head.
+exact head, and the run conclusion must be successful. The raw selected-job log
+is the source artifact; ANSI removal and the bounded `rg -o` extraction are the
+deterministic normalization step, so job/step/timestamp prefixes cannot prevent
+parsing. The normalized payload must contain exactly one validated
+`rg_version_line` and exactly one matching SHA field for each key. The raw log
+must also show unchanged S1-02 discovery output. A push after the run, or any
+change to the reviewed head, invalidates the run and all local review/QA
+attestations; repeat them against the new exact head.
 
 ## Adversarial review and open questions
 
