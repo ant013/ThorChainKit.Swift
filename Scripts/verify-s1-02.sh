@@ -126,6 +126,7 @@ live_tool_dir=$(mktemp -d)
 trap 'rm -f "$expected_sources" "$actual_sources" "$actual_tests" "$actual_symbols"; rm -rf "$symbol_dir" "$live_tool_dir"' EXIT
 
 cat > "$expected_sources" <<'EOF'
+Sources/ThorChainKit/Address/AddressCodec.swift
 Sources/ThorChainKit/Address/AddressError.swift
 Sources/ThorChainKit/Address/Bech32Codec.swift
 Sources/ThorChainKit/Address/BitConversion.swift
@@ -134,6 +135,11 @@ Sources/ThorChainKit/Core/KitConfigurationError.swift
 Sources/ThorChainKit/Core/KitDependencies.swift
 Sources/ThorChainKit/Core/KitFactory.swift
 Sources/ThorChainKit/Core/TestingEndpointPolicySession.swift
+Sources/ThorChainKit/Crypto/AccountAddressDeriving.swift
+Sources/ThorChainKit/Crypto/AccountAddressFactory.swift
+Sources/ThorChainKit/Crypto/CosmosAccountAddressDeriver.swift
+Sources/ThorChainKit/Crypto/DerivationPath.swift
+Sources/ThorChainKit/Crypto/Secp256k1PublicKeyValidator.swift
 Sources/ThorChainKit/Models/AccountState.swift
 Sources/ThorChainKit/Models/Address.swift
 Sources/ThorChainKit/Models/Denom.swift
@@ -218,6 +224,7 @@ sdk_dir=$(xcrun --sdk macosx --show-sdk-path)
 xcrun swift-symbolgraph-extract \
     -module-name ThorChainKit \
     -I "$bin_dir/Modules" \
+    -Xcc -fmodule-map-file="$bin_dir/secp256k1_bindings.build/module.modulemap" \
     -target "$target_triple" \
     -sdk "$sdk_dir" \
     -minimum-access-level public \

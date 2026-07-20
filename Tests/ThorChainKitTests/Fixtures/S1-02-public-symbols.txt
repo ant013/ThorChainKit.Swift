@@ -1,10 +1,17 @@
 swift.class	Kit	final class Kit
+swift.enum	AccountAddressError	enum AccountAddressError
+swift.enum	AccountAddressFactory	enum AccountAddressFactory
 swift.enum	AddressError	enum AddressError
+swift.enum	DerivationPathError	enum DerivationPathError
 swift.enum	EndpointConfigurationError	enum EndpointConfigurationError
 swift.enum	KitConfigurationError	enum KitConfigurationError
 swift.enum	Network.Environment	enum Environment
 swift.enum	SyncError	enum SyncError
 swift.enum	SyncState	enum SyncState
+swift.enum.case	AccountAddressError.invalidCompressedPublicKeyLength(_:)	case invalidCompressedPublicKeyLength(Int)
+swift.enum.case	AccountAddressError.invalidCompressedPublicKeyPrefix(_:)	case invalidCompressedPublicKeyPrefix(UInt8)
+swift.enum.case	AccountAddressError.invalidSecp256k1Point	case invalidSecp256k1Point
+swift.enum.case	AccountAddressError.secp256k1ContextUnavailable	case secp256k1ContextUnavailable
 swift.enum.case	AddressError.empty	case empty
 swift.enum.case	AddressError.invalidCharacter(_:)	case invalidCharacter(Character)
 swift.enum.case	AddressError.invalidChecksum	case invalidChecksum
@@ -14,6 +21,13 @@ swift.enum.case	AddressError.missingSeparator	case missingSeparator
 swift.enum.case	AddressError.mixedCase	case mixedCase
 swift.enum.case	AddressError.tooLong	case tooLong
 swift.enum.case	AddressError.wrongHrp(expected:actual:)	case wrongHrp(expected: String, actual: String)
+swift.enum.case	DerivationPathError.invalidAccount	case invalidAccount
+swift.enum.case	DerivationPathError.invalidChain	case invalidChain
+swift.enum.case	DerivationPathError.invalidCoinType	case invalidCoinType
+swift.enum.case	DerivationPathError.invalidComponentCount	case invalidComponentCount
+swift.enum.case	DerivationPathError.invalidIndex	case invalidIndex
+swift.enum.case	DerivationPathError.invalidPurpose	case invalidPurpose
+swift.enum.case	DerivationPathError.malformedComponent	case malformedComponent
 swift.enum.case	EndpointConfigurationError.duplicateFamilyId(_:)	case duplicateFamilyId(String)
 swift.enum.case	EndpointConfigurationError.emptyFamilies	case emptyFamilies
 swift.enum.case	EndpointConfigurationError.insecureURL	case insecureURL
@@ -39,11 +53,15 @@ swift.enum.case	SyncState.notSynced(_:cached:)	case notSynced(SyncError, cached:
 swift.enum.case	SyncState.synced(_:)	case synced(AccountState)
 swift.enum.case	SyncState.syncing(previous:)	case syncing(previous: AccountState?)
 swift.init	Address.init(_:network:)	init(_ raw: String, network: Network) throws
+swift.init	AddressCodec.init()	init()
 swift.init	Denom.init(rawValue:)	init(rawValue: String) throws
+swift.init	DerivationPath.init(_:)	init(_ raw: String) throws
 swift.init	EndpointConfiguration.init(families:clientId:requestTimeout:policy:)	init(families: [EndpointFamilyDescriptor], clientId: String? = nil, requestTimeout: TimeInterval = 15, policy: EndpointPolicy = .default) throws
 swift.init	EndpointFamilyDescriptor.init(id:cosmosRestURL:cometBftURL:)	init(id: String, cosmosRestURL: URL, cometBftURL: URL) throws
 swift.init	EndpointPolicy.init(maximumHeightLag:identityRevalidationInterval:retryableStatusCodes:maximumAttempts:maximumBalancePageCount:)	init(maximumHeightLag: Int64 = 5, identityRevalidationInterval: TimeInterval = 300, retryableStatusCodes: Set<Int> = [408, 429, 502, 503, 504], maximumAttempts: Int? = nil, maximumBalancePageCount: Int = 100) throws
 swift.init	Network.Environment.init(rawValue:)	init?(rawValue: String)
+swift.method	AddressCodec.decode(_:network:)	func decode(_ string: String, network: Network) throws -> Address
+swift.method	AddressCodec.encode(payload:network:)	func encode(payload: Data, network: Network) throws -> Address
 swift.method	Kit.refresh()	func refresh()
 swift.method	Kit.start()	func start()
 swift.method	Kit.stop()	func stop()
@@ -58,6 +76,7 @@ swift.property	Address.description	var description: String { get }
 swift.property	Address.network	let network: Network
 swift.property	Address.raw	let raw: String
 swift.property	Denom.rawValue	let rawValue: String
+swift.property	DerivationPath.rawValue	let rawValue: String
 swift.property	EndpointConfiguration.clientId	let clientId: String?
 swift.property	EndpointConfiguration.effectiveMaximumAttempts	var effectiveMaximumAttempts: Int { get }
 swift.property	EndpointConfiguration.families	let families: [EndpointFamilyDescriptor]
@@ -87,14 +106,18 @@ swift.property	Network.environment	let environment: Network.Environment
 swift.property	Network.expectedChainId	let expectedChainId: String
 swift.struct	AccountState	struct AccountState
 swift.struct	Address	struct Address
+swift.struct	AddressCodec	struct AddressCodec
 swift.struct	Denom	struct Denom
+swift.struct	DerivationPath	struct DerivationPath
 swift.struct	EndpointConfiguration	struct EndpointConfiguration
 swift.struct	EndpointFamilyDescriptor	struct EndpointFamilyDescriptor
 swift.struct	EndpointPolicy	struct EndpointPolicy
 swift.struct	Network	struct Network
+swift.type.method	AccountAddressFactory.address(compressedPublicKey:network:)	static func address(compressedPublicKey: Data, network: Network) throws -> Address
 swift.type.method	Kit.instance(address:walletId:endpoints:)	static func instance(address: Address, walletId: String, endpoints: EndpointConfiguration) throws -> Kit
 swift.type.method	Network.chainnet(expectedChainId:)	static func chainnet(expectedChainId: String) throws -> Network
 swift.type.method	Network.stagenet(expectedChainId:)	static func stagenet(expectedChainId: String) throws -> Network
 swift.type.property	Denom.rune	static let rune: Denom
+swift.type.property	DerivationPath.defaultAccount	static let defaultAccount: DerivationPath
 swift.type.property	EndpointPolicy.default	static let `default`: EndpointPolicy
 swift.type.property	Network.mainnet	static let mainnet: Network

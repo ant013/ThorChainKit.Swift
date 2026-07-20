@@ -1,0 +1,27 @@
+{
+  "vectors": [
+    {
+      "id": "vultisig-thorchain-public-key",
+      "path": "m/44'/931'/0'/0/0",
+      "publicKey": "02a9ac9f7a97da41559e1684011b6a9b0b9c0445297d5f51dea0897fd4a39c31c7",
+      "hash160": "5a0dba49dab8fec87c6dd7c01b564ee72a8515a6",
+      "mainnetAddress": "thor1tgxm5jw6hrlvslrd6lqpk4jwuu4g29dxytrean",
+      "provenance": {
+        "publicKeySource": "https://github.com/vultisig/vultisig-ios.git",
+        "publicKeyCommit": "d3123dbe6ef1103937c272a8b1cd81f613af0acc",
+        "publicKeyPath": "VultisigApp/VultisigAppTests/Chains/PublicKeyTest.swift:11-19",
+        "hashSource": "HsCryptoKit 7c11ad0e690cbb178a70f3b9d1116d0a37a51a41 plus independent Python hashlib/OpenSSL calculation",
+        "addressSource": "independent classic Bech32 calculation from the bound hash160 payload"
+      }
+    }
+  ],
+  "negativeCases": [
+    "wrong compressed-key length",
+    "wrong compressed-key prefix",
+    "off-curve compressed-key x-coordinate",
+    "wrong HRP",
+    "mixed case",
+    "checksum mutation",
+    "invalid payload length"
+  ]
+}

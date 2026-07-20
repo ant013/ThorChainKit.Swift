@@ -1,0 +1,4 @@
+HdWalletKit|https://github.com/horizontalsystems/HdWalletKit.Swift.git|163b4e253aa763babeb6d14f246e1d81cfa0473e|Sources/HdWalletKit/HDWallet.swift:4-49;Sources/HdWalletKit/HDKeychain.swift:37-59|host path/lifecycle analog
+HsCryptoKit|https://github.com/horizontalsystems/HsCryptoKit.Swift.git|7c11ad0e690cbb178a70f3b9d1116d0a37a51a41|Sources/HsCryptoKit/Crypto.swift:72-107,194-209|hash and public-key support
+BitcoinCore|https://github.com/horizontalsystems/BitcoinCore.Swift.git|5b49f424f495904cf06519b1a7b861ef37b45b50|Sources/BitcoinCore/Classes/SegWit/Bech32.swift:14-147,188-205|classic checksum counter-reference
+Vultisig|https://github.com/vultisig/vultisig-ios.git|d3123dbe6ef1103937c272a8b1cd81f613af0acc|VultisigApp/VultisigAppTests/Chains/PublicKeyTest.swift:11-19|THOR public-key vector support

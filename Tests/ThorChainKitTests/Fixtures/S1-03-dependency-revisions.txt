@@ -1,0 +1,8 @@
+# inherited-s1-01
+bigint|https://github.com/attaswift/BigInt.git|5.7.0|e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe
+
+# s1-03-closure
+hscryptokit.swift|https://github.com/horizontalsystems/HsCryptoKit.Swift.git|1.3.2|7c11ad0e690cbb178a70f3b9d1116d0a37a51a41
+hsextensions.swift|https://github.com/horizontalsystems/HsExtensions.Swift.git|1.0.6|0012014f98ae81ffb89b0d3a2e9c204559e1c278
+secp256k1.swift|https://github.com/GigaBitcoin/secp256k1.swift.git|0.10.0|48fb20fce4ca3aad89180448a127d5bc16f0e44c
+swift-crypto|https://github.com/apple/swift-crypto.git|2.6.0|60f13f60c4d093691934dc6cfdf5f508ada1f894

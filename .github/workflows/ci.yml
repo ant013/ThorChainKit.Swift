@@ -159,3 +159,9 @@ jobs:
           export THORCHAIN_SIMULATOR_UDID
           Scripts/run-maestro.sh s1-01
           Scripts/run-maestro.sh s1-02
+      - name: Verify S1-03 derivation and address codec
+        run: |
+          set -euo pipefail
+          Scripts/verify-s1-03.sh
+      - name: Run S1-03 fixture acceptance
+        run: Scripts/run-maestro.sh s1-03
