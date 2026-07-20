@@ -1,8 +1,8 @@
 # S1-02 — Hosted runner ripgrep provisioning
 
-Status: design revision 5, spec-only. Revision 4 is superseded by this
-current-tree and verification-contract correction. Explicit user approval is
-required before workflow or verifier implementation.
+Status: design revision 6, spec-only. Revision 5 is superseded by this
+current-tree boundary reconciliation. Explicit user approval is required
+before workflow or verifier implementation.
 
 ## Goal and assumptions
 
@@ -15,10 +15,13 @@ failed with `rg: command not found`.
 
 Current-tree boundary: the pinned ripgrep provisioning block already exists at
 `.github/workflows/ci.yml:78-94` and its exact-block checks already exist in
-`Scripts/verify-s1-02-ci-policy.sh:77-207`. This spec does not authorize
-re-adding or redesigning that block. The remaining implementation delta is the
-policy invocation move plus exact workflow-order, exact-SHA, and no-shadowing
-guards.
+`Scripts/verify-s1-02-ci-policy.sh:77-207`. Preserve its pinned URL, digest,
+architecture guard, staging, extraction order, PATH ownership, and consumer
+position. This revision authorizes only the minimal tightening of the existing
+version assertion needed for explicit command-status capture and exact first
+line matching; it does not authorize re-adding or otherwise redesigning the
+block. The remaining implementation delta is the policy invocation move plus
+exact workflow-order, exact-SHA, and no-shadowing guards.
 
 Assumptions: `macos-26` is Apple Silicon, but implementation must assert
 `uname -m == arm64` and fail closed otherwise; the official ripgrep 15.2.0
@@ -42,7 +45,7 @@ separate approved asset and design.
 
 | Path | Decision |
 |---|---|
-| `.github/workflows/ci.yml` | Move the existing exact-SHA policy command to the first line of `Verify package and S1-02 contract`; preserve the existing provisioning block byte-for-byte. |
+| `.github/workflows/ci.yml` | Move the existing exact-SHA policy command to the first line of `Verify package and S1-02 contract`; preserve the existing pinned provisioning behavior and tighten only its version assertion as specified. |
 | `Scripts/verify-s1-02-ci-policy.sh` | Extend the existing policy authority with the exact command-block assertion, late-order mutants, exact-SHA binding, and no-shadowing guard. |
 | `Scripts/verify-s1-02.sh` | Unchanged consumer; its `swift test list | rg | sort` pipeline remains the acceptance probe. |
 | This spec | Normative implementation and verification contract. |
@@ -82,7 +85,8 @@ rg_version_line="${rg_version_output%%$'\n'*}"
 ## Proposed workflow shape
 
 Retain the existing pinned provisioning step immediately before the package/S1-02
-contract step; do not add, duplicate, or redesign it. Within that existing
+contract step; do not add or duplicate it, and apply only the minimal version
+assertion tightening specified above. Within that existing
 contract step, the exact-SHA policy gate must be the first command, before any
 build, test, or product-verifier command:
 
@@ -153,7 +157,7 @@ verifier must remain fail-closed and SHA-bound.
 |---|---|---|---|
 | Responsibility | Current tree already provisions a pinned hosted CLI. | Move policy validation before product commands and prove the verified binary cannot be shadowed. | Rewriting the verifier to use `grep` hides the missing dependency. |
 | Boundary | Workflow owns host setup; the existing CI-policy verifier owns workflow-policy assertions; product verification remains separate. | Move one existing workflow command and extend the existing policy verifier only. | Re-adding the provisioning block or adding a new script fragments policy ownership. |
-| Lifecycle | Existing order is download, checksum, extract, version, PATH. | Preserve the block byte-for-byte; reject later installs/PATH shadowing and non-exact version checks. | PATH before verification or a later override could execute wrong bytes. |
+| Lifecycle | Existing order is download, checksum, extract, version, PATH. | Preserve the pinned asset, order, and ownership; minimally tighten version status/first-line matching and reject later installs/PATH shadowing. | PATH before verification or a later override could execute wrong bytes. |
 | Dependencies/trust | Maestro uses a literal URL and SHA-256 before extraction. | Pin version, URL, and exact digest. | Homebrew or `latest` adds mutable host drift. |
 | Failure behavior | Checksum failure stops the shell step. | Download, digest, archive, architecture, and version failures fail closed. | Continuing after checksum failure is unsafe. |
 | Consumer/test seam | `Scripts/verify-s1-02.sh:206-210` is the actual consumer and `Scripts/verify-s1-02-ci-policy.sh` is the existing policy authority. | Require the exact block and ordering in the policy verifier, then reach the exact allowlist comparison. | Version-only checking or a second script misses/removes the durable regression guard. |
@@ -183,8 +187,9 @@ verifier must remain fail-closed and SHA-bound.
 ## Acceptance criteria
 
 1. The only implementation paths changed are `.github/workflows/ci.yml` and
-   `Scripts/verify-s1-02-ci-policy.sh`; no new script is added, and the
-   existing provisioning block is not re-added or redesigned.
+   `Scripts/verify-s1-02-ci-policy.sh`; no new script is added, the existing
+   provisioning block is not re-added, and only its version assertion receives
+   the minimal tightening specified above.
 2. URL, version, archive name, and digest match the official 15.2.0 asset.
 3. Non-arm64, download/checksum/extract, missing-binary, command-substitution,
    and exact-version failures fail closed; PATH is not updated before checksum
@@ -262,17 +267,20 @@ review/QA attestations; repeat them against the new exact head.
   bind it with `git rev-parse HEAD`. Workflow and verifier anchors remain
   present on the assigned branch, and the historical/current-head distinction
   is explicit without self-referentially embedding a commit hash.
-- **D-002 Supply chain — REVISED in revision 5; pending closure.** The official
+- **D-002 Supply chain — REVISED in revision 6; pending closure.** The official
   digest and verify-before-extract behavior remain fixed. The policy must also
   reject second ripgrep installs, ripgrep-specific PATH exports, PATH mutations
   that can shadow the verified directory before the consumer, command-status
-  failures, and inexact version matching.
-- **D-003 Minimum scope — REVISED in revision 5; pending closure.** The current
+  failures, and inexact version matching. The minimal version assertion
+  tightening is explicitly allowed in the existing block and its policy
+  fixture.
+- **D-003 Minimum scope — REVISED in revision 6; pending closure.** The current
   tree already contains the pinned provisioning block and its basic policy
   checks. The smallest remaining delta is moving the existing policy command
-  before product verification and adding exact workflow-order, exact-SHA, and
-  no-shadowing assertions in the two existing implementation paths.
-- **D-004 Verification validity — REVISED in revision 5; pending closure.** The
+  before product verification, minimally tightening the existing version
+  assertion, and adding exact workflow-order, exact-SHA, and no-shadowing
+  assertions in the two existing implementation paths.
+- **D-004 Verification validity — REVISED in revision 6; pending closure.** The
   policy gate is required before build, test, and the actual failing `rg`
   pipeline. Separate mutants move it after each build, test, and consumer
   command, and replace the exact SHA expression with symbolic `HEAD`; every
@@ -299,7 +307,7 @@ provisioning is absent must not be used as a current-tree claim. Current-tree
 presence and policy gaps are verified directly at the assigned head and must be
 rechecked at the exact pushed review head.
 
-This is the complete spec-only deliverable for THR-52 revision 5. The prior
+This is the complete spec-only deliverable for THR-52 revision 6. The prior
 hosted failure is recorded above, and symbolic `HEAD` is explicitly rejected
 as a policy input. Explicit user approval of this revision is required before
 workflow or verifier implementation.
