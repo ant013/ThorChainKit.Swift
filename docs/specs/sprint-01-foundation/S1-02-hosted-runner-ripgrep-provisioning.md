@@ -59,17 +59,20 @@ workflow-dispatch, build, test, and Maestro gates. The observed failure is run
 preflight, builds, and 42 tests passed, then `Scripts/verify-s1-02.sh:208`
 failed with `rg: command not found`.
 
-Current-tree boundary: the pinned ripgrep provisioning block already exists at
-`.github/workflows/ci.yml:78-94` and its exact-block checks already exist in
-`Scripts/verify-s1-02-ci-policy.sh:77-207`. Preserve its pinned URL, digest,
+Current-tree boundary: the pinned ripgrep provisioning block already exists in
+the workflow step named `Provision pinned ripgrep`, with exact-block checks
+owned by `verify_ripgrep_provisioning()` and `RIPGREP_PROVISION_BLOCK` in
+`Scripts/verify-s1-02-ci-policy.sh`. Preserve its pinned URL, digest,
 architecture guard, staging, extraction order, PATH ownership, and consumer
 position. This revision authorizes only the minimal tightening of the existing
 version assertion needed for explicit command-status capture and exact first
 line matching; it does not authorize re-adding or otherwise redesigning the
-block. The existing exact policy ordering is preserved and is not part of the
-recovery implementation delta. The remaining recovery work is runtime
-selection/identity logging plus matching runtime-selector mutants in the same
-two implementation paths.
+block. The existing exact policy ordering and simulator selector/identity work
+completed at implementation head `3ec8044` are preserved and are not part of
+the recovery implementation delta. The remaining post-approval work is only
+the F1 version emission/removal mutant and the F2 exact-allowed-interval,
+`$GITHUB_ENV` PATH-shadowing, and extracted-binary replacement checks in these
+same two implementation paths.
 
 Assumptions: `macos-26` is Apple Silicon, but implementation must assert
 `uname -m == arm64` and fail closed otherwise; the official ripgrep 15.2.0
@@ -318,31 +321,56 @@ git diff --check <implementation-base>...<implementation-head>
 Scripts/verify-s1-02-ci-policy.sh steady-state --ref "$(git rev-parse HEAD)"
 Scripts/verify-s1-02.sh
 gh workflow run CI --ref <same-repository-feature-branch> -f pr_number=<PR> -f expected_head_sha=<exact-head> -f confirmation=FINAL_S1_02_GATE
-job_id=$(gh api repos/<owner>/<repo>/actions/runs/<run-id>/jobs --paginate \
-  --jq '.jobs[] | select(.name == "s1-02") | .id')
-test "$(printf '%s\n' "$job_id" | sed '/^$/d' | wc -l | tr -d ' ')" = 1
-gh api repos/<owner>/<repo>/actions/jobs/"$job_id"/logs > <raw-hosted-job-log>
-sed -E $'s/\033\\[[0-9;]*[[:alpha:]]//g' <raw-hosted-job-log> |
-  rg -o 'rg_version_line=ripgrep 15\.2\.0 \(rev [0-9a-f]+\)|workflow_sha=[0-9a-f]{40}|event_sha=[0-9a-f]{40}|pr_head_sha=[0-9a-f]{40}|checkout_sha=[0-9a-f]{40}' \
-  > <normalized-hosted-fields>
-test "$(rg -c '^rg_version_line=ripgrep 15\.2\.0 \(rev [0-9a-f]+\)$' <normalized-hosted-fields>)" = 1
+gh api repos/<owner>/<repo>/actions/runs/<run-id> \
+  --jq '{id,head_sha,head_branch,event,status,conclusion,workflow_id,run_attempt}' > <run-fields-json>
+gh run view <run-id> --log > <full-hosted-log>
+set -euo pipefail
+sed -E $'s/\033\\[[0-9;]*[[:alpha:]]//g' <full-hosted-log> |
+  awk -F '\t' '
+    NF < 4 || $1 == "" || $2 == "" || $3 !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z$/ || $4 == "" {
+      printf "malformed hosted log prefix at line %d\\n", NR > "/dev/stderr"; exit 1
+    }
+    {
+      printf "%s", $4
+      for (i = 5; i <= NF; i++) printf "\\t%s", $i
+      print ""
+    }
+  ' > <normalized-hosted-log>
+rg -n 'workflow_ref=|workflow_sha=|event_sha=|pr_head_sha=|checkout_sha=|PASS verify-s1-02-test-discovery' <normalized-hosted-log>
+test "$(rg -c '^rg_version_line=ripgrep 15\.2\.0 \(rev [0-9a-f]+\)$' <normalized-hosted-log>)" = 1
 jq -e --arg approved '<exact-head>' '.head_sha == $approved and .conclusion == "success"' <run-fields-json>
 for field in workflow_sha event_sha pr_head_sha checkout_sha; do
-  test "$(rg -c "^${field}=<exact-head>$" <normalized-hosted-fields>)" = 1
-  test "$(awk -F= -v key="$field" '$1 == key {print $2; found=1; exit} END {if (!found) exit 1}' <normalized-hosted-fields)" = '<exact-head>'
+  test "$(rg -c "^${field}=[0-9a-f]{40}$" <normalized-hosted-log>)" = 1
+  test "$(rg -c "^${field}=<exact-head>$" <normalized-hosted-log>)" = 1
+  test "$(awk -F= -v key="$field" '$1 == key {print $2; found=1; exit} END {if (!found) exit 1}' <normalized-hosted-log)" = '<exact-head>'
 done
+printf '%s\t%s\t%s\t%s\n' s1-02 'Verify package and S1-02 contract' \
+  2026-07-21T00:00:00Z 'rg_version_line=ripgrep 15.2.0 (rev abcdef0)' > <prefix-fixture>
+printf '%s\n' 'rg_version_line=ripgrep 15.2.0 (rev abcdef0)' > <fixture-expected>
+sed -E $'s/\033\\[[0-9;]*[[:alpha:]]//g' <prefix-fixture> |
+  awk -F '\t' 'NF < 4 || $3 !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z$/ { exit 1 } { print $4 }' > <fixture-normalized>
+diff -u <fixture-expected> <fixture-normalized>
+printf '%s\t%s\n' s1-02 'malformed' > <malformed-fixture>
+if sed -E $'s/\033\\[[0-9;]*[[:alpha:]]//g' <malformed-fixture> | awk -F '\t' 'NF < 4 { exit 1 }'; then
+  printf 'malformed fixture unexpectedly passed\n' >&2; exit 1
+fi
 ```
 
 The hosted result must cite workflow SHA, event SHA, PR head, checkout SHA, and
 run `head_sha`; each recorded SHA must be compared explicitly with the approved
-exact head, and the run conclusion must be successful. The raw selected-job log
-is the source artifact; ANSI removal and the bounded `rg -o` extraction are the
-deterministic normalization step, so job/step/timestamp prefixes cannot prevent
-parsing. The normalized payload must contain exactly one validated
-`rg_version_line` and exactly one matching SHA field for each key. The raw log
-must also show unchanged S1-02 discovery output. A push after the run, or any
-change to the reviewed head, invalidates the run and all local review/QA
-attestations; repeat them against the new exact head.
+exact head, and the run conclusion must be successful. The full `gh run
+view --log` artifact is the source. ANSI removal followed by strict removal of
+exactly three tab-delimited fields—job, step, and UTC timestamp—is the
+deterministic normalization step. Any malformed or under-columned line fails
+visibly; fields are never silently invented. The normalized payload must
+contain exactly one validated `rg_version_line` and exactly one exact 40-hex
+value for each SHA key, with each value matching the approved head. The
+normalized log must also show unchanged S1-02 discovery output. A replay fixture
+with the demonstrated `s1-02<TAB>Verify package and S1-02
+contract<TAB><UTC timestamp><TAB><payload>` shape must pass, while a
+missing-tab or malformed-timestamp fixture must fail before assertions. A push
+after the run, or any change to the reviewed head, invalidates the run and all
+local review/QA attestations; repeat them against the new exact head.
 
 ## Adversarial review and open questions
 
@@ -355,24 +383,25 @@ attestations; repeat them against the new exact head.
   present on the assigned branch, and the historical/current-head distinction
   is explicit without self-referentially embedding a commit hash.
 - **D-002 Supply chain — CLOSED in revision 10.** Current-tree anchors are the
-  pinned provisioning block at `.github/workflows/ci.yml:78-96` and its policy
-  authority at `Scripts/verify-s1-02-ci-policy.sh:216-239,364-452`. The outcome
+  workflow step `Provision pinned ripgrep`, the policy constant
+  `RIPGREP_PROVISION_BLOCK`, and `verify_ripgrep_provisioning()` plus its
+  `RIPGREP_DOWNLOAD_RE`, `RIPGREP_PATH_RE`, and `PATH_MUTATION_RE` checks. The outcome
   is a fixed URL/digest, verify-before-extract, architecture/version checks,
   and rejection of second downloads or PATH shadowing. Residual backlog is
   limited to a separately approved asset decision if the runner architecture
   changes; it does not block this slice.
-- **D-003 Minimum scope — CLOSED in revision 10.** Current-tree anchors are
-  `.github/workflows/ci.yml:97-103` and
-  `Scripts/verify-s1-02-ci-policy.sh:97-105,455-489`. The existing exact policy
-  ordering is preserved; it is completed work at implementation base
-  `64575a9`. The only new implementation work is runtime selector/identity
-  logging plus matching runtime-selector mutants in these same two paths. No
-  new script, package path, trigger, secret, binary, or unrelated file is
+- **D-003 Minimum scope — CLOSED in revision 10.** Current-tree anchors are the
+  workflow steps `Select exact iOS 26.2 simulator` and `Verify package and S1-02
+  contract`, plus `verify_simulator_selection()` and the simulator mutant
+  entrypoint. The selector/identity work is completed at implementation head
+  `3ec8044`; only F1 version emission/removal-mutant work and F2 exact-interval,
+  PATH-shadowing, and extracted-binary replacement checks remain after approval.
+  No new script, package path, trigger, secret, binary, or unrelated file is
   authorized.
 - **D-004 Verification validity — CLOSED in revision 10.** Current-tree anchors
-  are the five-command workflow block at `.github/workflows/ci.yml:97-103` and
-  the policy/mutant entry points at
-  `Scripts/verify-s1-02-ci-policy.sh:252-339,455-512`. The outcome separates
+  are the five-command body of `Verify package and S1-02 contract` and the
+  policy/mutant entrypoints `run_contract_mutants()`,
+  `run_ripgrep_mutants()`, and `run_simulator_mutants()`. The outcome separates
   spec-review proof from the post-implementation gate: static and mutant
   checks must reject late policy execution and symbolic `HEAD` before product
   verification, while fresh exact-head CR/QA and one hosted run are required
@@ -657,8 +686,8 @@ provisioning is absent must not be used as a current-tree claim. Current-tree
 presence and policy gaps are verified directly at the assigned head and must be
 rechecked at the exact pushed review head.
 
-This is the complete spec-only deliverable for THR-52 revision 11. The prior
+This is the complete spec-only deliverable for THR-52 revision 12. The prior
 hosted ripgrep failure, local-pass/hosted-failure contrast, deterministic
 runtime-selector proof, one-run hosted gate, and recovery boundary are recorded
 above. Symbolic `HEAD` remains explicitly rejected as a policy input. Explicit
-user approval of revision 11 is required before any recovery implementation.
+user approval of revision 12 is required before any recovery implementation.
