@@ -9,6 +9,122 @@ fail() {
     exit 1
 }
 
+verify_platform_boundary() {
+    local root=${1:-$repository_root}
+    python3 - "$root" <<'PY' \
+        || fail "verify-s1-01-platform" "SwiftUI/Combine platform boundary mismatch"
+from pathlib import Path
+import re
+import sys
+
+root = Path(sys.argv[1])
+library = list((root / "Sources/ThorChainKit").rglob("*.swift"))
+example = list((root / "iOS Example/Sources").rglob("*.swift"))
+
+def require(condition, reason):
+    if not condition:
+        raise SystemExit(reason)
+
+def combined(paths):
+    return "\n".join(path.read_text() for path in paths)
+
+library_source = combined(library)
+example_source = combined(example)
+require("import UIKit" not in library_source and "import UIKit" not in example_source, "ui-import")
+require(not re.search(r"\b(UIApplicationDelegate|UIWindow|UIViewController|UIViewRepresentable|UIViewControllerRepresentable)\b", example_source), "ui-type")
+require("import SwiftUI" not in library_source, "library-swiftui")
+
+package = (root / "Package.swift").read_text()
+require(".iOS(.v13)" in package, "library-floor")
+
+project = (root / "iOS Example/iOS Example.xcodeproj/project.pbxproj").read_text()
+targets = [float(value) for value in re.findall(r"IPHONEOS_DEPLOYMENT_TARGET = ([0-9.]+);", project)]
+require(targets and min(targets) >= 14.0, "example-floor")
+require(not any(name in project for name in ["AppDelegate.swift", "MainController.swift", "DiagnosticsController.swift", "EndpointsController.swift"]), "controller-path")
+
+app_path = root / "iOS Example/Sources/ThorChainExampleApp.swift"
+diagnostics_path = root / "iOS Example/Sources/Presentation/DiagnosticsViewModel.swift"
+diagnostics_view_path = root / "iOS Example/Sources/Views/DiagnosticsView.swift"
+require(app_path.is_file() and diagnostics_view_path.is_file(), "missing-swiftui")
+app = app_path.read_text()
+require("import SwiftUI" in app and "import SwiftUI" in diagnostics_view_path.read_text(), "missing-swiftui")
+require(re.search(r"@main\s+struct\s+ThorChainExampleApp\s*:\s*App\b", app), "missing-app")
+
+require(diagnostics_path.is_file(), "diagnostics-model")
+diagnostics = diagnostics_path.read_text()
+require(re.search(r"(?m)^@MainActor$", diagnostics) and "ObservableObject" in diagnostics, "main-actor")
+for publisher in ["lastBlockHeightPublisher", "syncStatePublisher", "accountStatePublisher"]:
+    require(publisher in diagnostics, f"publisher-{publisher}")
+require(not re.search(r"runtime\.kit\.(lastBlockHeight|syncState|accountState)\b", diagnostics), "scalar-snapshot")
+require("Set<AnyCancellable>" in diagnostics and diagnostics.count(".store(in: &cancellables)") >= 3, "retained-cancellation")
+require(diagnostics.count(".receive(on: DispatchQueue.main)") >= 3, "main-hop")
+PY
+    echo "PASS verify-s1-01-platform"
+}
+
+expect_platform_mutant_rejected() (
+    set -euo pipefail
+    local label=$1 expected=$2 path=$3 needle=$4 replacement=$5 tmp file output
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    cp "$repository_root/Package.swift" "$tmp/Package.swift"
+    mkdir -p "$tmp/Sources" "$tmp/iOS Example"
+    cp -R "$repository_root/Sources/ThorChainKit" "$tmp/Sources/ThorChainKit"
+    cp -R "$repository_root/iOS Example/Sources" "$tmp/iOS Example/Sources"
+    cp -R "$repository_root/iOS Example/iOS Example.xcodeproj" "$tmp/iOS Example/iOS Example.xcodeproj"
+    file="$tmp/$path"
+    python3 - "$file" "$needle" "$replacement" <<'PY' \
+        || fail "verify-s1-01-platform-$label" "mutation anchor is absent"
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text()
+assert sys.argv[2] in source
+path.write_text(source.replace(sys.argv[2], sys.argv[3]))
+PY
+    if output=$(verify_platform_boundary "$tmp" 2>&1); then
+        fail "verify-s1-01-platform-$label" "mutant passed"
+    fi
+    [[ "$output" == *"$expected"* ]] \
+        || fail "verify-s1-01-platform-$label" "mutant failed for the wrong reason: $output"
+    echo "mutant rejected: $label"
+)
+
+verify_platform_mutants() {
+    expect_platform_mutant_rejected library-uikit ui-import \
+        Sources/ThorChainKit/Core/Kit.swift 'import Combine' $'import Combine\nimport UIKit'
+    expect_platform_mutant_rejected example-uikit ui-import \
+        'iOS Example/Sources/Presentation/DiagnosticsViewModel.swift' 'import Combine' $'import Combine\nimport UIKit'
+    expect_platform_mutant_rejected ui-type ui-type \
+        'iOS Example/Sources/ThorChainExampleApp.swift' 'struct ThorChainExampleApp: App' 'struct ThorChainExampleApp: UIApplicationDelegate'
+    expect_platform_mutant_rejected representable ui-type \
+        'iOS Example/Sources/Views/DiagnosticsView.swift' 'struct DiagnosticsView: View' 'struct DiagnosticsView: UIViewRepresentable'
+    expect_platform_mutant_rejected library-swiftui library-swiftui \
+        Sources/ThorChainKit/Core/Kit.swift 'import Combine' $'import Combine\nimport SwiftUI'
+    expect_platform_mutant_rejected missing-swiftui missing-swiftui \
+        'iOS Example/Sources/ThorChainExampleApp.swift' 'import SwiftUI' 'import Foundation'
+    expect_platform_mutant_rejected missing-app missing-app \
+        'iOS Example/Sources/ThorChainExampleApp.swift' '@main' '// @main removed'
+    expect_platform_mutant_rejected library-floor library-floor \
+        Package.swift '.iOS(.v13)' '.iOS(.v14)'
+    expect_platform_mutant_rejected example-floor example-floor \
+        'iOS Example/iOS Example.xcodeproj/project.pbxproj' 'IPHONEOS_DEPLOYMENT_TARGET = 14.0;' 'IPHONEOS_DEPLOYMENT_TARGET = 13.0;'
+    expect_platform_mutant_rejected controller-path controller-path \
+        'iOS Example/iOS Example.xcodeproj/project.pbxproj' '/* Begin PBXProject section */' $'/* MainController.swift */\n/* Begin PBXProject section */'
+    expect_platform_mutant_rejected disconnected-publisher publisher-lastBlockHeightPublisher \
+        'iOS Example/Sources/Presentation/DiagnosticsViewModel.swift' 'lastBlockHeightPublisher' 'disconnectedHeightPublisher'
+    expect_platform_mutant_rejected scalar-snapshot scalar-snapshot \
+        'iOS Example/Sources/Presentation/DiagnosticsViewModel.swift' 'private var cancellables = Set<AnyCancellable>()' $'private var cancellables = Set<AnyCancellable>()\n    private let launchHeight = runtime.kit.lastBlockHeight'
+    expect_platform_mutant_rejected retained-cancellation retained-cancellation \
+        'iOS Example/Sources/Presentation/DiagnosticsViewModel.swift' '.store(in: &cancellables)' '.cancel()'
+    expect_platform_mutant_rejected main-actor main-actor \
+        'iOS Example/Sources/Presentation/DiagnosticsViewModel.swift' '@MainActor' '// @MainActor removed'
+    expect_platform_mutant_rejected main-hop main-hop \
+        'iOS Example/Sources/Presentation/DiagnosticsViewModel.swift' '.receive(on: DispatchQueue.main)' '.map { $0 }'
+    echo "PASS verify-s1-01-platform-mutants"
+}
+
 verify_package_topology() {
     local manifest
     manifest=$(mktemp)
@@ -588,6 +704,13 @@ assert "actions/setup-java@v" not in source
 PY
     echo "PASS verify-s1-01-ci-provenance"
 }
+
+if [[ ${1:-} == "--platform-only" && $# -eq 1 ]]; then
+    verify_platform_boundary
+    verify_platform_mutants
+    exit 0
+fi
+[[ $# -eq 0 ]] || fail "verify-s1-01-arguments" "expected no arguments or --platform-only"
 
 verify_package_topology
 verify_default_bigint_resolution
