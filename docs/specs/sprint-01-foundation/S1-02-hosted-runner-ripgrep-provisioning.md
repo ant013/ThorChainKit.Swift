@@ -19,7 +19,8 @@ are available; this task authorizes no implementation changes.
 ## Scope and affected paths
 
 In scope: one provisioning step in `.github/workflows/ci.yml` before the step
-that invokes `Scripts/verify-s1-02.sh`; a fixed release URL, archive name,
+that invokes `Scripts/verify-s1-02.sh`, plus durable assertions in the existing
+`Scripts/verify-s1-02-ci-policy.sh`; a fixed release URL, archive name,
 SHA-256, arm64 guard, `$RUNNER_TEMP` staging, PATH export, version check, and
 static/hosted verification.
 
@@ -31,6 +32,7 @@ separate approved asset and design.
 | Path | Decision |
 |---|---|
 | `.github/workflows/ci.yml` | Add one narrow provisioning step before `Verify package and S1-02 contract`. |
+| `Scripts/verify-s1-02-ci-policy.sh` | Extend the existing policy authority to assert the exact provisioning block, its ordering, and its fail-closed pin/architecture/version contract. |
 | `Scripts/verify-s1-02.sh` | Unchanged consumer; its `swift test list | rg | sort` pipeline remains the acceptance probe. |
 | This spec | Normative implementation and verification contract. |
 
@@ -72,25 +74,29 @@ permissions, and triggers remain unchanged.
 | Dimension | Verified invariant | Required delta | Rejected difference/failure |
 |---|---|---|---|
 | Responsibility | Current Maestro block provisions a missing hosted CLI. | Provision ripgrep before its real consumer. | Rewriting the verifier to use `grep` hides the missing dependency. |
-| Boundary | Workflow owns host setup; scripts own product verification. | Change workflow configuration only. | Setup in the verifier mixes boundaries. |
+| Boundary | Workflow owns host setup; the existing CI-policy verifier owns workflow-policy assertions; product verification remains separate. | Change workflow configuration and extend the existing policy verifier only. | Adding a new script or setup to the product verifier fragments the policy authority. |
 | Lifecycle | Existing order is download, checksum, extract, PATH. | Preserve order; add architecture/version assertions. | PATH before verification could execute wrong bytes. |
 | Dependencies/trust | Maestro uses a literal URL and SHA-256 before extraction. | Pin version, URL, and exact digest. | Homebrew or `latest` adds mutable host drift. |
 | Failure behavior | Checksum failure stops the shell step. | Download, digest, archive, architecture, and version failures fail closed. | Continuing after checksum failure is unsafe. |
-| Consumer/test seam | `Scripts/verify-s1-02.sh:206-210` is the actual consumer. | Prove ordering and reach the exact allowlist comparison. | Version-only checking misses the hosted failure. |
+| Consumer/test seam | `Scripts/verify-s1-02.sh:206-210` is the actual consumer and `Scripts/verify-s1-02-ci-policy.sh` is the existing policy authority. | Require the exact block and ordering in the policy verifier, then reach the exact allowlist comparison. | Version-only checking or a second script misses/removes the durable regression guard. |
 
 ## Tests before implementation
 
 - Reproduce the baseline hosted failure at line 208 with no provisioned `rg`.
-- Add static checks for step order, literal URL/digest, verify-before-extract,
-  arm64 guard, `rg --version`, and `$GITHUB_PATH` export.
-- Use temporary-copy mutants for wrong digest, wrong architecture, and a step
-  moved after the consumer; each must fail before product verification.
+- Extend `Scripts/verify-s1-02-ci-policy.sh` (no new script) with assertions for
+  the exact URL, version, archive, digest, arm64/version checks, ordering before
+  `Scripts/verify-s1-02.sh`, verify-before-extract/PATH, and `$GITHUB_PATH`.
+- Use temporary-copy mutants for missing provisioning, provisioning moved after
+  the consumer, wrong URL/version/digest, verification after extraction or PATH,
+  mutable package-manager fallback, and invalid architecture/version assertions;
+  each must fail before product verification.
 - The positive hosted run must reach the existing discovery command and retain
   the prior 42-test result. No allowlist changes are introduced.
 
 ## Acceptance criteria
 
-1. Only `.github/workflows/ci.yml` is an implementation file changed.
+1. The only implementation paths changed are `.github/workflows/ci.yml` and
+   `Scripts/verify-s1-02-ci-policy.sh`; no new script is added.
 2. URL, version, archive name, and digest match the official 15.2.0 asset.
 3. Non-arm64, download/checksum/extract, missing-binary, and version failures
    fail closed; PATH is not updated before checksum verification.
@@ -137,10 +143,14 @@ head SHA, successful `rg --version`, and unchanged S1-02 discovery output.
   exact head `e9c667a07ab46ecbc7116e1f8e1fa932ff956b8d` on the assigned branch.
 - **D-002 Supply chain — ACCEPT.** The official digest is independently
   reproduced; verify-before-extract and no package-manager fallback are fixed.
-- **D-003 Minimum scope — ACCEPT.** One workflow step is sufficient; verifier
-  and product files remain untouched.
-- **D-004 Verification validity — ACCEPT.** The actual failing `rg` pipeline is
-  the acceptance probe, with digest, architecture, and ordering mutants.
+- **D-003 Minimum scope — ACCEPT.** One workflow step plus assertions in the
+  existing CI-policy verifier is the smallest coherent regression surface; no
+  new script and no product-verifier change are needed.
+- **D-004 Verification validity — REVISED/ACCEPT.** The actual failing `rg`
+  pipeline remains the acceptance probe, while the existing CI-policy verifier
+  durably rejects missing/moved provisioning, wrong URL/version/digest,
+  verify-after-extract/PATH, mutable package-manager fallback, and invalid
+  architecture/version assertions.
 
 Open question: if `macos-26` becomes x86_64, approve a separately pinned asset
 or keep this gate unavailable. This spec chooses fail-closed and does not guess.
