@@ -102,6 +102,54 @@ PACKAGE_CONTRACT_BLOCK = r"""      - name: Verify package and S1-02 contract
           swift test
           Scripts/verify-s1-02.sh
 """
+SIMULATOR_SELECTION_BLOCK = r"""      - name: Select exact iOS 26.2 simulator
+        run: |
+          set -euo pipefail
+          simulator_runtime=com.apple.CoreSimulator.SimRuntime.iOS-26-2
+          device_list=$(xcrun simctl list devices available -j)
+          selection=$(SIMULATOR_RUNTIME="$simulator_runtime" python3 -c '
+          import json
+          import os
+          import sys
+
+          runtime = os.environ["SIMULATOR_RUNTIME"]
+          devices = json.load(sys.stdin).get("devices", {})
+          runtime_devices = devices.get(runtime)
+          if runtime_devices is None:
+              raise SystemExit(f"required simulator runtime is unavailable: {runtime}")
+          matches = [
+              device
+              for device in runtime_devices
+              if device.get("isAvailable") is True
+              and device.get("state") == "Shutdown"
+              and device.get("name") == "iPhone 17 Pro"
+              and device.get("udid")
+          ]
+          if len(matches) != 1:
+              raise SystemExit(f"expected exactly one eligible iPhone in {runtime}, found {len(matches)}")
+          device = matches[0]
+          print("\t".join((runtime, device["name"], device["udid"])))
+          ' <<<"$device_list")
+          IFS=$'\t' read -r selected_runtime selected_device selected_udid <<<"$selection"
+          [[ "$selected_runtime" == "$simulator_runtime" ]]
+          [[ -n "$selected_device" && -n "$selected_udid" ]]
+          xcode_version=$(xcodebuild -version | tr '\n' ' ')
+          printf '%s\n' \
+            "xcode_version=$xcode_version" \
+            "requested_runtime=$simulator_runtime" \
+            "selected_runtime=$selected_runtime" \
+            "selected_device=$selected_device" \
+            "selected_udid=$selected_udid"
+          printf 'THORCHAIN_SIMULATOR_UDID=%s\n' "$selected_udid" >> "$GITHUB_ENV"
+"""
+SIMULATOR_CONSUMER_BLOCK = r"""      - name: Run fixture acceptance
+        run: |
+          set -euo pipefail
+          : "${THORCHAIN_SIMULATOR_UDID:?exact simulator selection missing}"
+          export THORCHAIN_SIMULATOR_UDID
+          Scripts/run-maestro.sh s1-01
+          Scripts/run-maestro.sh s1-02
+"""
 RIPGREP_CONSUMER_LINE = "          Scripts/verify-s1-02.sh\n"
 RIPGREP_FALLBACK_RE = re.compile(
     r"(?im)^\s*(?:run:\s*)?(?:brew|port|apt(?:-get)?|yum|dnf|pacman)\b[^\n]*\bripgrep\b"
@@ -237,6 +285,20 @@ def verify_ripgrep_provisioning(workflow):
     after_provision = workflow[provision_at + len(RIPGREP_PROVISION_BLOCK) : consumer_at]
     if PATH_MUTATION_RE.search(after_provision) or "GITHUB_PATH" in after_provision:
         fail("workflow must not mutate PATH between ripgrep provisioning and its consumer")
+
+
+def verify_simulator_selection(workflow):
+    if workflow.count(SIMULATOR_SELECTION_BLOCK) != 1:
+        fail("workflow must contain exactly one exact iOS 26.2 simulator selection block")
+    if workflow.count(SIMULATOR_CONSUMER_BLOCK) != 1:
+        fail("fixture acceptance must consume the selected simulator identity")
+    selection_at = workflow.find(SIMULATOR_SELECTION_BLOCK)
+    contract_at = workflow.find(PACKAGE_CONTRACT_BLOCK)
+    if selection_at > contract_at:
+        fail("simulator selection must precede build and test commands")
+    outside_selection = workflow.replace(SIMULATOR_SELECTION_BLOCK, "", 1)
+    if "xcrun simctl list devices available -j" in outside_selection:
+        fail("workflow must not select a simulator through an all-runtime fallback")
 
 
 def expected_bootstrap_workflow(base_workflow):
@@ -449,6 +511,72 @@ def run_ripgrep_mutants(workflow):
                 1,
             )
         ),
+        )
+
+
+def run_simulator_mutants(workflow):
+    expect_mutant_failure(
+        "missing exact simulator runtime selection",
+        lambda: verify_simulator_selection(
+            workflow.replace(SIMULATOR_SELECTION_BLOCK, "", 1)
+        ),
+    )
+    flattened_selector = """      - name: Select exact iOS 26.2 simulator
+        run: |
+          set -euo pipefail
+          THORCHAIN_SIMULATOR_UDID=$(xcrun simctl list devices available -j \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x[\"udid\"] for ds in d[\"devices\"].values() for x in ds if x.get(\"isAvailable\") and x.get(\"state\")==\"Shutdown\" and x[\"name\"].startswith(\"iPhone\")))')
+          printf '%s\\n' \"selected_udid=$THORCHAIN_SIMULATOR_UDID\"
+          printf 'THORCHAIN_SIMULATOR_UDID=%s\\n' "$THORCHAIN_SIMULATOR_UDID" >> "$GITHUB_ENV"
+"""
+    expect_mutant_failure(
+        "flattened all-runtime selection",
+        lambda: verify_simulator_selection(
+            workflow.replace(SIMULATOR_SELECTION_BLOCK, flattened_selector, 1)
+        ),
+    )
+    for label, needle, replacement in (
+        (
+            "missing runtime filter",
+            'runtime_devices = devices.get(runtime)',
+            'runtime_devices = next(iter(devices.values()), None)',
+        ),
+        ("nondeterministic device selection", "if len(matches) != 1:", "if not matches:"),
+        (
+            "missing simulator identity logging",
+            'xcode_version=$(xcodebuild -version | tr \'\\n\' \' \')',
+            'xcode_version=unknown',
+        ),
+        (
+            "broad iPhone eligibility",
+            'device.get("name") == "iPhone 17 Pro"',
+            'device.get("name", "").startswith("iPhone")',
+        ),
+        (
+            "silent newer runtime fallback",
+            "simulator_runtime=com.apple.CoreSimulator.SimRuntime.iOS-26-2",
+            "simulator_runtime=com.apple.CoreSimulator.SimRuntime.iOS-26-4",
+        ),
+    ):
+        expect_mutant_failure(
+            label,
+            lambda needle=needle, replacement=replacement: verify_simulator_selection(
+                workflow.replace(needle, replacement, 1)
+            ),
+        )
+    expect_mutant_failure(
+        "fixture consumer reselects all runtimes",
+        lambda: verify_simulator_selection(
+            workflow.replace(
+                SIMULATOR_CONSUMER_BLOCK,
+                SIMULATOR_CONSUMER_BLOCK.replace(
+                    '          : "${THORCHAIN_SIMULATOR_UDID:?exact simulator selection missing}"\n',
+                    '          THORCHAIN_SIMULATOR_UDID=$(xcrun simctl list devices available -j)\n',
+                    1,
+                ),
+                1,
+            )
+        ),
     )
 
 
@@ -506,8 +634,10 @@ try:
         workflow = workflow_at(commit)
         verify_dispatch_policy(workflow)
         verify_ripgrep_provisioning(workflow)
+        verify_simulator_selection(workflow)
         run_policy_mutants(workflow)
         run_ripgrep_mutants(workflow)
+        run_simulator_mutants(workflow)
         run_contract_mutants(workflow)
         print(f"steady-state policy verified: ref={commit}")
 except PolicyFailure as error:
