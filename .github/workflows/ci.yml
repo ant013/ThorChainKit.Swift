@@ -90,15 +90,17 @@ jobs:
           rg_dir="$RUNNER_TEMP/ripgrep-${rg_version}-aarch64-apple-darwin"
           rg_path="$rg_dir/rg"
           [[ -x "$rg_path" ]]
-          [[ "$("$rg_path" --version)" == "ripgrep 15.2.0"* ]]
+          if ! rg_version_output=$("$rg_path" --version); then exit 1; fi
+          rg_version_line="${rg_version_output%%$'\n'*}"
+          [[ "$rg_version_line" =~ ^ripgrep\ 15\.2\.0\ \(rev\ [0-9a-f]+\)$ ]]
           echo "$rg_dir" >> "$GITHUB_PATH"
       - name: Verify package and S1-02 contract
         run: |
+          Scripts/verify-s1-02-ci-policy.sh steady-state --ref "$(git rev-parse HEAD)"
           swift build
           swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
           swift test
           Scripts/verify-s1-02.sh
-          Scripts/verify-s1-02-ci-policy.sh steady-state --ref HEAD
       - name: Verify guarded Maestro runner
         run: Scripts/test-run-maestro.sh
       - name: Install pinned Maestro CLI

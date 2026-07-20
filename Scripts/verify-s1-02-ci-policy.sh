@@ -89,12 +89,31 @@ RIPGREP_PROVISION_BLOCK = r"""      - name: Provision pinned ripgrep
           rg_dir="$RUNNER_TEMP/ripgrep-${rg_version}-aarch64-apple-darwin"
           rg_path="$rg_dir/rg"
           [[ -x "$rg_path" ]]
-          [[ "$("$rg_path" --version)" == "ripgrep 15.2.0"* ]]
+          if ! rg_version_output=$("$rg_path" --version); then exit 1; fi
+          rg_version_line="${rg_version_output%%$'\n'*}"
+          [[ "$rg_version_line" =~ ^ripgrep\ 15\.2\.0\ \(rev\ [0-9a-f]+\)$ ]]
           echo "$rg_dir" >> "$GITHUB_PATH"
+"""
+PACKAGE_CONTRACT_BLOCK = r"""      - name: Verify package and S1-02 contract
+        run: |
+          Scripts/verify-s1-02-ci-policy.sh steady-state --ref "$(git rev-parse HEAD)"
+          swift build
+          swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
+          swift test
+          Scripts/verify-s1-02.sh
 """
 RIPGREP_CONSUMER_LINE = "          Scripts/verify-s1-02.sh\n"
 RIPGREP_FALLBACK_RE = re.compile(
     r"(?im)^\s*(?:run:\s*)?(?:brew|port|apt(?:-get)?|yum|dnf|pacman)\b[^\n]*\bripgrep\b"
+)
+RIPGREP_DOWNLOAD_RE = re.compile(
+    r"(?im)^\s*(?:-\s*)?(?:run:\s*)?(?:curl|wget)\b[^\n]*\bripgrep\b"
+)
+RIPGREP_PATH_RE = re.compile(
+    r"(?im)^\s*(?:echo|printf|export)?[^\n]*(?:ripgrep|rg_(?:dir|path))[^\n]*(?:PATH|GITHUB_PATH)"
+)
+PATH_MUTATION_RE = re.compile(
+    r"(?im)^\s*(?:-\s*)?(?:run:\s*)?(?:export\s+)?PATH\s*="
 )
 DISPATCH_PREFLIGHT = r"""      - name: Preflight exact pull request head
         env:
@@ -199,12 +218,20 @@ def verify_ripgrep_provisioning(workflow):
         fail("workflow must contain exactly one pinned ripgrep provisioning block")
     if RIPGREP_FALLBACK_RE.search(workflow):
         fail("workflow must not contain a mutable ripgrep package-manager fallback")
-    consumer_at = workflow.find(RIPGREP_CONSUMER_LINE)
     provision_at = workflow.find(RIPGREP_PROVISION_BLOCK)
-    if consumer_at == -1:
-        fail("workflow must retain the S1-02 verifier consumer")
+    if workflow.count(PACKAGE_CONTRACT_BLOCK) != 1:
+        fail("workflow must contain exactly one exact package and S1-02 contract block")
+    consumer_at = workflow.find(PACKAGE_CONTRACT_BLOCK)
     if provision_at > consumer_at:
         fail("ripgrep provisioning must precede the S1-02 verifier consumer")
+    outside_provision = workflow.replace(RIPGREP_PROVISION_BLOCK, "", 1)
+    if RIPGREP_DOWNLOAD_RE.search(outside_provision):
+        fail("workflow must not contain a second ripgrep download")
+    if RIPGREP_PATH_RE.search(outside_provision):
+        fail("workflow must not mutate ripgrep PATH outside the pinned block")
+    after_provision = workflow[provision_at + len(RIPGREP_PROVISION_BLOCK) : consumer_at]
+    if PATH_MUTATION_RE.search(after_provision) or "GITHUB_PATH" in after_provision:
+        fail("workflow must not mutate PATH between ripgrep provisioning and its consumer")
 
 
 def expected_bootstrap_workflow(base_workflow):
@@ -352,8 +379,18 @@ def run_ripgrep_mutants(workflow):
         ("missing binary assertion", "          [[ -x \"$rg_path\" ]]\n", ""),
         (
             "corrupt rg version assertion",
-            "          [[ \"$(\"$rg_path\" --version)\" == \"ripgrep 15.2.0\"* ]]\n",
-            "          [[ \"$(\"$rg_path\" --version)\" == \"ripgrep 15.3.0\"* ]]\n",
+            "          [[ \"$rg_version_line\" =~ ^ripgrep\\ 15\\.2\\.0\\ \\(rev\\ [0-9a-f]+\\)$ ]]\n",
+            "          [[ \"$rg_version_line\" =~ ^ripgrep\\ 15\\.3\\.0\\ \\(rev\\ [0-9a-f]+\\)$ ]]\n",
+        ),
+        (
+            "missing version command-status guard",
+            "          if ! rg_version_output=$(\"$rg_path\" --version); then exit 1; fi\n",
+            "          rg_version_output=$(\"$rg_path\" --version)\n",
+        ),
+        (
+            "inexact version pattern",
+            "          [[ \"$rg_version_line\" =~ ^ripgrep\\ 15\\.2\\.0\\ \\(rev\\ [0-9a-f]+\\)$ ]]\n",
+            "          [[ \"$rg_version_line\" == \"ripgrep 15.2.0\"* ]]\n",
         ),
     ):
         expect_mutant_failure(
@@ -366,6 +403,70 @@ def run_ripgrep_mutants(workflow):
         "separate mutable package-manager fallback",
         lambda: verify_ripgrep_provisioning(
             workflow + "\n      - name: Mutable ripgrep fallback\n        run: brew install ripgrep\n"
+        ),
+    )
+    expect_mutant_failure(
+        "second ripgrep download",
+        lambda: verify_ripgrep_provisioning(
+            workflow + "\n      - run: curl -fsSL https://example.test/ripgrep.tar.gz\n"
+        ),
+    )
+    expect_mutant_failure(
+        "ripgrep PATH shadowing",
+        lambda: verify_ripgrep_provisioning(
+            workflow.replace(
+                PACKAGE_CONTRACT_BLOCK,
+                '      - name: Shadow ripgrep PATH\n        run: echo "/tmp/ripgrep" >> "$GITHUB_PATH"\n'
+                + PACKAGE_CONTRACT_BLOCK,
+                1,
+            )
+        ),
+    )
+    expect_mutant_failure(
+        "PATH mutation before consumer",
+        lambda: verify_ripgrep_provisioning(
+            workflow.replace(
+                PACKAGE_CONTRACT_BLOCK,
+                '      - name: Shadow PATH\n        run: export PATH="/tmp:$PATH"\n'
+                + PACKAGE_CONTRACT_BLOCK,
+                1,
+            )
+        ),
+    )
+
+
+def run_contract_mutants(workflow):
+    contract_lines = PACKAGE_CONTRACT_BLOCK.rstrip("\n").splitlines()
+    commands = contract_lines[2:]
+    for index, label in enumerate(
+        (
+            "policy after first build",
+            "policy after strict-concurrency build",
+            "policy after test",
+            "policy after consumer",
+        ),
+        start=1,
+    ):
+        reordered = "\n".join(
+            contract_lines[:2]
+            + commands[1 : index + 1]
+            + commands[:1]
+            + commands[index + 1 :]
+        ) + "\n"
+        expect_mutant_failure(
+            label,
+            lambda reordered=reordered: verify_ripgrep_provisioning(
+                workflow.replace(PACKAGE_CONTRACT_BLOCK, reordered, 1)
+            ),
+        )
+    expect_mutant_failure(
+        "symbolic policy ref",
+        lambda: verify_ripgrep_provisioning(
+            workflow.replace(
+                PACKAGE_CONTRACT_BLOCK,
+                PACKAGE_CONTRACT_BLOCK.replace('$(git rev-parse HEAD)', 'HEAD', 1),
+                1,
+            )
         ),
     )
 mode, base_ref, candidate_ref, ref = sys.argv[1:]
@@ -390,6 +491,7 @@ try:
         verify_ripgrep_provisioning(workflow)
         run_policy_mutants(workflow)
         run_ripgrep_mutants(workflow)
+        run_contract_mutants(workflow)
         print(f"steady-state policy verified: ref={commit}")
 except PolicyFailure as error:
     print(f"S1-02 CI policy verification failed: {error}", file=sys.stderr)
