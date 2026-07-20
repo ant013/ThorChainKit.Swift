@@ -1,9 +1,20 @@
 name: CI
 
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Open same-repository pull request number
+        required: true
+        type: number
+      expected_head_sha:
+        description: Exact pull request head commit
+        required: true
+        type: string
+      confirmation:
+        description: Type FINAL_S1_02_GATE
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -14,7 +25,52 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     steps:
+      - name: Preflight exact pull request head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          EVENT_SHA: ${{ github.sha }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          DISPATCHED_REF: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          [[ "$CONFIRMATION" == "FINAL_S1_02_GATE" ]]
+          [[ "$EXPECTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EVENT_SHA" == "$EXPECTED_HEAD_SHA" ]]
+          [[ "$WORKFLOW_SHA" == "$EXPECTED_HEAD_SHA" ]]
+
+          pull_request_json=$(gh api --method GET "repos/$REPOSITORY/pulls/$PR_NUMBER")
+          jq -e \
+            --arg repository "$REPOSITORY" \
+            --arg dispatched_ref "$DISPATCHED_REF" \
+            --arg expected_head_sha "$EXPECTED_HEAD_SHA" \
+            '.state == "open"
+              and .base.repo.full_name == $repository
+              and .base.ref == "main"
+              and .head.repo.full_name == $repository
+              and .head.ref == $dispatched_ref
+              and .head.sha == $expected_head_sha' \
+            <<<"$pull_request_json" >/dev/null
+
+          printf '%s\n' \
+            "workflow_ref=$WORKFLOW_REF" \
+            "workflow_sha=$WORKFLOW_SHA" \
+            "event_sha=$EVENT_SHA" \
+            "pr_head_sha=$EXPECTED_HEAD_SHA"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.expected_head_sha }}
+      - name: Verify exact checkout
+        env:
+          EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "$EXPECTED_HEAD_SHA" ]]
+          printf '%s\n' "checkout_sha=$EXPECTED_HEAD_SHA"
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
         with:
           distribution: temurin
