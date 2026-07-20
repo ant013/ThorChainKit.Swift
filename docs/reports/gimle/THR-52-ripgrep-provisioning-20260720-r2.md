@@ -1,7 +1,7 @@
 # Gimle reliability report: THR-52-ripgrep-provisioning-20260720-r2
 
 - Task: 04ee70d8-5cc8-415a-9df6-bc65ede0dc37
-- Workflow/phase: analog_change / adversarial_review
+- Workflow/phase: analog_change / awaiting_approval
 - Trust: **RED**
 - Repository: /Users/ant013/Data/AI/thorchain
 - Base HEAD: e9c667a07ab46ecbc7116e1f8e1fa932ff956b8d
@@ -82,9 +82,9 @@ Bug statuses: {'workaround': 1}
 
 ## Adversarial decisions
 
-- D-001@1 ACCEPT: Current-tree workflow and verifier anchors are fresh and identity-bound.
-- D-002@1 ACCEPT: External executable remains pinned and fail-closed.
-- D-003@1 ACCEPT: One workflow step is the minimum coherent change.
+- D-001@2 ACCEPT: Current-tree workflow and verifier anchors are fresh and identity-bound for the revised spec.
+- D-002@2 ACCEPT: External executable remains pinned and fail-closed for the revised spec.
+- D-003@2 ACCEPT: Workflow plus existing policy verifier is the minimum coherent change.
 - D-004@3 ACCEPT: The existing CI-policy verifier provides the durable regression guard for pinned ripgrep provisioning.
 
 ## Verification and acceptance
