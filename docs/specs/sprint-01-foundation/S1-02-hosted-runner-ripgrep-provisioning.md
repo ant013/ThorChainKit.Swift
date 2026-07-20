@@ -1,16 +1,24 @@
 # S1-02 — Hosted runner ripgrep provisioning
 
-Status: design revision 4, spec-only. Revision 3 is superseded by this
-verification-contract correction. Explicit user approval is required before
-workflow or verifier implementation.
+Status: design revision 5, spec-only. Revision 4 is superseded by this
+current-tree and verification-contract correction. Explicit user approval is
+required before workflow or verifier implementation.
 
 ## Goal and assumptions
 
-Provision `rg` on the `macos-26` hosted runner before
-`Scripts/verify-s1-02.sh` runs. Preserve exact-head, workflow-dispatch, build,
-test, and Maestro gates. The observed failure is run `29750250371` at exact PR
-head `e9c667a07ab46ecbc7116e1f8e1fa932ff956b8d`: preflight, builds, and 42
-tests passed, then `Scripts/verify-s1-02.sh:208` failed with `rg: command not found`.
+Close the hosted `rg` failure and bind the S1-02 policy gate to the verified
+checkout before `Scripts/verify-s1-02.sh` runs. Preserve exact-head,
+workflow-dispatch, build, test, and Maestro gates. The observed failure is run
+`29750250371` at exact PR head `e9c667a07ab46ecbc7116e1f8e1fa932ff956b8d`:
+preflight, builds, and 42 tests passed, then `Scripts/verify-s1-02.sh:208`
+failed with `rg: command not found`.
+
+Current-tree boundary: the pinned ripgrep provisioning block already exists at
+`.github/workflows/ci.yml:78-94` and its exact-block checks already exist in
+`Scripts/verify-s1-02-ci-policy.sh:77-207`. This spec does not authorize
+re-adding or redesigning that block. The remaining implementation delta is the
+policy invocation move plus exact workflow-order, exact-SHA, and no-shadowing
+guards.
 
 Assumptions: `macos-26` is Apple Silicon, but implementation must assert
 `uname -m == arm64` and fail closed otherwise; the official ripgrep 15.2.0
@@ -19,11 +27,13 @@ are available; this task authorizes no implementation changes.
 
 ## Scope and affected paths
 
-In scope: one provisioning step in `.github/workflows/ci.yml` before the step
-that invokes `Scripts/verify-s1-02.sh`, plus durable assertions in the existing
-`Scripts/verify-s1-02-ci-policy.sh`; a fixed release URL, archive name,
-SHA-256, arm64 guard, `$RUNNER_TEMP` staging, PATH export, version check, and
-static/hosted verification.
+In scope: move the existing exact-SHA policy command to the first line of the
+existing `Verify package and S1-02 contract` step; extend the existing
+`Scripts/verify-s1-02-ci-policy.sh` with an exact command-block assertion,
+late-order mutants, exact-SHA binding, and protection against later ripgrep
+installs or PATH shadowing; and record static/hosted verification. The existing
+fixed release URL, archive name, SHA-256, arm64 guard, `$RUNNER_TEMP` staging,
+PATH export, and version check are preserved and policy-checked.
 
 Out of scope: changes to `Scripts/verify-s1-02.sh` or its allowlist; Homebrew
 or any package manager; new actions, jobs, triggers, permissions, checked-in
@@ -32,8 +42,8 @@ separate approved asset and design.
 
 | Path | Decision |
 |---|---|
-| `.github/workflows/ci.yml` | Add one narrow provisioning step before `Verify package and S1-02 contract`. |
-| `Scripts/verify-s1-02-ci-policy.sh` | Extend the existing policy authority to assert the exact provisioning block, its ordering, and its fail-closed pin/architecture/version contract. |
+| `.github/workflows/ci.yml` | Move the existing exact-SHA policy command to the first line of `Verify package and S1-02 contract`; preserve the existing provisioning block byte-for-byte. |
+| `Scripts/verify-s1-02-ci-policy.sh` | Extend the existing policy authority with the exact command-block assertion, late-order mutants, exact-SHA binding, and no-shadowing guard. |
 | `Scripts/verify-s1-02.sh` | Unchanged consumer; its `swift test list | rg | sort` pipeline remains the acceptance probe. |
 | This spec | Normative implementation and verification contract. |
 
@@ -53,7 +63,21 @@ The archive was shown to contain an arm64 Mach-O `rg` reporting `ripgrep
 changed bytes, failed download, failed digest, unexpected architecture, missing
 executable, or unexpected version must stop the job before PATH is updated.
 Never resolve the digest at runtime and never use a mutable package-manager
-fallback.
+fallback. The policy must reject any second ripgrep download/install, any
+ripgrep-specific PATH export outside the pinned block, and any PATH or
+`GITHUB_PATH` mutation between the pinned block and the S1-02 consumer that
+could shadow its verified directory. Capture the absolute binary's version
+output with an explicit fail-closed status check; require its first line to
+match exactly `ripgrep 15.2.0 (rev <lowercase-hex>)`, not a prefix such as
+`ripgrep 15.2.0-extra`.
+
+The required version check shape is equivalent to:
+
+```text
+if ! rg_version_output=$("$rg_path" --version); then exit 1; fi
+rg_version_line="${rg_version_output%%$'\n'*}"
+[[ "$rg_version_line" =~ ^ripgrep\ 15\.2\.0\ \(rev\ [0-9a-f]+\)$ ]]
+```
 
 ## Proposed workflow shape
 
@@ -71,19 +95,33 @@ Scripts/verify-s1-02.sh
 
 This ordering is required so a malformed provisioning block is rejected by the
 policy authority before the hosted consumer can fail or produce misleading
-product-verification evidence. The policy verifier must also retain the static
-contract-order assertion and add mutants that reject the policy invocation
-after the first `swift build`, after the strict-concurrency `swift build`,
-after `swift test`, and after `Scripts/verify-s1-02.sh`. The symbolic
-`--ref HEAD` replacement is a separate mutant. Every mutant must fail at the
-policy gate before any build, test, or product-verifier command runs.
+product-verification evidence. The policy verifier must add one exact
+five-command assertion for the `Verify package and S1-02 contract` run body:
+the literal policy command with `$(git rev-parse HEAD)`, the two builds,
+`swift test`, and `Scripts/verify-s1-02.sh`, each exactly once and in that
+order. It must reject a missing, duplicated, or reordered command before
+product verification. The four order mutants are made by moving the policy
+command after the first build, after the strict-concurrency build, after the
+test, or after the consumer; the `--ref HEAD` replacement is a separate
+mutant. Each mutant must fail this exact-block assertion before any product
+verification command runs.
 
-1. Run with `set -euo pipefail` and assert `uname -m` is `arm64`.
-2. Download the exact URL to `$RUNNER_TEMP` with `curl -fsSL`.
-3. Verify the literal SHA-256 with `shasum -a 256 -c -`.
+| Mutant | Required rejection from the exact-block assertion |
+|---|---|
+| Policy after first `swift build` | The first command is not the exact policy command. |
+| Policy after strict-concurrency `swift build` | The first command is not the exact policy command. |
+| Policy after `swift test` | The first command is not the exact policy command. |
+| Policy after `Scripts/verify-s1-02.sh` | The exact five-command block is absent/reordered. |
+| `--ref HEAD` | The first command is not the exact checked-out-SHA expression. |
+
+1. Preserve `set -euo pipefail` and assert `uname -m` is `arm64`.
+2. Preserve the exact URL download to `$RUNNER_TEMP` with `curl -fsSL`.
+3. Preserve literal SHA-256 verification with `shasum -a 256 -c -`.
 4. Extract only after verification into `$RUNNER_TEMP`.
-5. Assert the extracted absolute `rg` exists and reports `15.2.0`.
-6. Append the extracted release directory to `$GITHUB_PATH` for later steps.
+5. Assert the extracted absolute `rg` exists and, with an explicit checked
+   command status, reports the exact `15.2.0` version line.
+6. Append only the extracted release directory to `$GITHUB_PATH` for later
+   steps; no later ripgrep install or shadowing PATH mutation is permitted.
 
 Do not invoke `rg` before PATH update except by its explicit absolute extracted
 path. Exact-head preflight, `workflow_sha` equality, checkout equality,
@@ -112,9 +150,9 @@ verifier must remain fail-closed and SHA-bound.
 
 | Dimension | Verified invariant | Required delta | Rejected difference/failure |
 |---|---|---|---|
-| Responsibility | Current Maestro block provisions a missing hosted CLI. | Provision ripgrep before its real consumer. | Rewriting the verifier to use `grep` hides the missing dependency. |
-| Boundary | Workflow owns host setup; the existing CI-policy verifier owns workflow-policy assertions; product verification remains separate. | Change workflow configuration and extend the existing policy verifier only. | Adding a new script or setup to the product verifier fragments the policy authority. |
-| Lifecycle | Existing order is download, checksum, extract, PATH. | Preserve order; add architecture/version assertions. | PATH before verification could execute wrong bytes. |
+| Responsibility | Current tree already provisions a pinned hosted CLI. | Move policy validation before product commands and prove the verified binary cannot be shadowed. | Rewriting the verifier to use `grep` hides the missing dependency. |
+| Boundary | Workflow owns host setup; the existing CI-policy verifier owns workflow-policy assertions; product verification remains separate. | Move one existing workflow command and extend the existing policy verifier only. | Re-adding the provisioning block or adding a new script fragments policy ownership. |
+| Lifecycle | Existing order is download, checksum, extract, version, PATH. | Preserve the block byte-for-byte; reject later installs/PATH shadowing and non-exact version checks. | PATH before verification or a later override could execute wrong bytes. |
 | Dependencies/trust | Maestro uses a literal URL and SHA-256 before extraction. | Pin version, URL, and exact digest. | Homebrew or `latest` adds mutable host drift. |
 | Failure behavior | Checksum failure stops the shell step. | Download, digest, archive, architecture, and version failures fail closed. | Continuing after checksum failure is unsafe. |
 | Consumer/test seam | `Scripts/verify-s1-02.sh:206-210` is the actual consumer and `Scripts/verify-s1-02-ci-policy.sh` is the existing policy authority. | Require the exact block and ordering in the policy verifier, then reach the exact allowlist comparison. | Version-only checking or a second script misses/removes the durable regression guard. |
@@ -123,29 +161,34 @@ verifier must remain fail-closed and SHA-bound.
 ## Tests before implementation
 
 - Reproduce the baseline hosted failure at line 208 with no provisioned `rg`.
-- Extend `Scripts/verify-s1-02-ci-policy.sh` (no new script) with assertions for
-  the exact URL, version, archive, digest, arm64/version checks, ordering before
-  `Scripts/verify-s1-02.sh`, verify-before-extract/PATH, `$GITHUB_PATH`, and
-  the exact checked-out SHA expression passed to the steady-state verifier.
+- Extend `Scripts/verify-s1-02-ci-policy.sh` (no new script) with an exact
+  five-command workflow-block assertion, the four late-order mutants, the
+  symbolic-`HEAD` mutant, no-second-install/no-shadowing checks, and assertions
+  for the preserved URL, version, archive, digest, arm64 guard,
+  verify-before-extract/PATH, `$GITHUB_PATH`, and exact checked-out SHA
+  expression.
 - Use temporary-copy mutants for missing provisioning, provisioning moved after
   the consumer, the policy invocation moved after the first `swift build`,
   after the strict-concurrency `swift build`, after `swift test`, or after
   `Scripts/verify-s1-02.sh`, wrong URL/version/digest, verification after
   extraction or PATH, mutable package-manager fallback, invalid
-  architecture/version assertions, and replacing
-  `--ref "$(git rev-parse HEAD)"` with `--ref HEAD`. Run the policy check as
-  the first gate against each mutant; every mutant must fail there, before
-  product verification is invoked.
+  architecture/version assertions, a command-substitution failure, an
+  inexact version pattern, and replacing `--ref "$(git rev-parse HEAD)"` with
+  `--ref HEAD`. Run the policy check as the first gate against each mutant;
+  every mutant must fail there, before product verification is invoked.
 - The positive hosted run must reach the existing discovery command and retain
   the prior 42-test result. No allowlist changes are introduced.
 
 ## Acceptance criteria
 
 1. The only implementation paths changed are `.github/workflows/ci.yml` and
-   `Scripts/verify-s1-02-ci-policy.sh`; no new script is added.
+   `Scripts/verify-s1-02-ci-policy.sh`; no new script is added, and the
+   existing provisioning block is not re-added or redesigned.
 2. URL, version, archive name, and digest match the official 15.2.0 asset.
-3. Non-arm64, download/checksum/extract, missing-binary, and version failures
-   fail closed; PATH is not updated before checksum verification.
+3. Non-arm64, download/checksum/extract, missing-binary, command-substitution,
+   and exact-version failures fail closed; PATH is not updated before checksum
+   verification; no later ripgrep install or PATH shadowing can replace the
+   verified binary before the consumer.
 4. The exact-SHA policy gate runs before build, test, and
    `Scripts/verify-s1-02.sh`; policy-first mutants fail when its invocation is
    moved after the first build, strict build, test, or consumer; the symbolic
@@ -156,7 +199,8 @@ verifier must remain fail-closed and SHA-bound.
    remain unchanged.
 6. No package-manager path, action, trigger, secret, binary, or unrelated file
    change is introduced.
-7. Static/mutant checks, including every policy-order mutant and the exact-SHA
+7. Static/mutant checks, including every policy-order, no-shadowing,
+   command-status, exact-version, and exact-SHA
    binding mutant, and the exact hosted run are recorded before review. The
    evidence includes the exact two-path implementation diff, full run
    conclusion and logs, successful `rg --version`, workflow/event/PR/checkout/
@@ -182,10 +226,9 @@ tar -tzf ripgrep-15.2.0-aarch64-apple-darwin.tar.gz
 Implementation-phase checks, not authorized or run here:
 
 ```text
-git diff --name-only <implementation-base>...<implementation-head> | sort
-# Expected output is exactly:
-# .github/workflows/ci.yml
-# Scripts/verify-s1-02-ci-policy.sh
+expected_paths=$(printf '%s\n' .github/workflows/ci.yml Scripts/verify-s1-02-ci-policy.sh | sort)
+actual_paths=$(git diff --name-only <implementation-base>...<implementation-head> | sort)
+diff -u <(printf '%s\n' "$expected_paths") <(printf '%s\n' "$actual_paths")
 git diff --check <implementation-base>...<implementation-head>
 Scripts/verify-s1-02-ci-policy.sh steady-state --ref "$(git rev-parse HEAD)"
 Scripts/verify-s1-02.sh
@@ -193,11 +236,12 @@ gh workflow run CI --ref <same-repository-feature-branch> -f pr_number=<PR> -f e
 gh run view <run-id> --log > <full-hosted-log>
 gh api repos/<owner>/<repo>/actions/runs/<run-id> \
   --jq '{id,head_sha,head_branch,event,status,conclusion,workflow_id,run_attempt}' > <run-fields-json>
-gh api repos/<owner>/<repo>/actions/runs/<run-id>/jobs --paginate \
-  --jq '.jobs[] | {id,name,head_sha,status,conclusion,steps}' > <job-fields-json>
 rg -n 'workflow_ref=|workflow_sha=|event_sha=|pr_head_sha=|checkout_sha=|ripgrep 15\.2\.0|PASS verify-s1-02-test-discovery' <full-hosted-log>
 jq -e --arg approved '<exact-head>' '.head_sha == $approved and .conclusion == "success"' <run-fields-json>
-test "$(rg -c -e "workflow_sha=<exact-head>" -e "event_sha=<exact-head>" -e "pr_head_sha=<exact-head>" -e "checkout_sha=<exact-head>" <full-hosted-log>)" = 4
+for field in workflow_sha event_sha pr_head_sha checkout_sha; do
+  test "$(rg -c "^${field}=<exact-head>$" <full-hosted-log>)" = 1
+  test "$(awk -F= -v key="$field" '$1 == key {print $2; found=1; exit} END {if (!found) exit 1}' <full-hosted-log)" = '<exact-head>'
+done
 ```
 
 The hosted result must cite workflow SHA, event SHA, PR head, checkout SHA, and
@@ -210,16 +254,24 @@ review/QA attestations; repeat them against the new exact head.
 ## Adversarial review and open questions
 
 - **D-001 Freshness/identity — ACCEPT.** The incident baseline is exact PR head
-  `e9c667a07ab46ecbc7116e1f8e1fa932ff956b8d`; the revision-4 review head is
-  `44198c040a3ed17186e2278128be127c8c5dd165`. Workflow and verifier anchors
-  remain present on the assigned branch, and the baseline/current-head
-  distinction is explicit.
-- **D-002 Supply chain — ACCEPT.** The official digest is independently
-  reproduced; verify-before-extract and no package-manager fallback are fixed.
-- **D-003 Minimum scope — ACCEPT.** One workflow step plus assertions in the
-  existing CI-policy verifier is the smallest coherent regression surface; no
-  new script and no product-verifier change are needed.
-- **D-004 Verification validity — REVISED in revision 4; pending closure.** The
+  `e9c667a07ab46ecbc7116e1f8e1fa932ff956b8d`; the revision-4 baseline head
+  before this correction is `ed80ba5f0970d19c4667561662c6fa40b8f1ed42`. The
+  revision-5 review head is the exact SHA of the pushed commit carrying this
+  spec and is recorded in the CTO handoff; the reviewer must independently
+  bind it with `git rev-parse HEAD`. Workflow and verifier anchors remain
+  present on the assigned branch, and the historical/current-head distinction
+  is explicit without self-referentially embedding a commit hash.
+- **D-002 Supply chain — REVISED in revision 5; pending closure.** The official
+  digest and verify-before-extract behavior remain fixed. The policy must also
+  reject second ripgrep installs, ripgrep-specific PATH exports, PATH mutations
+  that can shadow the verified directory before the consumer, command-status
+  failures, and inexact version matching.
+- **D-003 Minimum scope — REVISED in revision 5; pending closure.** The current
+  tree already contains the pinned provisioning block and its basic policy
+  checks. The smallest remaining delta is moving the existing policy command
+  before product verification and adding exact workflow-order, exact-SHA, and
+  no-shadowing assertions in the two existing implementation paths.
+- **D-004 Verification validity — REVISED in revision 5; pending closure.** The
   policy gate is required before build, test, and the actual failing `rg`
   pipeline. Separate mutants move it after each build, test, and consumer
   command, and replace the exact SHA expression with symbolic `HEAD`; every
@@ -240,7 +292,13 @@ the target under that name, but Gimle does not register it. This is mapping bug
 `G-0001` and makes Gimle trust RED. Current-tree conclusions use codebase-memory,
 Serena, targeted `rg`, Git, and direct official release verification.
 
-This is the complete spec-only deliverable for THR-52 revision 4. The prior
+The existing `THR-52-ripgrep-provisioning-20260720-r2.md` report is historical
+incident evidence anchored to the pre-provisioning baseline; its statement that
+provisioning is absent must not be used as a current-tree claim. Current-tree
+presence and policy gaps are verified directly at the assigned head and must be
+rechecked at the exact pushed review head.
+
+This is the complete spec-only deliverable for THR-52 revision 5. The prior
 hosted failure is recorded above, and symbolic `HEAD` is explicitly rejected
 as a policy input. Explicit user approval of this revision is required before
 workflow or verifier implementation.
