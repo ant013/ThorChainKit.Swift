@@ -5,8 +5,8 @@
 This is the narrow revision-12 report for the specification at
 `docs/specs/sprint-01-foundation/S1-02-hosted-runner-ripgrep-provisioning.md`.
 The exact pushed spec-content head is
-`ec78c64c49fd4f5fe241f181156e1487ed29c990`; the spec SHA-256 is
-`26cb2c250fca64ec1f43f6fd52086cc02ad4213f9c215044d7f6eb3a7bb5bbdc`.
+`76827c10607263f19d20978553a797b09699a9f6`; the spec SHA-256 is
+`a57bc06c25fe57b8ccbef85e06e7cc236b8ac591aa418f083c7e537a02e38e26`.
 This report is spec-only: no workflow, verifier, hosted-run, approval, merge,
 or implementation action was performed.
 
