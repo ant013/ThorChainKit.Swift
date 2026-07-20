@@ -60,6 +60,54 @@ final class EndpointPoolTests: XCTestCase {
         XCTAssertEqual(probeCount, 2)
     }
 
+    func testMixedIdentityTakesPrecedenceOverEarlierForeignFamily() async throws {
+        let configurations = try [
+            [family("foreign"), family("mixed")],
+            [family("mixed"), family("foreign")],
+        ]
+
+        for families in configurations {
+            let probe = CountingProbe { index, family in
+                if family.id == "foreign" {
+                    return outcomes(
+                        index: index,
+                        family: family,
+                        node: .success(.init(chainId: "foreign-secret-chain")),
+                        block: .success(.init(chainId: "foreign-secret-chain", latestHeight: 100)),
+                        comet: .success(.init(chainId: "foreign-secret-chain", latestHeight: 100, catchingUp: false))
+                    )
+                }
+                return outcomes(
+                    index: index,
+                    family: family,
+                    node: .success(.init(chainId: "foreign-secret-chain")),
+                    block: .success(.init(chainId: "thorchain-1", latestHeight: 100)),
+                    comet: .success(.init(chainId: "thorchain-1", latestHeight: 100, catchingUp: false))
+                )
+            }
+            let pool = try EndpointPool(
+                network: .mainnet,
+                configuration: EndpointConfiguration(families: families),
+                probe: probe,
+                clock: TestEndpointClock()
+            )
+
+            let firstError = await leaseError(pool)
+            XCTAssertEqual(
+                firstError,
+                .identityFailure(
+                    expected: "thorchain-1",
+                    familyId: "mixed",
+                    role: .cosmosRest,
+                    request: .cosmosNodeInfo,
+                    code: .mixed
+                )
+            )
+            let lockedError = await leaseError(pool)
+            XCTAssertEqual(lockedError, firstError)
+        }
+    }
+
     func testCatchingUpFamilyFallsBackAndReturnsDistinctErrorWhenAlone() async throws {
         let stale = try family("stale")
         let healthyFamily = try family("healthy")

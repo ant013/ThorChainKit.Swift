@@ -249,32 +249,53 @@ actor EndpointPool {
     }
 
     private func identityError(in allOutcomes: [[IndexedProbeOutcome]]) -> ProviderError? {
+        var candidates: [(
+            familyIndex: Int,
+            familyId: String,
+            observation: IdentityObservation,
+            code: IdentityFailureCode
+        )] = []
+
         for (familyIndex, outcomes) in allOutcomes.enumerated() {
             guard familyIndex < configuration.families.count else { continue }
             let family = configuration.families[familyIndex]
             let observations = outcomes.compactMap(identityObservation)
-                .sorted { $0.request.rawValue < $1.request.rawValue }
+                .sorted {
+                    if $0.role.rawValue != $1.role.rawValue {
+                        return $0.role.rawValue < $1.role.rawValue
+                    }
+                    return $0.request.rawValue < $1.request.rawValue
+                }
             let identities = Set(observations.map(\.chainId))
             if identities.count > 1, let first = observations.first {
-                return .identityFailure(
-                    expected: network.expectedChainId,
-                    familyId: family.id,
-                    role: first.role,
-                    request: first.request,
-                    code: .mixed
-                )
+                candidates.append((familyIndex, family.id, first, .mixed))
             }
-            if let foreign = observations.first(where: { $0.chainId != network.expectedChainId }) {
-                return .identityFailure(
-                    expected: network.expectedChainId,
-                    familyId: family.id,
-                    role: foreign.role,
-                    request: foreign.request,
-                    code: .foreign
-                )
+            else if let foreign = observations.first(where: { $0.chainId != network.expectedChainId }) {
+                candidates.append((familyIndex, family.id, foreign, .foreign))
             }
         }
-        return nil
+
+        guard let candidate = candidates.sorted(by: {
+            if $0.code != $1.code {
+                return $0.code == .mixed
+            }
+            if $0.familyIndex != $1.familyIndex {
+                return $0.familyIndex < $1.familyIndex
+            }
+            if $0.observation.role.rawValue != $1.observation.role.rawValue {
+                return $0.observation.role.rawValue < $1.observation.role.rawValue
+            }
+            return $0.observation.request.rawValue < $1.observation.request.rawValue
+        }).first else {
+            return nil
+        }
+        return .identityFailure(
+            expected: network.expectedChainId,
+            familyId: candidate.familyId,
+            role: candidate.observation.role,
+            request: candidate.observation.request,
+            code: candidate.code
+        )
     }
 
     private func identityObservation(_ outcome: IndexedProbeOutcome) -> IdentityObservation? {
