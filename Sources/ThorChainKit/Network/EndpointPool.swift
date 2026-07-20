@@ -215,12 +215,14 @@ actor EndpointPool {
                 issues.append(.catchingUp)
                 continue
             }
+            guard block.latestHeight > 0, comet.latestHeight > 0 else {
+                issues.append(.stale(block.latestHeight, comet.latestHeight))
+                continue
+            }
             let skew = block.latestHeight >= comet.latestHeight
                 ? block.latestHeight - comet.latestHeight
                 : comet.latestHeight - block.latestHeight
-            if block.latestHeight <= 0 || comet.latestHeight <= 0
-                || skew > configuration.policy.maximumHeightLag
-            {
+            if skew > configuration.policy.maximumHeightLag {
                 issues.append(.stale(block.latestHeight, comet.latestHeight))
                 continue
             }
@@ -331,11 +333,22 @@ actor EndpointPool {
             if case let .invalidResponse(field) = failure {
                 return .invalid(familyId, outcome.index.role, field)
             }
+            if case let .httpStatus(code, _) = failure,
+               !configuration.policy.retryableStatusCodes.contains(code)
+            {
+                return .invalid(familyId, outcome.index.role, .httpEnvelope)
+            }
         }
         return .temporary
     }
 
     private func fallbackError(_ issues: [FamilyIssue]) -> ProviderError {
+        if let invalid = issues.compactMap({ issue -> (String, EndpointRole, ProbeField)? in
+            if case let .invalid(family, role, field) = issue { return (family, role, field) }
+            return nil
+        }).first {
+            return .invalidResponse(familyId: invalid.0, role: invalid.1, field: invalid.2)
+        }
         if issues.contains(where: { if case .catchingUp = $0 { true } else { false } }) {
             return .catchingUp
         }
@@ -344,12 +357,6 @@ actor EndpointPool {
             return nil
         }).first {
             return .staleEndpoint(height: stale.0, bestKnown: stale.1)
-        }
-        if let invalid = issues.compactMap({ issue -> (String, EndpointRole, ProbeField)? in
-            if case let .invalid(family, role, field) = issue { return (family, role, field) }
-            return nil
-        }).first {
-            return .invalidResponse(familyId: invalid.0, role: invalid.1, field: invalid.2)
         }
         if issues.contains(where: { if case .temporary = $0 { true } else { false } }) {
             return .temporarilyUnavailable

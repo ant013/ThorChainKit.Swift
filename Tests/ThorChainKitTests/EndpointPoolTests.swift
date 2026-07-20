@@ -360,7 +360,10 @@ final class EndpointPoolTests: XCTestCase {
             clock: TestEndpointClock()
         )
         let precedenceError = await leaseError(failurePool)
-        XCTAssertEqual(precedenceError, .catchingUp)
+        XCTAssertEqual(
+            precedenceError,
+            .invalidResponse(familyId: "second", role: .cosmosRest, field: .nodeInfoNetwork)
+        )
 
         let healthyProbe = CountingProbe { index, family in
             healthy(index: index, family: family, heights: (100, 100))
@@ -373,6 +376,71 @@ final class EndpointPoolTests: XCTestCase {
         )
         let exclusionError = await leaseError(exclusionPool, excluding: ["first"])
         XCTAssertEqual(exclusionError, .noEligibleFamily)
+    }
+
+    func testHTTPFailuresFollowTerminalAndRetryableMatrix() async throws {
+        let first = try family("first")
+        for status in [400, 401, 403, 404] {
+            let probe = CountingProbe { index, family in
+                outcomes(
+                    index: index,
+                    family: family,
+                    node: .failure(.httpStatus(code: status, retryAfterSeconds: nil)),
+                    block: .failure(.transport(kind: .timeout)),
+                    comet: .failure(.transport(kind: .connection))
+                )
+            }
+            let pool = try EndpointPool(
+                network: .mainnet,
+                configuration: EndpointConfiguration(families: [first]),
+                probe: probe,
+                clock: TestEndpointClock()
+            )
+
+            let error = await leaseError(pool)
+            XCTAssertEqual(
+                error,
+                .invalidResponse(familyId: "first", role: .cosmosRest, field: .httpEnvelope)
+            )
+        }
+        for status in [408, 429, 502, 503, 504] {
+            let probe = CountingProbe { index, family in
+                outcomes(
+                    index: index,
+                    family: family,
+                    node: .failure(.httpStatus(code: status, retryAfterSeconds: nil)),
+                    block: .failure(.transport(kind: .timeout)),
+                    comet: .failure(.transport(kind: .connection))
+                )
+            }
+            let pool = try EndpointPool(
+                network: .mainnet,
+                configuration: EndpointConfiguration(families: [first]),
+                probe: probe,
+                clock: TestEndpointClock()
+            )
+
+            let error = await leaseError(pool)
+            XCTAssertEqual(error, .temporarilyUnavailable)
+        }
+    }
+
+    func testExtremeNonpositiveHeightsFailClosedWithoutOverflow() async throws {
+        let first = try family("first")
+        for heights in [(Int64.min, Int64.max), (Int64.max, Int64.min)] {
+            let probe = CountingProbe { index, family in
+                healthy(index: index, family: family, heights: heights)
+            }
+            let pool = try EndpointPool(
+                network: .mainnet,
+                configuration: EndpointConfiguration(families: [first]),
+                probe: probe,
+                clock: TestEndpointClock()
+            )
+
+            let error = await leaseError(pool)
+            XCTAssertEqual(error, .staleEndpoint(height: heights.0, bestKnown: heights.1))
+        }
     }
 
     private func leaseError(
