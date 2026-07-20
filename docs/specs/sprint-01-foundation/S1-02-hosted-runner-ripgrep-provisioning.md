@@ -331,7 +331,7 @@ import sys
 
 ansi = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 timestamp = re.compile(
-    r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)[ \t]+(.+)$"
+    r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)(?:[ \t]+(.*))?$"
 )
 
 with open(sys.argv[1], encoding="utf-8", newline="") as source:
@@ -343,9 +343,9 @@ with open(sys.argv[1], encoding="utf-8", newline="") as source:
         job, step, remainder = fields
         remainder = remainder.removeprefix("\ufeff")
         match = timestamp.match(remainder)
-        if not job or not step or not match or not match.group(2).strip():
-            raise SystemExit(f"malformed hosted log at line {line_number}: invalid prefix or payload")
-        print(match.group(2))
+        if not job or not step or not match:
+            raise SystemExit(f"malformed hosted log at line {line_number}: invalid prefix or timestamp")
+        print(match.group(2) or "")
 PY
 rg -n 'workflow_ref=|workflow_sha=|event_sha=|pr_head_sha=|checkout_sha=|PASS verify-s1-02-test-discovery' <normalized-hosted-log>
 test "$(rg -c '^rg_version_line=ripgrep 15\.2\.0 \(rev [0-9a-f]+\)$' <normalized-hosted-log>)" = 1
@@ -363,7 +363,7 @@ import re
 import sys
 
 ansi = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
-timestamp = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z[ \t]+(.+)$")
+timestamp = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z(?:[ \t]+(.*))?$")
 with open(sys.argv[1], encoding="utf-8", newline="") as source:
     for raw_line in source:
         fields = ansi.sub("", raw_line.rstrip("\r\n")).split("\t", 2)
@@ -372,7 +372,7 @@ with open(sys.argv[1], encoding="utf-8", newline="") as source:
         match = timestamp.match(fields[2].removeprefix("\ufeff"))
         if not match:
             raise SystemExit(1)
-        print(match.group(1))
+        print(match.group(1) or "")
 PY
 diff -u <fixture-expected> <fixture-normalized>
 printf '%s\t%s\t%s\n' s1-02 'Set up job' 'not-a-timestamp payload' > <malformed-timestamp-fixture>
@@ -380,7 +380,7 @@ if python3 - "<malformed-timestamp-fixture>" <<'PY'
 import sys
 import re
 
-timestamp = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z[ \t]+.+$")
+timestamp = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z(?:[ \t]+.*)?$")
 for line in open(sys.argv[1], encoding="utf-8"):
     fields = line.rstrip("\r\n").split("\t", 2)
     if len(fields) != 3 or not timestamp.match(fields[2].removeprefix("\ufeff")):
@@ -396,8 +396,9 @@ run `head_sha`; each recorded SHA must be compared explicitly with the approved
 exact head, and the run conclusion must be successful. The full `gh run
 view --log` artifact is the source. ANSI removal followed by strict removal of
 exactly three tab-delimited fields—job, step, and UTC timestamp—is the
-deterministic normalization step. Any malformed or under-columned line fails
-visibly; fields are never silently invented. The normalized payload must
+deterministic normalization step. A timestamped blank payload is valid and
+emits an empty normalized line; only missing job/step/timestamp or wrong tab
+structure fails visibly. Fields are never silently invented. The normalized payload must
 contain exactly one validated `rg_version_line` and exactly one exact 40-hex
 value for each SHA key, with each value matching the approved head. The
 normalized log must also show unchanged S1-02 discovery output. A replay fixture
