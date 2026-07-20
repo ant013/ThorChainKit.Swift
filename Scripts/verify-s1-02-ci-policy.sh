@@ -635,6 +635,28 @@ def run_contract_mutants(workflow):
                 workflow.replace(PACKAGE_CONTRACT_BLOCK, reordered, 1)
             ),
         )
+    policy_command = '          Scripts/verify-s1-02-ci-policy.sh steady-state --ref "$(git rev-parse HEAD)"\n'
+    for label, insertion in (
+        (
+            "GITHUB_ENV PATH mutation after policy command",
+            '          echo "PATH=/tmp:$PATH" >> "$GITHUB_ENV"\n',
+        ),
+        (
+            "extracted binary replacement after policy command",
+            '          cp "$RUNNER_TEMP/replacement" "$RUNNER_TEMP/ripgrep-15.2.0-aarch64-apple-darwin/rg"\n',
+        ),
+    ):
+        mutated_contract = PACKAGE_CONTRACT_BLOCK.replace(
+            policy_command,
+            policy_command + insertion,
+            1,
+        )
+        expect_mutant_failure(
+            label,
+            lambda mutated_contract=mutated_contract: verify_ripgrep_provisioning(
+                workflow.replace(PACKAGE_CONTRACT_BLOCK, mutated_contract, 1)
+            ),
+        )
     expect_mutant_failure(
         "symbolic policy ref",
         lambda: verify_ripgrep_provisioning(
