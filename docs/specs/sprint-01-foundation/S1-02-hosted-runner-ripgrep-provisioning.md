@@ -1,10 +1,11 @@
 # S1-02 — Hosted runner ripgrep provisioning
 
-Status: design revision 9, spec-only. Revision 7 remains the frozen
-ripgrep-provisioning design and exact-head CR/QA baseline; revision 8's
-Maestro diagnosis is preserved. This revision adds only the simulator-runtime
-selector correction and its A/B approval boundary. Explicit user approval is
-required before any recovery implementation.
+Status: design revision 10, spec-only. Revision 7 remains the frozen
+ripgrep-provisioning design and exact-head CR/QA baseline; revisions 8 and 9's
+Maestro diagnosis and selector evidence are preserved. This revision replaces
+revision 9's impossible local iOS 26.2 prerequisite with deterministic
+verifier/mutant proof and one post-implementation hosted acceptance gate.
+Explicit user approval is required before any recovery implementation.
 
 ## Goal and assumptions
 
@@ -407,6 +408,10 @@ diagnosis.
 
 ## Revision 9 — simulator runtime selector correction
 
+**Superseded by revision 10.** The runtime hypothesis and official image
+evidence remain historical context, but revision 9's requirement for a local
+iOS 26.2 A/B leg is no longer normative.
+
 The operator cancelled the redundant unchanged-head retry. Official
 `macos-26-arm64` image evidence shows that Xcode 26.3 uses the iOS 26.2 SDK
 while the image also provides iOS 26.2 and iOS 26.4.1 simulator runtimes:
@@ -476,6 +481,70 @@ was checked directly. Gimle trust remains RED because the target project
 mapping is unavailable. No hosted run, merge, implementation edit, or fresh
 CR/QA review was performed for this revision.
 
+## Revision 10 — evidence correction and deterministic selector proof
+
+Revision 9 is not approvable as written: the operator's exact local toolchain
+has iOS 26.3 and 18.6 runtimes, not iOS 26.2. The exact local evidence is
+nevertheless meaningful and complete for the current hypothesis:
+
+| Tuple | Evidence |
+|---|---|
+| Local | Maestro 2.6.1 release SHA-256 `3440825f514f537c6a96bcf5de995780c2a4a7f83a43208fdc95d4f1fecfad3b`; Temurin JRE SHA-256 `cef790b404cf168fd1a8a7abc5054fbb442c7d4bfe390cceccfe3f64b9b776a9`; Java `Temurin-17.0.19+10`; Xcode 26.3 build `17C529`; iPhoneSimulator SDK 26.2; local iPhone 17 Pro on iOS 26.3, UDID `9F8C536F-C2BF-44A0-B315-85E7405D5F76`; S1-01 and S1-02 flows passed and OCR scans passed. |
+| Hosted | Xcode 26.3 with iOS 26.4.1 selected by the first-shutdown-iPhone selector; install/launch passed, then Maestro failed at `127.0.0.1:50637` before assertions. |
+
+This contrast supports a runtime-compatibility hypothesis but does not prove
+that iOS 26.2 will pass. The old revision-9 local iOS 26.2 A/B prerequisite
+is removed; no pending revision-8 or revision-9 approval is accepted.
+
+### Narrow implementation delta after approval
+
+The next implementation slice remains limited to the existing two paths:
+
+1. `.github/workflows/ci.yml` must select only
+   `com.apple.CoreSimulator.SimRuntime.iOS-26-2`, select exactly one
+   deterministic available shutdown iPhone from that bucket, and log the
+   Xcode version, requested runtime, selected runtime identifier, device name,
+   and UDID before build/install/launch.
+2. `Scripts/verify-s1-02-ci-policy.sh` must add positive contract checks and
+   temporary-copy mutants proving that the workflow rejects: flattened
+   all-runtime selection, a missing runtime filter, nondeterministic device
+   selection, missing identity logging, and silent fallback to a newer or
+   different runtime.
+3. The workflow must fail closed before build/install/launch when the exact
+   runtime is absent or when zero or multiple eligible devices violate the
+   deterministic selection contract.
+
+The Maestro 2.6.1, Temurin 17.0.19+10, ripgrep, permission, flow-order, and
+acceptance semantics remain unchanged. No alternative version, runner, or
+runtime is guessed. No implementation edit is authorized by this revision.
+
+### Verification and hosted gate
+
+The local exact-toolchain evidence above is the required pre-implementation
+proof. After approval, implementation must receive fresh adversarial
+CodeReviewer review and independent QA at a new exact head. Exactly one hosted
+run is then authorized against that new head and must prove, in its logs:
+
+- the exact checked-out SHA and workflow/event/PR SHA equality;
+- Xcode 26.3 identity and the requested iOS 26.2 runtime identifier;
+- one deterministic iPhone device from that runtime, including name and UDID;
+- successful ripgrep policy/product gates, builds, install, launch, and both
+  Maestro flows.
+
+If the explicit iOS 26.2 hosted flow still fails with the same driver error,
+stop and require a separately approved Maestro/XCUITest compatibility design.
+Do not dispatch another run at unchanged head `64575a9`, merge, or bypass the
+permission/flow acceptance.
+
+### Revision 10 evidence status and identity
+
+The spec-only head for this revision is recorded in the pushed handoff and
+report; the implementation base remains `64575a9aea42201b31f3549ba517f1e02017199d`.
+Codebase-memory is `ready`; Serena and targeted `rg`/Git verified the selector
+and lifecycle anchors; official runner-image evidence was checked directly;
+Gimle trust remains RED. No hosted rerun, merge, implementation edit, or fresh
+CR/QA review was performed for this revision.
+
 ## Gimle reliability and approval gate
 
 Gimle health was reachable, but `palace.memory.get_project_overview` returned
@@ -496,8 +565,8 @@ provisioning is absent must not be used as a current-tree claim. Current-tree
 presence and policy gaps are verified directly at the assigned head and must be
 rechecked at the exact pushed review head.
 
-This is the complete spec-only deliverable for THR-52 revision 9. The prior
-hosted ripgrep failure, downstream Maestro driver failure, runtime-selector
-correction, A/B evidence requirement, and recovery boundary are recorded
+This is the complete spec-only deliverable for THR-52 revision 10. The prior
+hosted ripgrep failure, local-pass/hosted-failure contrast, deterministic
+runtime-selector proof, one-run hosted gate, and recovery boundary are recorded
 above. Symbolic `HEAD` remains explicitly rejected as a policy input. Explicit
 user approval of this revision is required before any recovery implementation.
