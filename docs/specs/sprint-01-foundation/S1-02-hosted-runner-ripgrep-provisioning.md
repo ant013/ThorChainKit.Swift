@@ -81,9 +81,10 @@ rg_version_line="${rg_version_output%%$'\n'*}"
 
 ## Proposed workflow shape
 
-Add the provisioning step immediately before the existing package/S1-02
-contract step. Within that contract step, the exact-SHA policy gate must be the
-first command, before any build, test, or product-verifier command:
+Retain the existing pinned provisioning step immediately before the package/S1-02
+contract step; do not add, duplicate, or redesign it. Within that existing
+contract step, the exact-SHA policy gate must be the first command, before any
+build, test, or product-verifier command:
 
 ```text
 Scripts/verify-s1-02-ci-policy.sh steady-state --ref "$(git rev-parse HEAD)"
