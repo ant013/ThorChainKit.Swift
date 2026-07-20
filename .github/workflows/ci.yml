@@ -93,6 +93,7 @@ jobs:
           if ! rg_version_output=$("$rg_path" --version); then exit 1; fi
           rg_version_line="${rg_version_output%%$'\n'*}"
           [[ "$rg_version_line" =~ ^ripgrep\ 15\.2\.0\ \(rev\ [0-9a-f]+\)$ ]]
+          printf 'rg_version_line=%s\n' "$rg_version_line"
           echo "$rg_dir" >> "$GITHUB_PATH"
       - name: Select exact iOS 26.2 simulator
         run: |

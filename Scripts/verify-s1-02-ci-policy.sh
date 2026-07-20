@@ -92,6 +92,7 @@ RIPGREP_PROVISION_BLOCK = r"""      - name: Provision pinned ripgrep
           if ! rg_version_output=$("$rg_path" --version); then exit 1; fi
           rg_version_line="${rg_version_output%%$'\n'*}"
           [[ "$rg_version_line" =~ ^ripgrep\ 15\.2\.0\ \(rev\ [0-9a-f]+\)$ ]]
+          printf 'rg_version_line=%s\n' "$rg_version_line"
           echo "$rg_dir" >> "$GITHUB_PATH"
 """
 PACKAGE_CONTRACT_BLOCK = r"""      - name: Verify package and S1-02 contract
@@ -273,6 +274,9 @@ def verify_ripgrep_provisioning(workflow):
     consumer_at = workflow.find(PACKAGE_CONTRACT_BLOCK)
     if provision_at > consumer_at:
         fail("ripgrep provisioning must precede the S1-02 verifier consumer")
+    interval = workflow[provision_at + len(RIPGREP_PROVISION_BLOCK) : consumer_at]
+    if interval != SIMULATOR_SELECTION_BLOCK:
+        fail("only the approved simulator selection may occur before the S1-02 consumer")
     outside_provision = re.sub(
         r"\\[ \t]*\r?\n[ \t]*",
         " ",
@@ -459,6 +463,11 @@ def run_ripgrep_mutants(workflow):
             "          [[ \"$rg_version_line\" =~ ^ripgrep\\ 15\\.2\\.0\\ \\(rev\\ [0-9a-f]+\\)$ ]]\n",
             "          [[ \"$rg_version_line\" == \"ripgrep 15.2.0\"* ]]\n",
         ),
+        (
+            "missing validated version log emission",
+            "          printf 'rg_version_line=%s\\n' \"$rg_version_line\"" + "\n",
+            "",
+        ),
     ):
         expect_mutant_failure(
             label,
@@ -511,7 +520,29 @@ def run_ripgrep_mutants(workflow):
                 1,
             )
         ),
-        )
+    )
+    expect_mutant_failure(
+        "GITHUB_ENV PATH shadowing between provisioning and consumer",
+        lambda: verify_ripgrep_provisioning(
+            workflow.replace(
+                PACKAGE_CONTRACT_BLOCK,
+                '      - name: Shadow runner PATH\n        run: echo "PATH=/tmp:$PATH" >> "$GITHUB_ENV"\n'
+                + PACKAGE_CONTRACT_BLOCK,
+                1,
+            )
+        ),
+    )
+    expect_mutant_failure(
+        "extracted binary replacement between provisioning and consumer",
+        lambda: verify_ripgrep_provisioning(
+            workflow.replace(
+                PACKAGE_CONTRACT_BLOCK,
+                '      - name: Replace extracted ripgrep\n        run: cp "$RUNNER_TEMP/replacement" "$RUNNER_TEMP/ripgrep-15.2.0-aarch64-apple-darwin/rg"\n'
+                + PACKAGE_CONTRACT_BLOCK,
+                1,
+            )
+        ),
+    )
 
 
 def run_simulator_mutants(workflow):
