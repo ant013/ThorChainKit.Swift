@@ -1,7 +1,8 @@
 # S1-02 — Hosted runner ripgrep provisioning
 
-Status: design revision 1, spec-only. Explicit user approval is required before
-workflow or verifier implementation.
+Status: design revision 2, spec-only. Revision 1 approval is superseded by this
+SHA-binding correction. Explicit user approval is required before workflow or
+verifier implementation.
 
 ## Goal and assumptions
 
@@ -69,6 +70,25 @@ Do not invoke `rg` before PATH update except by its explicit absolute extracted
 path. Exact-head preflight, `workflow_sha` equality, checkout equality,
 permissions, and triggers remain unchanged.
 
+## Exact checked-out SHA binding
+
+The existing steady-state policy invocation must pass the exact commit checked
+out by the preceding verification step:
+
+```text
+Scripts/verify-s1-02-ci-policy.sh steady-state --ref "$(git rev-parse HEAD)"
+```
+
+The policy verifier must assert that literal command expression, including the
+`git rev-parse HEAD` expansion, and must reject `--ref HEAD`. The hosted run
+`29750250371` stopped earlier at `Scripts/verify-s1-02.sh:208` with `rg:
+command not found`, so it did not expose this latent policy defect. The
+steady-state parser already requires a 40-character commit SHA; accepting the
+symbolic `HEAD` argument would therefore either fail after the real consumer or
+force the verifier to resolve an ambient symbolic ref. Neither behavior binds
+the policy result to the exact checkout SHA proved by the workflow. The
+verifier must remain fail-closed and SHA-bound.
+
 ## Analog delta matrix
 
 | Dimension | Verified invariant | Required delta | Rejected difference/failure |
@@ -79,16 +99,19 @@ permissions, and triggers remain unchanged.
 | Dependencies/trust | Maestro uses a literal URL and SHA-256 before extraction. | Pin version, URL, and exact digest. | Homebrew or `latest` adds mutable host drift. |
 | Failure behavior | Checksum failure stops the shell step. | Download, digest, archive, architecture, and version failures fail closed. | Continuing after checksum failure is unsafe. |
 | Consumer/test seam | `Scripts/verify-s1-02.sh:206-210` is the actual consumer and `Scripts/verify-s1-02-ci-policy.sh` is the existing policy authority. | Require the exact block and ordering in the policy verifier, then reach the exact allowlist comparison. | Version-only checking or a second script misses/removes the durable regression guard. |
+| Exact-head binding | CI proves `git rev-parse HEAD == EXPECTED_HEAD_SHA` before product commands. | Pass `$(git rev-parse HEAD)` to steady-state policy and assert that exact expression. | Allowing `--ref HEAD` weakens the 40-character SHA contract and can detach policy evidence from the checked-out commit. |
 
 ## Tests before implementation
 
 - Reproduce the baseline hosted failure at line 208 with no provisioned `rg`.
 - Extend `Scripts/verify-s1-02-ci-policy.sh` (no new script) with assertions for
   the exact URL, version, archive, digest, arm64/version checks, ordering before
-  `Scripts/verify-s1-02.sh`, verify-before-extract/PATH, and `$GITHUB_PATH`.
+  `Scripts/verify-s1-02.sh`, verify-before-extract/PATH, `$GITHUB_PATH`, and
+  the exact checked-out SHA expression passed to the steady-state verifier.
 - Use temporary-copy mutants for missing provisioning, provisioning moved after
   the consumer, wrong URL/version/digest, verification after extraction or PATH,
-  mutable package-manager fallback, and invalid architecture/version assertions;
+  mutable package-manager fallback, invalid architecture/version assertions, and
+  replacing `--ref "$(git rev-parse HEAD)"` with `--ref HEAD`;
   each must fail before product verification.
 - The positive hosted run must reach the existing discovery command and retain
   the prior 42-test result. No allowlist changes are introduced.
@@ -100,13 +123,15 @@ permissions, and triggers remain unchanged.
 2. URL, version, archive name, and digest match the official 15.2.0 asset.
 3. Non-arm64, download/checksum/extract, missing-binary, and version failures
    fail closed; PATH is not updated before checksum verification.
-4. Provisioning precedes `Scripts/verify-s1-02.sh` and its existing allowlist
-   check passes on the hosted runner.
+4. Provisioning precedes `Scripts/verify-s1-02.sh`; its existing allowlist
+   check passes on the hosted runner; and the steady-state policy receives the
+   exact checked-out SHA expression rather than symbolic `HEAD`.
 5. Exact-head, checkout, build/test, dispatch, permissions, and Maestro pins
    remain unchanged.
 6. No package-manager path, action, trigger, secret, binary, or unrelated file
    change is introduced.
-7. Static/mutant checks and the exact hosted run are recorded before review;
+7. Static/mutant checks, including the exact-SHA binding mutant, and the exact
+   hosted run are recorded before review;
    any later push invalidates hosted evidence.
 
 ## Verification plan
@@ -119,6 +144,7 @@ git status --short --branch
 git show e9c667a07ab46ecbc7116e1f8e1fa932ff956b8d:.github/workflows/ci.yml
 rg --hidden -n 'Maestro|shasum -a 256 -c|GITHUB_PATH' .github/workflows/ci.yml
 rg -n '\| rg ' Scripts/verify-s1-02.sh
+rg -n 'steady-state --ref|git rev-parse HEAD' .github/workflows/ci.yml Scripts/verify-s1-02-ci-policy.sh
 curl -fsSL https://api.github.com/repos/BurntSushi/ripgrep/releases/tags/15.2.0
 shasum -a 256 ripgrep-15.2.0-aarch64-apple-darwin.tar.gz
 tar -tzf ripgrep-15.2.0-aarch64-apple-darwin.tar.gz
@@ -128,7 +154,7 @@ Implementation-phase checks, not authorized or run here:
 
 ```text
 git diff --check
-Scripts/verify-s1-02-ci-policy.sh steady-state --ref HEAD
+Scripts/verify-s1-02-ci-policy.sh steady-state --ref "$(git rev-parse HEAD)"
 Scripts/verify-s1-02.sh
 gh workflow run CI --ref <same-repository-feature-branch> -f pr_number=<PR> -f expected_head_sha=<exact-head> -f confirmation=FINAL_S1_02_GATE
 gh run view <run-id> --log-failed
@@ -151,6 +177,10 @@ head SHA, successful `rg --version`, and unchanged S1-02 discovery output.
   durably rejects missing/moved provisioning, wrong URL/version/digest,
   verify-after-extract/PATH, mutable package-manager fallback, and invalid
   architecture/version assertions.
+- **D-005 Exact-head binding — PENDING ThorChainCodeReviewer review.** Revision
+  2 requires the steady-state policy command to pass `$(git rev-parse HEAD)` and
+  adds a mutant that rejects symbolic `--ref HEAD`; revision 1 did not cover
+  this masked defect.
 
 Open question: if `macos-26` becomes x86_64, approve a separately pinned asset
 or keep this gate unavailable. This spec chooses fail-closed and does not guess.
@@ -163,5 +193,7 @@ the target under that name, but Gimle does not register it. This is mapping bug
 `G-0001` and makes Gimle trust RED. Current-tree conclusions use codebase-memory,
 Serena, targeted `rg`, Git, and direct official release verification.
 
-This is the complete spec-only deliverable for THR-52. Explicit user approval
-of this revision is required before workflow or verifier implementation.
+This is the complete spec-only deliverable for THR-52 revision 2. The prior
+hosted failure is recorded above, and symbolic `HEAD` is explicitly rejected
+as a policy input. Explicit user approval of this revision is required before
+workflow or verifier implementation.
