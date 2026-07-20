@@ -33,7 +33,7 @@ final class DiagnosticsViewModel: ObservableObject {
     }
 
     var address: String { runtime.kit.address.raw }
-    var runeBalance: String { accountState?.balances[.rune].description ?? "0" }
+    var runeBalance: String { accountState?.balances[.rune]?.description ?? "0" }
     var accountExists: String { String(accountState?.exists ?? false) }
     var accountStateDescription: String { accountState == nil ? "nil" : "present" }
 

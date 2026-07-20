@@ -6,8 +6,9 @@ struct ThorChainExampleApp: App {
 
     init() {
         do {
+            let runtime = try ExampleRuntime()
             _diagnostics = StateObject(
-                wrappedValue: DiagnosticsViewModel(runtime: try ExampleRuntime())
+                wrappedValue: DiagnosticsViewModel(runtime: runtime)
             )
         } catch {
             fatalError("Unable to construct fixture runtime")

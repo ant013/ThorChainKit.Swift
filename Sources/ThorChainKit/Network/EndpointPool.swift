@@ -261,9 +261,6 @@ actor EndpointPool {
             let family = configuration.families[familyIndex]
             let observations = outcomes.compactMap(identityObservation)
                 .sorted {
-                    if $0.role.rawValue != $1.role.rawValue {
-                        return $0.role.rawValue < $1.role.rawValue
-                    }
                     return $0.request.rawValue < $1.request.rawValue
                 }
             let identities = Set(observations.map(\.chainId))
@@ -281,9 +278,6 @@ actor EndpointPool {
             }
             if $0.familyIndex != $1.familyIndex {
                 return $0.familyIndex < $1.familyIndex
-            }
-            if $0.observation.role.rawValue != $1.observation.role.rawValue {
-                return $0.observation.role.rawValue < $1.observation.role.rawValue
             }
             return $0.observation.request.rawValue < $1.observation.request.rawValue
         }).first else {
