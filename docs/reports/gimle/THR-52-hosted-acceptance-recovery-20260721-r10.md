@@ -5,8 +5,7 @@
 This report covers a spec-only correction after exact local toolchain evidence
 invalidated revision 9's local iOS 26.2 prerequisite. The implementation base
 remains `64575a9aea42201b31f3549ba517f1e02017199d`; the new spec-only revision
-head is `c09f7e8`. Spec SHA-256:
-`0d8bc82c234bbf1411d198b8c9a5841f6c2828413130ebab2db0052bdef09f61`. No
+head and spec SHA-256 are recorded after this closure commit. No
 implementation, hosted rerun, merge, or approval interaction was created
 before adversarial review.
 
@@ -50,19 +49,32 @@ verifier must prove these properties with positive checks and temporary-copy
 mutants. Existing Maestro, Temurin, ripgrep, permission, and flow semantics
 remain unchanged.
 
+Revision-10 closure decisions are explicit: D-002 is closed by the pinned
+workflow block and existing no-second-install/PATH-shadowing policy checks;
+D-003 is closed by the existing two-file implementation boundary and no-new-
+path restriction; and D-004 is closed by the existing policy-order, exact-SHA,
+and mutant entry points. Their only residual backlog is the separately
+approved Maestro/XCUITest design if the post-implementation iOS 26.2 hosted
+flow still fails.
+
 Fresh adversarial CodeReviewer and QA evidence are required at the new exact
-head. One hosted run is authorized after those gates; if iOS 26.2 still shows
-the driver failure, a separate Maestro/XCUITest design is required.
+implementation head. One hosted run is authorized only after those gates and
+must complete before merge; if iOS 26.2 still shows the driver failure, a
+separate Maestro/XCUITest design is required.
 
 ## Verification
 
 Completed: codebase-memory status/search, Serena activation, targeted selector
 and lifecycle reads, Git identity checks, operator-supplied exact local tuple
-and flow results, and direct review of official macos-26-arm64 image evidence.
+and flow results, and direct review of official [macos-26-arm64 image
+documentation](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md),
+image version `20260715.0248.1`.
 
 Not run by design: hosted CI, merge, implementation tests, and workflow or
-verifier edits. Adversarial CodeReviewer review is the next phase before a new
-revision-bound approval interaction.
+verifier edits. The spec-review evidence is complete for this revision; the
+hosted run is explicitly post-approval, post-implementation, after fresh
+exact-head CR/QA, and before merge. Adversarial CodeReviewer closure is the
+next phase before a new revision-bound approval interaction.
 
 ## Residual risk
 

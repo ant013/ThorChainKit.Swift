@@ -208,13 +208,17 @@ verifier must remain fail-closed and SHA-bound.
    remain unchanged.
 6. No package-manager path, action, trigger, secret, binary, or unrelated file
    change is introduced.
-7. Static/mutant checks, including every policy-order, no-shadowing,
-   command-status, exact-version, and exact-SHA
-   binding mutant, and the exact hosted run are recorded before review. The
-   evidence includes the exact two-path implementation diff, full run
-   conclusion and logs, successful `rg --version`, workflow/event/PR/checkout/
-   run SHA fields, and an explicit equality comparison to the approved head;
-   any later push invalidates all hosted evidence and requires a fresh run.
+7. Before approval review, the spec-review evidence is recorded: current-tree
+   anchors, the exact two-path implementation boundary, the pinned artifact
+   evidence, the runtime-selector contract, and the static/mutant verification
+   plan. No hosted run is required or authorized for this spec-only review.
+8. After approval and implementation, fresh exact-head CodeReviewer and QA
+   evidence must precede exactly one hosted acceptance run, and that run must
+   complete before merge. Its evidence includes the full run conclusion and
+   logs, successful `rg --version`, workflow/event/PR/checkout/run SHA fields,
+   selected runtime/device identity, and explicit equality with the approved
+   implementation head; any later push invalidates all hosted evidence and
+   requires fresh review, QA, and hosted acceptance.
 
 ## Verification plan
 
@@ -270,25 +274,29 @@ review/QA attestations; repeat them against the new exact head.
   bind it with `git rev-parse HEAD`. Workflow and verifier anchors remain
   present on the assigned branch, and the historical/current-head distinction
   is explicit without self-referentially embedding a commit hash.
-- **D-002 Supply chain — REVISED in revision 6; pending closure.** The official
-  digest and verify-before-extract behavior remain fixed. The policy must also
-  reject second ripgrep installs, ripgrep-specific PATH exports, PATH mutations
-  that can shadow the verified directory before the consumer, command-status
-  failures, and inexact version matching. The minimal version assertion
-  tightening is explicitly allowed in the existing block and its policy
-  fixture.
-- **D-003 Minimum scope — REVISED in revision 6; pending closure.** The current
-  tree already contains the pinned provisioning block and its basic policy
-  checks. The smallest remaining delta is moving the existing policy command
-  before product verification, minimally tightening the existing version
-  assertion, and adding exact workflow-order, exact-SHA, and no-shadowing
-  assertions in the two existing implementation paths.
-- **D-004 Verification validity — REVISED in revision 6; pending closure.** The
-  policy gate is required before build, test, and the actual failing `rg`
-  pipeline. Separate mutants move it after each build, test, and consumer
-  command, and replace the exact SHA expression with symbolic `HEAD`; every
-  mutant must fail before product verification, so the policy guard cannot be
-  bypassed by any late workflow command or ambient ref.
+- **D-002 Supply chain — CLOSED in revision 10.** Current-tree anchors are the
+  pinned provisioning block at `.github/workflows/ci.yml:78-96` and its policy
+  authority at `Scripts/verify-s1-02-ci-policy.sh:216-239,364-452`. The outcome
+  is a fixed URL/digest, verify-before-extract, architecture/version checks,
+  and rejection of second downloads or PATH shadowing. Residual backlog is
+  limited to a separately approved asset decision if the runner architecture
+  changes; it does not block this slice.
+- **D-003 Minimum scope — CLOSED in revision 10.** Current-tree anchors are
+  `.github/workflows/ci.yml:97-103` and
+  `Scripts/verify-s1-02-ci-policy.sh:97-105,455-489`. The outcome is the
+  smallest two-path delta: move the existing policy invocation before product
+  verification and extend the existing policy verifier with the required
+  order, exact-SHA, no-shadowing, and runtime-selector mutants. No new script,
+  package path, trigger, secret, binary, or unrelated file is authorized.
+- **D-004 Verification validity — CLOSED in revision 10.** Current-tree anchors
+  are the five-command workflow block at `.github/workflows/ci.yml:97-103` and
+  the policy/mutant entry points at
+  `Scripts/verify-s1-02-ci-policy.sh:252-339,455-512`. The outcome separates
+  spec-review proof from the post-implementation gate: static and mutant
+  checks must reject late policy execution and symbolic `HEAD` before product
+  verification, while fresh exact-head CR/QA and one hosted run are required
+  before merge. Residual backlog is only the separately approved Maestro
+  design if the exact iOS 26.2 hosted flow still fails.
 - **D-005 Exact-head binding — ACCEPT.** The steady-state policy command passes
   `$(git rev-parse HEAD)` and the exact-SHA mutant rejects symbolic `--ref HEAD`;
   revision 1 did not cover this masked defect.
@@ -415,7 +423,8 @@ iOS 26.2 A/B leg is no longer normative.
 The operator cancelled the redundant unchanged-head retry. Official
 `macos-26-arm64` image evidence shows that Xcode 26.3 uses the iOS 26.2 SDK
 while the image also provides iOS 26.2 and iOS 26.4.1 simulator runtimes:
-[actions/runner-images macos-26 image documentation](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-Readme.md).
+[actions/runner-images macos-26-arm64 image documentation](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md),
+image version `20260715.0248.1`.
 The current workflow selector at `.github/workflows/ci.yml:117-118` searches
 all runtime buckets and chooses the first shutdown iPhone. That selection
 chose iOS 26.4.1 on the failed run, even though the workflow pins Xcode 26.3.
@@ -521,9 +530,11 @@ runtime is guessed. No implementation edit is authorized by this revision.
 ### Verification and hosted gate
 
 The local exact-toolchain evidence above is the required pre-implementation
-proof. After approval, implementation must receive fresh adversarial
-CodeReviewer review and independent QA at a new exact head. Exactly one hosted
-run is then authorized against that new head and must prove, in its logs:
+proof for spec review; it is not a hosted acceptance prerequisite for approval
+of this spec-only revision. After explicit approval and implementation, the
+implementation must receive fresh adversarial CodeReviewer review and
+independent QA at a new exact head. Exactly one hosted run is then authorized
+against that new head, before merge, and must prove in its logs:
 
 - the exact checked-out SHA and workflow/event/PR SHA equality;
 - Xcode 26.3 identity and the requested iOS 26.2 runtime identifier;
