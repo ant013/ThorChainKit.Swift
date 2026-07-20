@@ -1,9 +1,10 @@
 # S1-02 — Hosted runner ripgrep provisioning
 
-Status: design revision 8, spec-only. Revision 7 remains the frozen
-ripgrep-provisioning design and exact-head CR/QA baseline. This revision adds
-only the hosted-acceptance recovery diagnosis and its approval boundary;
-explicit user approval is required before any recovery implementation.
+Status: design revision 9, spec-only. Revision 7 remains the frozen
+ripgrep-provisioning design and exact-head CR/QA baseline; revision 8's
+Maestro diagnosis is preserved. This revision adds only the simulator-runtime
+selector correction and its A/B approval boundary. Explicit user approval is
+required before any recovery implementation.
 
 ## Goal and assumptions
 
@@ -404,6 +405,77 @@ ripgrep evidence and defer the downstream Maestro issue to a new slice, or
 authorize a separate runner/fixture recovery slice after the exact-pair
 diagnosis.
 
+## Revision 9 — simulator runtime selector correction
+
+The operator cancelled the redundant unchanged-head retry. Official
+`macos-26-arm64` image evidence shows that Xcode 26.3 uses the iOS 26.2 SDK
+while the image also provides iOS 26.2 and iOS 26.4.1 simulator runtimes:
+[actions/runner-images macos-26 image documentation](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-Readme.md).
+The current workflow selector at `.github/workflows/ci.yml:117-118` searches
+all runtime buckets and chooses the first shutdown iPhone. That selection
+chose iOS 26.4.1 on the failed run, even though the workflow pins Xcode 26.3.
+
+### Narrow recovery delta
+
+The only proposed recovery implementation delta is to make simulator choice
+explicit and fail closed:
+
+1. Derive the simulator runtime from the pinned Xcode/SDK contract, selecting
+   the exact iOS 26.2 runtime supported by Xcode 26.3 rather than flattening
+   every runtime bucket.
+2. Select a deterministic iPhone device within that runtime and assert that
+   the selected device's runtime identifier is exactly the requested runtime.
+3. Fail before build/install/launch if the required runtime or deterministic
+   device is unavailable; never silently fall back to iOS 26.4.1 or another
+   runtime.
+4. Keep the existing Maestro 2.6.1 and Temurin 17.0.19+10 pins unchanged for
+   the A/B test. Do not change ripgrep provisioning, permission setup, flow
+   order, or acceptance semantics in this narrow correction.
+
+This is a design, not authorization to edit `.github/workflows/ci.yml`.
+
+### Required local A/B evidence before implementation approval
+
+The operator must run the exact pinned Maestro/Temurin pair locally against:
+
+- A: the current all-runtimes, first-shutdown-iPhone selector, recording the
+  selected runtime and the loopback driver result; and
+- B: the proposed explicit iOS 26.2 selector, with the same app, flow, Xcode,
+  Maestro, Java, and device family, recording the same driver readiness data.
+
+Each leg must record `maestro --version`, Java identity,
+`xcodebuild -version`, simulator runtime/device identifiers, install/launch
+success, driver installation/readiness, loopback port behavior, and the first
+flow result. A/B evidence that does not distinguish the runtime is
+insufficient. If B is not available locally, the recovery remains blocked and
+the design must not guess a different runtime, Maestro version, or runner.
+
+### Revision 9 acceptance boundary
+
+1. No hosted run is authorized at unchanged head `64575a9`; the cancelled
+   retry adds no evidence and must not be repeated.
+2. Implementation may begin only after explicit approval of this revision and
+   local A/B evidence shows that the selector correction is a meaningful,
+   fail-closed diagnostic delta.
+3. The implementation head must receive fresh CodeReviewer and QA evidence;
+   revision 7's attestations remain historical evidence for `64575a9` and are
+   not silently transferred to a new head.
+4. The new hosted run must bind the exact new head, selected runtime, Xcode
+   version, and simulator device in its logs before any Maestro flow result is
+   accepted.
+5. If the explicit iOS 26.2 A/B leg still fails with the same driver error,
+   stop and create a separately approved Maestro/XCUITest compatibility
+   recovery design. Do not bypass permissions or downgrade/upgrade pins by
+   inference.
+
+### Revision 9 evidence status
+
+Codebase-memory remains `ready`; Serena and targeted `rg`/Git independently
+verified the selector and lifecycle anchors. Official runner-image evidence
+was checked directly. Gimle trust remains RED because the target project
+mapping is unavailable. No hosted run, merge, implementation edit, or fresh
+CR/QA review was performed for this revision.
+
 ## Gimle reliability and approval gate
 
 Gimle health was reachable, but `palace.memory.get_project_overview` returned
@@ -424,8 +496,8 @@ provisioning is absent must not be used as a current-tree claim. Current-tree
 presence and policy gaps are verified directly at the assigned head and must be
 rechecked at the exact pushed review head.
 
-This is the complete spec-only deliverable for THR-52 revision 8. The prior
-hosted ripgrep failure, the downstream Maestro driver failure, the evidence
-limit, and the recovery boundary are recorded above. Symbolic `HEAD` remains
-explicitly rejected as a policy input. Explicit user approval of this revision
-is required before any recovery implementation.
+This is the complete spec-only deliverable for THR-52 revision 9. The prior
+hosted ripgrep failure, downstream Maestro driver failure, runtime-selector
+correction, A/B evidence requirement, and recovery boundary are recorded
+above. Symbolic `HEAD` remains explicitly rejected as a policy input. Explicit
+user approval of this revision is required before any recovery implementation.
