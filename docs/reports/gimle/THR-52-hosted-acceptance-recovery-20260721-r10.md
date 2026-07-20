@@ -5,8 +5,10 @@
 This report covers a spec-only correction after exact local toolchain evidence
 invalidated revision 9's local iOS 26.2 prerequisite. The implementation base
 remains `64575a9aea42201b31f3549ba517f1e02017199d`; the new spec-only revision
-head is recorded in the final handoff after push. No implementation, hosted
-rerun, merge, or approval interaction was created before adversarial review.
+head is `c09f7e8`. Spec SHA-256:
+`0d8bc82c234bbf1411d198b8c9a5841f6c2828413130ebab2db0052bdef09f61`. No
+implementation, hosted rerun, merge, or approval interaction was created
+before adversarial review.
 
 ## Gimle trust
 
