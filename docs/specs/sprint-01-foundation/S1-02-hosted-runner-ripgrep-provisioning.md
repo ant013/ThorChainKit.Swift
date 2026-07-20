@@ -396,14 +396,16 @@ run `head_sha`; each recorded SHA must be compared explicitly with the approved
 exact head, and the run conclusion must be successful. The full `gh run
 view --log` artifact is the source. ANSI removal followed by strict removal of
 exactly three tab-delimited fields—job, step, and UTC timestamp—is the
-deterministic normalization step. A timestamped blank payload is valid and
+deterministic normalization step: remove the two tab-delimited prefix fields,
+job and step, then parse the leading timestamp from the third field's
+timestamp-plus-payload remainder. A timestamped blank payload is valid and
 emits an empty normalized line; only missing job/step/timestamp or wrong tab
 structure fails visibly. Fields are never silently invented. The normalized payload must
 contain exactly one validated `rg_version_line` and exactly one exact 40-hex
 value for each SHA key, with each value matching the approved head. The
 normalized log must also show unchanged S1-02 discovery output. A replay fixture
-with the demonstrated `s1-02<TAB>Verify package and S1-02
-contract<TAB><UTC timestamp+payload>` shape must pass, while a
+with the demonstrated `s1-02<TAB>Set up job<TAB><UTC timestamp+payload>` shape
+must pass, while a
 malformed-timestamp fixture must fail before assertions. A push
 after the run, or any change to the reviewed head, invalidates the run and all
 local review/QA attestations; repeat them against the new exact head.
