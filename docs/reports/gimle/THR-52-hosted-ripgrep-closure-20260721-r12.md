@@ -5,8 +5,8 @@
 This is the narrow revision-12 report for the specification at
 `docs/specs/sprint-01-foundation/S1-02-hosted-runner-ripgrep-provisioning.md`.
 The exact pushed spec-content head is
-`555329369cea86dd303a854b81363d1f26489009`; the spec SHA-256 is
-`d85c6035bf08dabfbc03e2a71c21b56007106e91d30df475352e347bc6971f9b`.
+`ec78c64c49fd4f5fe241f181156e1487ed29c990`; the spec SHA-256 is
+`26cb2c250fca64ec1f43f6fd52086cc02ad4213f9c215044d7f6eb3a7bb5bbdc`.
 This report is spec-only: no workflow, verifier, hosted-run, approval, merge,
 or implementation action was performed.
 
@@ -20,7 +20,7 @@ that slug returned `ok=false` with `error=unknown_project`.
 The safe independent fallback is current-tree evidence: codebase-memory reports
 the target index `ready`; Serena was activated for the assigned workspace;
 targeted `rg` and Git reads verified the workflow step/job anchors, the
-three-field fractional-timestamp hosted-log normalization contract,
+two-prefix-field plus fractional-timestamp hosted-log normalization contract,
 specification, and report paths; and the official ripgrep release asset
 evidence is retained from the prior revision. Gimle's mapping failure was not
 treated as evidence that the repository or its symbols are absent.
@@ -30,12 +30,12 @@ treated as evidence that the repository or its symbols are absent.
 ### F1 — hosted-log artifact parsing: corrected
 
 The prior plan parsed `gh run view --log` as column-zero payload, but the
-demonstrated artifact has three tab fields: job, step, and a BOM-prefixed
-timestamp-plus-payload remainder. The revision-12 plan now strips ANSI
-escapes, splits each line on tabs with `maxsplit=2`, removes an optional BOM,
-parses a fractional-or-whole-second UTC timestamp, and emits only the payload
-while preserving payload tabs. Timestamped blank payloads are valid and emit
-empty normalized lines; malformed or under-columned lines fail visibly. It
+demonstrated artifact has two tab-delimited prefix fields—job and step—followed
+by a BOM-prefixed timestamp-plus-payload remainder. The revision-12 plan now
+strips ANSI escapes, splits each line on tabs with `maxsplit=2`, removes an
+optional BOM, parses a fractional-or-whole-second UTC timestamp, and emits only
+the payload while preserving payload tabs. Timestamped blank payloads are valid
+and emit empty normalized lines; malformed or under-columned lines fail visibly. It
 then requires exactly one validated `rg_version_line` and exactly one exact
 40-hex field matching the approved head for each of `workflow_sha`,
 `event_sha`, `pr_head_sha`, and `checkout_sha`. The replay fixture covers the
@@ -84,7 +84,7 @@ git status --short --branch
 shasum -a 256 docs/specs/sprint-01-foundation/S1-02-hosted-runner-ripgrep-provisioning.md
 rg -n 'gh run view|split\("\\t", 2\)|malformed hosted log|prefix-fixture' docs/specs/sprint-01-foundation/S1-02-hosted-runner-ripgrep-provisioning.md
 rg -n 'jobs:|s1-02|Verify package and S1-02 contract' .github/workflows/ci.yml
-git show --stat --oneline 555329369cea86dd303a854b81363d1f26489009
+git show --stat --oneline ec78c64c49fd4f5fe241f181156e1487ed29c990
 gh run view 29764294250 --log > <historical-full-hosted-log>
 python3 <normalizer-script> <historical-full-hosted-log> > <historical-normalized-log>
 test "$(wc -l < <historical-normalized-log)" = 1592
