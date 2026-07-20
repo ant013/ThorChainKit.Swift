@@ -1,6 +1,6 @@
 # S1-03 — Account Derivation and Address Codec
 
-**Status:** revision 5 after closure-2 adversarial REVISE; frozen blocker allowlist is being closed by documentation only. Implementation remains blocked pending closure review and approval.
+**Status:** revision 6 after closure-3 adversarial REVISE; frozen blocker allowlist is being closed by documentation only. Implementation remains blocked pending closure review and approval.
 **Risk:** high/cryptographic boundary.
 **Observable outcome:** an independent seed/public-key vector produces the expected THORChain address; checksum, payload length, mixed case, and wrong-network HRP are rejected before any network/signing call.
 
@@ -398,7 +398,8 @@ count=1024
 
 The replay is canonical and byte-exact: initialize one unsigned 64-bit
 `state` to `seed`; for each case in order, advance the state exactly three
-times by `0x9E3779B97F4A7C15`, apply the standard SplitMix64 mix
+times by `0x9E3779B97F4A7C15` using modulo-2⁶⁴ wrapping arithmetic (`&+`),
+then apply the standard SplitMix64 mix
 (`z = state; z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9; z = (z ^ (z >> 27))
 &* 0x94D049BB133111EB; z ^= z >> 31`), and append each `z` as eight
 little-endian bytes. The first 20 bytes of the resulting 24-byte buffer are

@@ -1,7 +1,7 @@
 # THR-62 — S1-03 Derivation and Address Codec Plan
 
-Status: discovery 2/2 is frozen after REVISE; revision 5 addresses the frozen
-allowlist findings from closure 2/5; closure review 3/5 is required before
+Status: discovery 2/2 is frozen after REVISE; revision 6 addresses the frozen
+allowlist finding from closure 3/5; closure review 4/5 is required before
 approval.
 
 ## Goal and acceptance
@@ -36,7 +36,7 @@ and S1-02, SwiftUI-only Example presentation, and the bounded Maestro flow.
   provenance, dependency/context seams, Xcode/CI/runner wiring, and literal
   base/head/clean-worktree checks.
 - Push the spec, Gimle report, delta matrix, and this plan, then hand the exact
-  head to ThorChainCodeReviewer for closure 3/5. Approval remains prohibited
+  head to ThorChainCodeReviewer for closure 4/5. Approval remains prohibited
   until an exact-head CodeReviewer ACCEPT.
 
 Affected paths: `docs/specs/sprint-01-foundation/S1-03-derivation-address-codec.md`,
@@ -99,8 +99,9 @@ Dependency: Step 1 explicit approval.
   `Scripts/verify-s1-02-ci-policy.sh`, and `.github/workflows/ci.yml`.
 - Require the dependency fixture to contain the immutable S1-01 baseline plus
   the exact HsCryptoKit, HsExtensions, secp256k1, and swift-crypto resolved
-  closure rows; require three SplitMix64 outputs per case, little-endian
-  packing, four-byte truncation, and `count == 1024`.
+  closure rows; require three SplitMix64 outputs per case, modulo-2⁶⁴ state
+  advancement (`&+`), little-endian packing, four-byte truncation, and
+  `count == 1024`.
 - Extend the CI policy matcher with `fetch-depth: 0`, persisted checkout
   credentials, and the exact authenticated fetch/equality check for
   `refs/remotes/origin/main`.
@@ -127,7 +128,7 @@ Dependency: Step 2 implementation shape and Step 1 approval.
 - Run the project-equivalent narrow/full checks and inspect public-symbol,
   dependency, secret, platform, and diff boundaries.
 - Recheck only the frozen discovery-2 blocker IDs and direct changed-line
-  Critical/High regressions during closure; record closure 3/5.
+  Critical/High regressions during closure; record closure 4/5.
 
 Affected paths: exact PR diff and CI/verification artifacts.
 

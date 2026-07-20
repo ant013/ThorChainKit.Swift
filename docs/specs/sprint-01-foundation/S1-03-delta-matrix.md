@@ -1,7 +1,7 @@
 # S1-03 — Analog Delta Matrix and Test Plan
 
 This document is the review-bound delta matrix for
-`S1-03-derivation-address-codec.md`. It is revision 5 after discovery 2/2
+`S1-03-derivation-address-codec.md`. It is revision 6 after discovery 2/2
 REVISE; implementation remains blocked until closure review and explicit
 approval.
 
@@ -46,9 +46,9 @@ approval.
 | Tests before code | Encode/decode round trip for all supported networks; isolated SHA256/HASH160 KATs; exact independent public vectors; uppercase canonicalization; all S1-01 negative cases through `AddressCodec`; BIP173 valid/invalid vectors; direct padding and malformed-length tests; arbitrary UTF-8/property tests; public-symbol subset test. |
 | Verification | `swift test --filter AddressCodecTests`, full `swift test`, exact expected-base/head/clean-worktree verifier, dependency/source/platform/secret verifier, Xcode target/navigation check, real-call-path Maestro mutant checks, deterministic fuzz replay, provenance audit, and `THORCHAIN_SIMULATOR_UDID=<exact-udid> Scripts/run-maestro.sh s1-03` for the Example only. |
 
-## Frozen blocker closure map — discovery 2/2, closure 3/5 pending
+## Frozen blocker closure map — discovery 2/2, closure 4/5 pending
 
-| Frozen IDs | Mechanical closure in revision 5 |
+| Frozen IDs | Mechanical closure in revision 6 |
 |---|---|
 | `S103-ARCH-01` | `.maestro/S1-03-analog-manifest.txt` must reproduce the literal URLs `https://github.com/horizontalsystems/HdWalletKit.Swift.git`, `https://github.com/horizontalsystems/HsCryptoKit.Swift.git`, `https://github.com/horizontalsystems/BitcoinCore.Swift.git`, and `https://github.com/vultisig/vultisig-ios.git` alongside each pinned commit, path, and role. |
 | `S103-ARCH-02`, `THR62-SEC-B02` | `DerivationPath.rawValue`, exact five-component grammar, typed `DerivationPathError`, and host `privateKey(path: DerivationPath.defaultAccount.rawValue)` call shape are normative; the host must not reconstruct the path from independent literals. |
@@ -58,11 +58,11 @@ approval.
 | `THR62-SEC-B01` | Factory has no default `.mainnet`; inherited S1-01 trap is recorded as baseline and cannot be introduced into the S1-03 call path. |
 | `THR62-SEC-B03`, `VOP-04` | Exact bound vector values, output digest, pinned source commits/paths, independent hash/checksum sources, and oracle provenance are specified. |
 | `THR62-SEC-B04` | Capability allowlist, forbidden-edge mutants, exact package products, and the complete two-section resolved-pin fixture are mandatory and fail closed. The inherited S1-01 baseline is the exact `bigint` row from `expected-base:Package.resolved`; the S1-03 closure is the four literal direct/transitive rows for HsCryptoKit `1.3.2`, HsExtensions `1.0.6`, secp256k1 `0.10.0`, and swift-crypto `2.6.0`, with the revisions recorded in the spec. |
-| `THR62-SEC-B05`, `VOP-05` | Internal context-provider seam has production and deterministic injected-failure providers; `S1-03-fuzz-seed.txt` is exactly `version=1`, `algorithm=splitmix64`, `seed=0x534c30332d46555a`, `count=1024`, with three SplitMix64 outputs per case, little-endian packing, and four-byte truncation, replayed by the named test command. |
+| `THR62-SEC-B05`, `VOP-05` | Internal context-provider seam has production and deterministic injected-failure providers; `S1-03-fuzz-seed.txt` is exactly `version=1`, `algorithm=splitmix64`, `seed=0x534c30332d46555a`, `count=1024`, with three SplitMix64 outputs per case, modulo-2⁶⁴ state advancement (`&+`), little-endian packing, and four-byte truncation, replayed by the named test command. |
 | `VOP-02` | Verifier requires literal expected base/head, exact `HEAD`, an explicitly fetched and SHA-checked `refs/remotes/origin/main`, clean worktree, and ancestor relation; the cumulative CI matcher includes the exact checkout/fetch/refspec block. |
 | `VOP-03` | `S1-03-dependency-revisions.txt` has an immutable inherited-baseline section plus an exact four-row S1-03 closure. The verifier compares the expected-base lockfile baseline and the complete current direct/transitive pin union by package identity, URL, version, and revision, while also enforcing the literal closure rows; no version-only, movable-HEAD, missing, extra, or coordinated fixture/lockfile drift is accepted. |
 | All IDs | Any mismatch is a closure finding on the exact changed head, not a new discovery cycle or blocker-list expansion. |
 
-Revision 5 is documentation-only and preserves the accepted protocol choices.
+Revision 6 is documentation-only and preserves the accepted protocol choices.
 Any implementation PR must populate the declared fixture/provenance artifacts
 with exact values and fail closed if a schema field is absent.

@@ -59,7 +59,7 @@ baseline/platform/CI checks, and making the Example Maestro path reachable and
 real-call-path dependent. Explicit approval is still required before
 implementation.
 
-## Discovery 2/2 frozen allowlist and revision 5 closure
+## Discovery 2/2 frozen allowlist and revision 6 closure
 
 ThorChainCodeReviewer independently re-ran the three bounded read-only lanes
 on the pushed revision-2 head and returned `REVISE`. Discovery 2/2 is now
@@ -79,17 +79,20 @@ allowlist for closure-only rework:
 
 Revision 3 closed the security IDs and the non-allowlisted review items, but
 closure 1/5 returned seven frozen High IDs for revision. Revision 4 addressed
-the first closure pass. Closure 2/5 retained four frozen High IDs, so revision
-5 addresses only those IDs: the BitcoinCore path is now the reproducible
+the first closure pass. Closure 2/5 retained four frozen High IDs, and closure
+3/5 retained one frozen High ID, so revision 6 addresses only that remaining
+finding: SplitMix64 state advancement now explicitly uses modulo-2⁶⁴ wrapping
+arithmetic (`&+`). The BitcoinCore path is now the reproducible
 `Sources/BitcoinCore/Classes/SegWit/Bech32.swift` path; the CI contract now
 requires full-history checkout plus an authenticated exact `origin/main`
 refspec/equality check; dependency provenance now freezes the inherited
 S1-01 baseline and all four direct/transitive S1-03 closure pins; and the fuzz
-fixture now specifies the 3072-output SplitMix64 stream, little-endian packing,
-four-byte truncation, and `count == 1024`. The revision preserves the accepted
-protocol choices and remains documentation-only. The next authorized action is
-closure review 3/5 on the exact pushed head; approval and implementation remain
-prohibited until CodeReviewer ACCEPT.
+fixture now specifies the 3072-output SplitMix64 stream, modulo-2⁶⁴ state
+advancement, little-endian packing, four-byte truncation, and `count == 1024`.
+The revision preserves the accepted protocol choices and remains
+documentation-only. The next authorized action is closure review 4/5 on the
+exact pushed head; approval and implementation remain prohibited until
+CodeReviewer ACCEPT.
 
 ## Reproduction and verification record
 
