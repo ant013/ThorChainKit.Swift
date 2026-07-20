@@ -394,11 +394,9 @@ fi
 The hosted result must cite workflow SHA, event SHA, PR head, checkout SHA, and
 run `head_sha`; each recorded SHA must be compared explicitly with the approved
 exact head, and the run conclusion must be successful. The full `gh run
-view --log` artifact is the source. ANSI removal followed by strict removal of
-exactly three tab-delimited fields—job, step, and UTC timestamp—is the
-deterministic normalization step: remove the two tab-delimited prefix fields,
-job and step, then parse the leading timestamp from the third field's
-timestamp-plus-payload remainder. A timestamped blank payload is valid and
+view --log` artifact is the source. After stripping ANSI escapes, split each line
+on at most two tabs into job, step, and a timestamp-plus-payload remainder, then
+parse and remove the leading timestamp. A timestamped blank payload is valid and
 emits an empty normalized line; only missing job/step/timestamp or wrong tab
 structure fails visibly. Fields are never silently invented. The normalized payload must
 contain exactly one validated `rg_version_line` and exactly one exact 40-hex
