@@ -107,12 +107,12 @@ SH
 }
 
 run_fixture() {
-    local fixture=$1
+    local fixture=$1 slice=$2
     SHIM_LOG="$fixture/commands.log" \
     SHIM_UDID="$canary_udid" \
     PATH="$fixture/shims:$PATH" \
     THORCHAIN_SIMULATOR_UDID="$canary_udid" \
-        "$fixture/Scripts/run-maestro.sh" >/dev/null
+        "$fixture/Scripts/run-maestro.sh" "$slice" >/dev/null
 }
 
 verify_provenance() {
@@ -139,23 +139,23 @@ expect_runner_failure() {
         SHIM_UDID="$canary_udid" \
         PATH="$fixture/shims:$PATH" \
         THORCHAIN_SIMULATOR_UDID="$canary_udid" \
-        "$@" "$fixture/Scripts/run-maestro.sh" >/dev/null 2>&1
+        "$@" "$fixture/Scripts/run-maestro.sh" s1-01 >/dev/null 2>&1
     then
         fail "$label was accepted"
     fi
     echo "PASS $label"
 }
 
-happy="$test_root/happy"
+happy="$test_root/happy-s1-01"
 copy_fixture_repo "$happy"
 verify_provenance "$happy/.github/workflows/ci.yml"
-run_fixture "$happy"
-python3 - "$happy/commands.log" "$canary_udid" "$happy" <<'PY' \
+run_fixture "$happy" s1-01
+python3 - "$happy/commands.log" "$canary_udid" "$happy" '.maestro/flows/00-launch-foundation.yaml' <<'PY' \
     || fail "shim argv audit failed"
 import sys
 
 lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
-udid, root = sys.argv[2], sys.argv[3]
+udid, root, flow = sys.argv[2], sys.argv[3], sys.argv[4]
 required = ["simctl boot ", "simctl bootstatus ", "xcodebuild ", "simctl install ", "simctl launch ", "maestro --device "]
 for prefix in required:
     matches = [line for line in lines if prefix in line]
@@ -164,8 +164,50 @@ for prefix in required:
 for line in lines:
     if "--output" in line or "-derivedDataPath" in line:
         assert root in line, line
+maestro = next(line for line in lines if line.startswith("maestro --device "))
+assert maestro.endswith(" " + flow), maestro
 PY
-echo "PASS run-maestro-shim"
+echo "PASS run-maestro-shim-s1-01"
+
+happy="$test_root/happy-s1-02"
+copy_fixture_repo "$happy"
+run_fixture "$happy" s1-02
+python3 - "$happy/commands.log" <<'PY' \
+    || fail "S1-02 exact flow argv audit failed"
+import sys
+
+lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+maestro = next(line for line in lines if line.startswith("maestro --device "))
+assert maestro.endswith(" .maestro/flows/01-endpoint-policy.yaml"), maestro
+assert "00-launch-foundation.yaml" not in maestro
+PY
+echo "PASS run-maestro-shim-s1-02"
+
+fixture="$test_root/missing-slice"
+copy_fixture_repo "$fixture"
+if SHIM_LOG="$fixture/commands.log" SHIM_UDID="$canary_udid" PATH="$fixture/shims:$PATH" \
+    THORCHAIN_SIMULATOR_UDID="$canary_udid" "$fixture/Scripts/run-maestro.sh" >/dev/null 2>&1; then
+    fail "missing slice was accepted"
+fi
+echo "PASS missing-slice"
+
+for bad_slice in '.maestro/flows/00-launch-foundation.yaml' unknown; do
+    fixture="$test_root/bad-slice-${bad_slice##*/}"
+    copy_fixture_repo "$fixture"
+    if SHIM_LOG="$fixture/commands.log" SHIM_UDID="$canary_udid" PATH="$fixture/shims:$PATH" \
+        THORCHAIN_SIMULATOR_UDID="$canary_udid" "$fixture/Scripts/run-maestro.sh" "$bad_slice" >/dev/null 2>&1; then
+        fail "raw or unknown slice was accepted"
+    fi
+done
+echo "PASS invalid-slice"
+
+fixture="$test_root/extra-slice"
+copy_fixture_repo "$fixture"
+if SHIM_LOG="$fixture/commands.log" SHIM_UDID="$canary_udid" PATH="$fixture/shims:$PATH" \
+    THORCHAIN_SIMULATOR_UDID="$canary_udid" "$fixture/Scripts/run-maestro.sh" s1-01 extra >/dev/null 2>&1; then
+    fail "extra slice argument was accepted"
+fi
+echo "PASS extra-slice"
 
 fixture="$test_root/action-provenance"
 copy_fixture_repo "$fixture"
@@ -230,7 +272,7 @@ expect_runner_failure bad-manifest "$fixture" env
 fixture="$test_root/symlink-output"
 copy_fixture_repo "$fixture"
 mkdir -p "$fixture/build" "$fixture/outside"
-ln -s "$fixture/outside" "$fixture/build/maestro-results"
+ln -s "$fixture/outside" "$fixture/build/s1-01-maestro-results"
 expect_runner_failure symlink-output "$fixture" env
 
 mutate_runner() {
@@ -248,12 +290,12 @@ PY
 
 fixture="$test_root/relative-output"
 copy_fixture_repo "$fixture"
-mutate_runner "$fixture" 'results_root="$repository_root/build/maestro-results"' 'results_root="build/maestro-results"'
+mutate_runner "$fixture" 'results_root="$repository_root/build/$slice-maestro-results"' 'results_root="build/$slice-maestro-results"'
 expect_runner_failure relative-output "$fixture" env
 
 fixture="$test_root/sibling-output"
 copy_fixture_repo "$fixture"
-mutate_runner "$fixture" 'results_root="$repository_root/build/maestro-results"' 'results_root="${repository_root}-escape"'
+mutate_runner "$fixture" 'results_root="$repository_root/build/$slice-maestro-results"' 'results_root="${repository_root}-escape"'
 expect_runner_failure sibling-output "$fixture" env
 
 fixture="$test_root/substituted-udid"

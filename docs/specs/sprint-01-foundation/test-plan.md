@@ -8,14 +8,14 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 
 | Layer | Execution | What it proves |
 |---|---|---|
-| Pure unit | default CI | network/address/amount/error invariants |
-| Controlled async | default CI | cancellation, coalescing, generation, retry, pagination |
-| Storage | default CI, temporary DB | migrations, atomic replace, restart/cache namespaces |
-| Package integration | default CI | facade composition, publishers, real dependencies |
-| Contract audit | default CI | parsed manifest topology, import allowlist, public symbol allowlist, exact test discovery, and public-only iOS consumer |
-| Platform boundary | default CI | library remains UI-agnostic at iOS 13; Example uses a SwiftUI `App` at iOS 14+ with Combine observation and no UIKit |
+| Pure unit | routine local; one final hosted gate | network/address/amount/error invariants |
+| Controlled async | routine local; one final hosted gate | cancellation, coalescing, generation, retry, pagination |
+| Storage | routine local with temporary DB; one final hosted gate | migrations, atomic replace, restart/cache namespaces |
+| Package integration | routine local; one final hosted gate | facade composition, publishers, real dependencies |
+| Contract audit | routine local; one final hosted gate | parsed manifest topology, import allowlist, public symbol allowlist, exact test discovery, and public-only iOS consumer |
+| Platform boundary | routine local; one final hosted gate | library remains UI-agnostic at iOS 13; Example uses a SwiftUI `App` at iOS 14+ with Combine observation and no UIKit |
 | WalletCore integration | host branch CI | manager/adapter/factory/consumer lifecycle |
-| Example UI acceptance | default fixture CI via Maestro | SwiftUI user-visible state, accessibility contract, cross-slice scenario |
+| Example UI acceptance | routine local Maestro; one final hosted gate | SwiftUI user-visible state, accessibility contract, cross-slice scenario |
 | Opt-in live | manual/release gate | current endpoint/API compatibility and chain identity |
 | Host product acceptance | manual `Development` checklist | observable create/import/enable/receive/relaunch/App Status behavior without Maestro |
 
@@ -75,13 +75,13 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 - S1-01 endpoint tests enumerate every constructor rule: nonempty families, `https`, no credentials/query/fragment, normalized nonempty unique family IDs, separate `clientId` trim/control/empty-to-nil normalization, finite nonnegative lag, finite positive timeout/revalidation seconds, retryable-status subset, `1...1000` page count, explicit attempts in `1...families.count`, nil attempts, and the exact `effectiveMaximumAttempts` result.
 - Retry count and requested URLs assert exact sequence.
 - Random/property tests log seed on failure.
-- Network live tests excluded from default CI and never make deterministic suite flaky.
+- Network live tests are local opt-in only, excluded from the hosted gate, and never make the deterministic suite flaky.
 - Maestro selectors use accessibility identifiers, not localized labels or screen coordinates.
 - The platform gate rejects UIKit imports, lifecycle/view-controller symbols, and UIKit representable wrappers under both `Sources/ThorChainKit` and `iOS Example/Sources`; it separately rejects SwiftUI under `Sources/ThorChainKit`, requires a SwiftUI `App` entry point, preserves the library iOS 13 floor, and requires an iOS 14-or-later Example target.
 - Committed Maestro YAML contains no mnemonic, API key or endpoint credential; runtime values arrive via environment.
 - Fixture and live modes expose an explicit `data-source` badge so fixture success cannot masquerade as live evidence.
 - S1-01's sole UI gate is `THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh`; raw `maestro test` is not accepted. Boot, build, install, launch, and Maestro use that same UDID.
-- S1-01 default CI pins `actions/checkout` to `34e114876b0b11c390a56381ad16ebd13914f8d5`, `actions/setup-java` to `c1e323688fd81a25caa38c78aa6df2d33d3e20d9`, and the Maestro `2.6.1` `maestro.zip` artifact to official SHA-256 `3440825f514f537c6a96bcf5de995780c2a4a7f83a43208fdc95d4f1fecfad3b`. It asserts Maestro `2.6.1` and Temurin `17.0.19+10` before the fixture flow.
+- The final hosted gate preserves S1-01's pins: `actions/checkout` at `34e114876b0b11c390a56381ad16ebd13914f8d5`, `actions/setup-java` at `c1e323688fd81a25caa38c78aa6df2d33d3e20d9`, and the Maestro `2.6.1` `maestro.zip` artifact at official SHA-256 `3440825f514f537c6a96bcf5de995780c2a4a7f83a43208fdc95d4f1fecfad3b`. It asserts Maestro `2.6.1` and Temurin `17.0.19+10` before the fixture flow.
 - S1-01 resolves JUnit, test-output, and debug-output to absolute paths under one repository-root `build/maestro-results` tree. The runner and shims reject workspace-relative or outside-root artifacts, and the scanner covers the separate JUnit file plus both Maestro output trees.
 - The S1-01 launcher requires one configured flow and JUnit `tests=1`, `failures=0`, `errors=0`, and `skipped=0`; detecting zero, extra, failed, errored, or skipped tests fails the gate.
 - All Maestro rules apply only to `ThorChainKit/iOS Example`; the Unstoppable repository receives no Maestro YAML, runner, DEBUG transport, or acceptance launch arguments.
@@ -97,6 +97,48 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 - The named `verify-s1-01-example-workspace` subgate parses the workspace and asserts exactly `container:iOS Example.xcodeproj` plus `group:..` before the exact-destination build.
 - Directly invoked shell scripts have Git mode `100755`, pass `test -x`, and use a valid shell shebang. Non-executable Swift helpers are called through `xcrun swift`.
 
+## S1-02 endpoint-policy gate
+
+Revision 16 adds the following local-first obligations before implementation may be considered complete. They run routinely on the operator MacBook; GitHub-hosted macOS runs them only once through the manual final exact-PR-head gate.
+
+| Behavior | Deterministic evidence |
+|---|---|
+| S1-01 surface preservation | Compile the unchanged `Network`, `EndpointFamilyDescriptor`, `EndpointPolicy`, `EndpointConfiguration`, and error values through the pool; preserve the S1-01 symbol baseline as an exact subset. |
+| Family identity | Three separately retained request results must all equal the expected identity; any observed mixed/foreign value locks the pool even when its sibling request fails and another family is healthy. Missing/duplicate/mismatched result indices cannot erase that fact. |
+| Role freshness | Positive independent Cosmos/Comet heights pass; catching-up, nonpositive, cross-role-skewed, fresh-Comet+stale-Cosmos, and best-height-lagging families are stale. |
+| Typed deterministic selection | `RoleProbeFailure: Error` and exactly three indexed per-family/role/request outcomes compile under strict concurrency and classify transport, HTTP/`Retry-After`, invalid field, identity, and cancellation; highest verified Comet height wins, ties use original order, and completion permutations preserve the fixed result. |
+| Stale-family fallback | A correctly identified stale family may be excluded for another verified family; no remaining family returns distinct `catchingUp` or `staleEndpoint`, never `wrongNetwork`. |
+| Probe lifecycle | Concurrent first lease and TTL revalidation coalesce through a waiter registry/shared token; one synchronous cancellation latch shared by `onCancel`, enrollment, and stable-order commit locking makes pre-cancel, registration/completion races, cancel-one, cancel-all, and reset deterministic without sleeps. |
+| Health effects | An injected monotonic clock controls TTL and explicit `retryNotBefore`; retryable values only extend eligibility, expiry/TTL interaction is deterministic, and terminal/stale/invalid/cancelled outcomes create no timed health state. `recordFailure` rejects a lease from a stale generation without mutation. |
+| Ownership boundary | `EndpointPool` performs no business read or retry. S1-04 alone tests attempt order, backoff, family-at-most-once, exhaustion, and cancellation propagation. |
+| Live probe contract | Controlled transport proves exact base-path-preserving node-info/latest-block/status requests, decoder/status/cancellation behavior, and zero `/thorchain`, Midgard, gRPC, business-read, write, broadcast, or retry requests. |
+| Diagnostics/UI | `ProviderError` has no actual/raw identity associated value. Hostile path/body/error/chain-ID sentinels are absent from typed diagnostics, logs, xUnit, Example UI, Maestro artifacts, and live JSON; only family/role/request, origin, local expected identity/classification, height/status, and fixed reason codes remain. |
+| Example execution | The sole Testing SPI session calls the real pool while production `Kit` stays inert; source/syntax gates reject duplicated classification, static outcomes, or SPI imports outside tests/Example. |
+| Slice-exact Maestro | Runner tests prove `s1-01` and `s1-02` each execute exactly one different allowlisted YAML and retain all provenance, containment, JUnit, OCR, and secret canaries. |
+| Live separation | Exact schema-v1 keys/types/literals/arithmetic, source/path/head binding, duplicate/unknown-key rejection, and distinct fixture/live roots prevent fixture substitution. The validator recomputes the greatest-Comet-height/configuration-order winner; lower-height selection and later-equal-height-tie mutants must fail. |
+| Hosted CI bootstrap/budget | Bootstrap mode compares pre-bootstrap `main` with a two-path CI-policy PR, proving its merge refs have no `pull_request` trigger and its merged commit has no `push` trigger. Exact `event=pull_request&head_sha=<merge-ref-sha>&per_page=1` and `event=push&head_sha=<merge-commit-sha>&per_page=1` API evidence must return HTTP 200 and `total_count == 0`. Steady-state mode proves `workflow_dispatch` only and binds `github.workflow_sha`, `github.sha`, same-repository PR `headRefOid`, `expected_head_sha`, checkout SHA, and run `head_sha` to one product head. A local stale-default-workflow mutant must fail before product verification. The bootstrap PR is recorded separately; Reviewer/QA cite local product outputs and the one final hosted product run. |
+
+The narrow-to-broad command order is:
+
+```bash
+swift build
+swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
+swift test --filter LiveNodeProbeTests
+swift test --filter EndpointPoolTests
+swift test --filter EndpointDiagnosticsTests
+swift test
+Scripts/verify-s1-02.sh
+Scripts/verify-s1-02-ci-policy.sh steady-state --ref HEAD
+Scripts/test-run-maestro.sh
+THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh s1-02
+```
+
+The opt-in live command in the S1-02 spec runs locally only after deterministic gates pass. It validates two families and all three identity sources against the exact implementation head. Absence is `UNRUN`, an attempted unavailable/invalid run is nonzero failure, and its sanitized JSON cannot be replaced by fixture evidence.
+
+Before the product branch exists, the separately reviewed bootstrap PR runs `Scripts/verify-s1-02-ci-policy.sh bootstrap --base-ref <pre-bootstrap-main> --candidate-ref <bootstrap-head>` locally. Mutants must fail for every automatic trigger, any third changed path, trigger-unrelated job-command drift, missing dispatch input, mutable checkout, head mismatch, or duplicate `main` suite. After PR creation and every update, retain the current merge-ref SHA and query the workflow-runs API with `event=pull_request`, that exact `head_sha`, and `per_page=1`; after merge, query `event=push` with the exact merge-commit SHA and `per_page=1`. Record filters, UTC observation time, HTTP 200, and the bounded response, and require `total_count == 0` for every tuple.
+
+The steady-state verifier locally mutates the event context so the bootstrap/default-`main` workflow definition is used while checkout still targets the correct product SHA. That mutant must fail on workflow-definition/event-head binding before any product command or verification credit. The sole real dispatch names the same-repository PR head branch; preflight and retained run evidence require `github.workflow_sha == github.sha == headRefOid == expected_head_sha == checkout SHA == run head_sha` and record `github.workflow_ref`.
+
 ## Verification order per slice
 
 1. `swift build` / compile of changed target.
@@ -109,7 +151,7 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 8. Opt-in live API gate.
 9. Unstoppable manual create/import/relaunch/App Status checklist for S1-07.
 10. Diff audit confirms that no Maestro/acceptance-only host files were added.
-11. Before merge, `gh pr checks <PR>` is green, `mergeStateStatus` is `CLEAN`, the conflict-marker diff scan is empty, the PR-linked plan exists on the branch, and Paperclip Reviewer and QA evidence cite the exact final head. After QA evidence is copied into the PR body, the CodeReviewer performs one final exact-head pass.
+11. Before merge, Reviewer and QA first produce exact local command outputs at the same `headRefOid`; the CTO/operator then dispatches the sole GitHub-hosted macOS gate against that same-repository PR head branch. Before product commands it requires `github.workflow_sha`, `github.sha`, `headRefOid`, and `expected_head_sha` to equal the exact product head; retained checkout and run `head_sha` must match too. Once green, QA and CodeReviewer append attestations citing their unchanged local evidence and its workflow ref/SHA/run URL/status/head SHA. The CTO verifies `mergeStateStatus` is `CLEAN`, the conflict-marker diff scan is empty, and the PR-linked plan exists. Any push invalidates all evidence; merge/push to `main` does not rerun the suite.
 
 ## Live evidence record
 
@@ -119,13 +161,13 @@ For a controlled run, record:
 - final PR `headRefOid`; Reviewer, QA, and CI records are invalidated by any later push;
 - timestamp/timezone;
 - endpoint IDs/roles, without credentials;
-- returned chain ID and heights;
+- local expected chain ID, sanitized match classification, and heights; S1-02 never records an observed raw identity;
 - test address class/provenance;
 - expected and actual raw RUNE amount;
 - create/import/relaunch result;
 - Example Maestro flow name, mode (`FIXTURE`/`LIVE`) and JUnit/artifact location;
 - the Unstoppable manual-checklist result separately from the Maestro evidence;
-- skipped/unavailable checks and the exact reason.
+- unrun checks and the exact reason; an attempted unavailable live check is failure, not a skip/pass.
 
 The mnemonic/private key must not appear in the evidence. Use a public fixture mnemonic or a purpose-created test account without user funds.
 

@@ -7,21 +7,25 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A20000000000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000001 /* AppDelegate.swift */; };
+		A20000000000000000000001 /* ThorChainExampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000001 /* ThorChainExampleApp.swift */; };
 		A20000000000000000000002 /* Configuration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000002 /* Configuration.swift */; };
 		A20000000000000000000003 /* ExampleRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000003 /* ExampleRuntime.swift */; };
-		A20000000000000000000004 /* MainController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000004 /* MainController.swift */; };
-		A20000000000000000000005 /* DiagnosticsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000005 /* DiagnosticsController.swift */; };
+		A20000000000000000000004 /* DiagnosticsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000004 /* DiagnosticsViewModel.swift */; };
+		A20000000000000000000005 /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000005 /* DiagnosticsView.swift */; };
 		A20000000000000000000006 /* ThorChainKit in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000002 /* ThorChainKit */; };
+		A20000000000000000000007 /* EndpointsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000007 /* EndpointsViewModel.swift */; };
+		A20000000000000000000008 /* EndpointsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000008 /* EndpointsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		A30000000000000000000001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		A30000000000000000000001 /* ThorChainExampleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThorChainExampleApp.swift; sourceTree = "<group>"; };
 		A30000000000000000000002 /* Configuration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Configuration.swift; sourceTree = "<group>"; };
 		A30000000000000000000003 /* ExampleRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExampleRuntime.swift; sourceTree = "<group>"; };
-		A30000000000000000000004 /* MainController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainController.swift; sourceTree = "<group>"; };
-		A30000000000000000000005 /* DiagnosticsController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsController.swift; sourceTree = "<group>"; };
+		A30000000000000000000004 /* DiagnosticsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsViewModel.swift; sourceTree = "<group>"; };
+		A30000000000000000000005 /* DiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsView.swift; sourceTree = "<group>"; };
 		A30000000000000000000006 /* iOS Example.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "iOS Example.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A30000000000000000000007 /* EndpointsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndpointsViewModel.swift; sourceTree = "<group>"; };
+		A30000000000000000000008 /* EndpointsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndpointsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -47,10 +51,11 @@
 		A50000000000000000000002 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
-				A30000000000000000000001 /* AppDelegate.swift */,
+				A30000000000000000000001 /* ThorChainExampleApp.swift */,
 				A30000000000000000000002 /* Configuration.swift */,
 				A50000000000000000000003 /* Core */,
-				A50000000000000000000004 /* Controllers */,
+				A50000000000000000000004 /* Presentation */,
+				A50000000000000000000006 /* Views */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -63,13 +68,22 @@
 			path = Core;
 			sourceTree = "<group>";
 		};
-		A50000000000000000000004 /* Controllers */ = {
+		A50000000000000000000004 /* Presentation */ = {
 			isa = PBXGroup;
 			children = (
-				A30000000000000000000004 /* MainController.swift */,
-				A30000000000000000000005 /* DiagnosticsController.swift */,
+				A30000000000000000000004 /* DiagnosticsViewModel.swift */,
+				A30000000000000000000007 /* EndpointsViewModel.swift */,
 			);
-			path = Controllers;
+			path = Presentation;
+			sourceTree = "<group>";
+		};
+		A50000000000000000000006 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A30000000000000000000005 /* DiagnosticsView.swift */,
+				A30000000000000000000008 /* EndpointsView.swift */,
+			);
+			path = Views;
 			sourceTree = "<group>";
 		};
 		A50000000000000000000005 /* Products */ = {
@@ -156,11 +170,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A20000000000000000000001 /* AppDelegate.swift in Sources */,
+				A20000000000000000000001 /* ThorChainExampleApp.swift in Sources */,
 				A20000000000000000000002 /* Configuration.swift in Sources */,
 				A20000000000000000000003 /* ExampleRuntime.swift in Sources */,
-				A20000000000000000000004 /* MainController.swift in Sources */,
-				A20000000000000000000005 /* DiagnosticsController.swift in Sources */,
+				A20000000000000000000004 /* DiagnosticsViewModel.swift in Sources */,
+				A20000000000000000000005 /* DiagnosticsView.swift in Sources */,
+				A20000000000000000000007 /* EndpointsViewModel.swift in Sources */,
+				A20000000000000000000008 /* EndpointsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -209,7 +225,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -235,7 +251,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

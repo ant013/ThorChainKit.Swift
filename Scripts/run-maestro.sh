@@ -12,6 +12,14 @@ repository_root=$(git -C "$script_root" rev-parse --show-toplevel)
 repository_root=$(cd "$repository_root" && pwd -P)
 cd "$repository_root"
 
+[[ $# == 1 ]] || fail "exactly one slice token is required"
+slice=$1
+case "$slice" in
+    s1-01) flow_path=.maestro/flows/00-launch-foundation.yaml ;;
+    s1-02) flow_path=.maestro/flows/01-endpoint-policy.yaml ;;
+    *) fail "slice must be s1-01 or s1-02" ;;
+esac
+
 udid=${THORCHAIN_SIMULATOR_UDID:-}
 [[ "$udid" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]] \
     || fail "THORCHAIN_SIMULATOR_UDID must contain one UUID"
@@ -23,8 +31,7 @@ java_identity=$(java -version 2>&1)
     || fail "Temurin 17.0.19+10 is required"
 
 device_list=$(xcrun simctl list devices available -j)
-python3 - "$udid" "$device_list" <<'PY' \
-    || fail "the configured simulator is unavailable"
+device_state=$(python3 - "$udid" "$device_list" <<'PY'
 import json
 import sys
 
@@ -37,15 +44,19 @@ matches = [
     if device.get("isAvailable") and device.get("udid", "").lower() == udid
 ]
 assert len(matches) == 1
+assert matches[0].get("state") in {"Shutdown", "Booted"}
+print(matches[0]["state"])
 PY
+) || fail "the configured simulator is unavailable"
 
 flow_count=$(find .maestro/flows -type f -name '*.yaml' | wc -l | tr -d ' ')
-[[ "$flow_count" == 1 ]] || fail "exactly one Maestro flow is required"
-[[ "$(<.maestro/config.yaml)" == $'flows:\n  - flows/00-launch-foundation.yaml' ]] \
-    || fail "Maestro manifest must select only the foundation flow"
+[[ "$flow_count" == 2 ]] || fail "exactly two slice flows are required"
+[[ "$(<.maestro/config.yaml)" == $'flows:\n  - flows/00-launch-foundation.yaml\n  - flows/01-endpoint-policy.yaml' ]] \
+    || fail "Maestro manifest must contain exactly the two slice flows"
+[[ -f "$flow_path" ]] || fail "selected slice flow is unavailable"
 
-results_root="$repository_root/build/maestro-results"
-derived_data="$repository_root/build/s1-01-derived-data"
+results_root="$repository_root/build/$slice-maestro-results"
+derived_data="$repository_root/build/$slice-derived-data"
 python3 - "$repository_root" "$results_root" "$derived_data" <<'PY' \
     || fail "an output path escapes the repository or contains a symlink"
 import os
@@ -69,11 +80,11 @@ PY
     || fail "generated output already exists; use a clean working output tree"
 mkdir -p "$results_root/artifacts" "$results_root/debug" "$derived_data"
 
-python3 - "$results_root/commands.json" "$udid" "$results_root" "$derived_data" <<'PY'
+python3 - "$results_root/commands.json" "$udid" "$results_root" "$derived_data" "$flow_path" <<'PY'
 import json
 import sys
 
-output, udid, results, derived = sys.argv[1:]
+output, udid, results, derived, flow = sys.argv[1:]
 commands = {
     "boot": ["xcrun", "simctl", "boot", udid],
     "bootstatus": ["xcrun", "simctl", "bootstatus", udid, "-b"],
@@ -86,13 +97,16 @@ commands = {
         "junit": f"{results}/junit.xml",
         "artifacts": f"{results}/artifacts",
         "debug": f"{results}/debug",
+        "flow": flow,
     },
 }
 with open(output, "w", encoding="utf-8") as handle:
     json.dump(commands, handle, indent=2, sort_keys=True)
 PY
 
-xcrun simctl boot "$udid"
+if [[ "$device_state" == Shutdown ]]; then
+    xcrun simctl boot "$udid"
+fi
 xcrun simctl bootstatus "$udid" -b
 
 set -o pipefail
@@ -118,7 +132,7 @@ maestro \
     --test-output-dir "$results_root/artifacts" \
     --debug-output "$results_root/debug" \
     --flatten-debug-output \
-    .maestro 2>&1 | tee "$results_root/maestro.log"
+    "$flow_path" 2>&1 | tee "$results_root/maestro.log"
 
 python3 - "$results_root/junit.xml" <<'PY' \
     || fail "JUnit must contain one passing, unskipped flow"

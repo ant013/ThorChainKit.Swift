@@ -1,0 +1,82 @@
+appId: org.horizontalsystems.thorchainkit.example
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: endpoint-policy-open
+- extendedWaitUntil:
+    visible:
+      id: endpoint-selected-family
+      text: fixture
+    timeout: 5000
+- assertVisible:
+    id: endpoint-expected-identity
+    text: thorchain-1
+- assertVisible:
+    id: endpoint-identity
+    text: expected
+- assertVisible:
+    id: endpoint-cosmos-origin
+    text: https://rest.invalid
+- assertVisible:
+    id: endpoint-comet-origin
+    text: https://rpc.invalid
+- assertVisible:
+    id: endpoint-cosmos-height
+    text: "100"
+- assertVisible:
+    id: endpoint-comet-height
+    text: "102"
+- assertVisible:
+    id: endpoint-height-skew
+    text: "2"
+- assertVisible:
+    id: endpoint-catching-up
+    text: "false"
+- assertVisible:
+    id: endpoint-rejection
+    text: none
+- tapOn:
+    id: endpoint-scenario-mixed
+- extendedWaitUntil:
+    visible:
+      id: endpoint-rejection
+      text: identity_mixed
+    timeout: 5000
+- assertVisible:
+    id: endpoint-selected-family
+    text: nil
+- assertVisible:
+    id: endpoint-identity
+    text: mixed
+- tapOn:
+    id: endpoint-scenario-catching-up
+- extendedWaitUntil:
+    visible:
+      id: endpoint-rejection
+      text: catching_up
+    timeout: 5000
+- assertVisible:
+    id: endpoint-catching-up
+    text: "true"
+- tapOn:
+    id: endpoint-scenario-stale-cosmos
+- extendedWaitUntil:
+    visible:
+      id: endpoint-rejection
+      text: stale
+    timeout: 5000
+- assertVisible:
+    id: endpoint-identity
+    text: expected
+- assertVisible:
+    id: endpoint-cosmos-height
+    text: "80"
+- assertVisible:
+    id: endpoint-comet-height
+    text: "100"
+- assertVisible:
+    id: endpoint-height-skew
+    text: "20"
+- assertNotVisible: "(?i).*(mnemonic|seed phrase|private key|foreign-secret-chain).*"
+- takeScreenshot: endpoint-policy-success

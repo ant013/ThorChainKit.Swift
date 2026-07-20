@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 jobs:
-  s1-01:
+  s1-02:
     runs-on: macos-26
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
@@ -75,8 +75,72 @@ jobs:
         with:
           distribution: temurin
           java-version: 17.0.19+10
-      - name: Verify S1-01 package contract
-        run: Scripts/verify-s1-01.sh
+      - name: Provision pinned ripgrep
+        run: |
+          set -euo pipefail
+          [[ "$(uname -m)" == "arm64" ]]
+          rg_version=15.2.0
+          rg_archive="ripgrep-${rg_version}-aarch64-apple-darwin.tar.gz"
+          rg_url="https://github.com/BurntSushi/ripgrep/releases/download/${rg_version}/${rg_archive}"
+          rg_sha256=3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4
+          rg_archive_path="$RUNNER_TEMP/$rg_archive"
+          curl -fsSL "$rg_url" -o "$rg_archive_path"
+          echo "$rg_sha256  $rg_archive_path" | shasum -a 256 -c -
+          tar -xzf "$rg_archive_path" -C "$RUNNER_TEMP"
+          rg_dir="$RUNNER_TEMP/ripgrep-${rg_version}-aarch64-apple-darwin"
+          rg_path="$rg_dir/rg"
+          [[ -x "$rg_path" ]]
+          if ! rg_version_output=$("$rg_path" --version); then exit 1; fi
+          rg_version_line="${rg_version_output%%$'\n'*}"
+          [[ "$rg_version_line" =~ ^ripgrep\ 15\.2\.0\ \(rev\ [0-9a-f]+\)$ ]]
+          printf 'rg_version_line=%s\n' "$rg_version_line"
+          echo "$rg_dir" >> "$GITHUB_PATH"
+      - name: Select exact iOS 26.2 simulator
+        run: |
+          set -euo pipefail
+          simulator_runtime=com.apple.CoreSimulator.SimRuntime.iOS-26-2
+          device_list=$(xcrun simctl list devices available -j)
+          selection=$(SIMULATOR_RUNTIME="$simulator_runtime" python3 -c '
+          import json
+          import os
+          import sys
+
+          runtime = os.environ["SIMULATOR_RUNTIME"]
+          devices = json.load(sys.stdin).get("devices", {})
+          runtime_devices = devices.get(runtime)
+          if runtime_devices is None:
+              raise SystemExit(f"required simulator runtime is unavailable: {runtime}")
+          matches = [
+              device
+              for device in runtime_devices
+              if device.get("isAvailable") is True
+              and device.get("state") == "Shutdown"
+              and device.get("name") == "iPhone 17 Pro"
+              and device.get("udid")
+          ]
+          if len(matches) != 1:
+              raise SystemExit(f"expected exactly one eligible iPhone in {runtime}, found {len(matches)}")
+          device = matches[0]
+          print("\t".join((runtime, device["name"], device["udid"])))
+          ' <<<"$device_list")
+          IFS=$'\t' read -r selected_runtime selected_device selected_udid <<<"$selection"
+          [[ "$selected_runtime" == "$simulator_runtime" ]]
+          [[ -n "$selected_device" && -n "$selected_udid" ]]
+          xcode_version=$(xcodebuild -version | tr '\n' ' ')
+          printf '%s\n' \
+            "xcode_version=$xcode_version" \
+            "requested_runtime=$simulator_runtime" \
+            "selected_runtime=$selected_runtime" \
+            "selected_device=$selected_device" \
+            "selected_udid=$selected_udid"
+          printf 'THORCHAIN_SIMULATOR_UDID=%s\n' "$selected_udid" >> "$GITHUB_ENV"
+      - name: Verify package and S1-02 contract
+        run: |
+          Scripts/verify-s1-02-ci-policy.sh steady-state --ref "$(git rev-parse HEAD)"
+          swift build
+          swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
+          swift test
+          Scripts/verify-s1-02.sh
       - name: Verify guarded Maestro runner
         run: Scripts/test-run-maestro.sh
       - name: Install pinned Maestro CLI
@@ -90,7 +154,8 @@ jobs:
           echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
       - name: Run fixture acceptance
         run: |
-          THORCHAIN_SIMULATOR_UDID=$(xcrun simctl list devices available -j \
-            | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for ds in d["devices"].values() for x in ds if x.get("isAvailable") and x.get("state")=="Shutdown" and x["name"].startswith("iPhone")))')
+          set -euo pipefail
+          : "${THORCHAIN_SIMULATOR_UDID:?exact simulator selection missing}"
           export THORCHAIN_SIMULATOR_UDID
-          Scripts/run-maestro.sh
+          Scripts/run-maestro.sh s1-01
+          Scripts/run-maestro.sh s1-02

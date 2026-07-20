@@ -1,0 +1,17 @@
+@_spi(Testing) public struct TestingEndpointPolicySession: Sendable
+@_spi(Testing) public struct TestingEndpointPolicySnapshot: Equatable, Sendable
+pool = EndpointPool(
+try await pool.lease(excludingFamilyIds: [])
+struct EndpointPolicySnapshot
+enum EndpointScenario
+TestingEndpointPolicySession(
+@MainActor
+final class EndpointsViewModel: ObservableObject
+private var operation: Task<Void, Never>?
+private var generation: UInt64 = 0
+operation?.cancel()
+generation &+= 1
+guard !Task.isCancelled else { return }
+guard generation == requestGeneration else { return }
+runtime.endpointSnapshot
+struct EndpointsView: View

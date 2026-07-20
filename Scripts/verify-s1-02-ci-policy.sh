@@ -74,6 +74,96 @@ DISPATCH_BLOCK = """on:
 """
 
 BASE_CHECKOUT = "      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5\n"
+RIPGREP_PROVISION_BLOCK = r"""      - name: Provision pinned ripgrep
+        run: |
+          set -euo pipefail
+          [[ "$(uname -m)" == "arm64" ]]
+          rg_version=15.2.0
+          rg_archive="ripgrep-${rg_version}-aarch64-apple-darwin.tar.gz"
+          rg_url="https://github.com/BurntSushi/ripgrep/releases/download/${rg_version}/${rg_archive}"
+          rg_sha256=3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4
+          rg_archive_path="$RUNNER_TEMP/$rg_archive"
+          curl -fsSL "$rg_url" -o "$rg_archive_path"
+          echo "$rg_sha256  $rg_archive_path" | shasum -a 256 -c -
+          tar -xzf "$rg_archive_path" -C "$RUNNER_TEMP"
+          rg_dir="$RUNNER_TEMP/ripgrep-${rg_version}-aarch64-apple-darwin"
+          rg_path="$rg_dir/rg"
+          [[ -x "$rg_path" ]]
+          if ! rg_version_output=$("$rg_path" --version); then exit 1; fi
+          rg_version_line="${rg_version_output%%$'\n'*}"
+          [[ "$rg_version_line" =~ ^ripgrep\ 15\.2\.0\ \(rev\ [0-9a-f]+\)$ ]]
+          printf 'rg_version_line=%s\n' "$rg_version_line"
+          echo "$rg_dir" >> "$GITHUB_PATH"
+"""
+PACKAGE_CONTRACT_BLOCK = r"""      - name: Verify package and S1-02 contract
+        run: |
+          Scripts/verify-s1-02-ci-policy.sh steady-state --ref "$(git rev-parse HEAD)"
+          swift build
+          swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
+          swift test
+          Scripts/verify-s1-02.sh
+"""
+SIMULATOR_SELECTION_BLOCK = r"""      - name: Select exact iOS 26.2 simulator
+        run: |
+          set -euo pipefail
+          simulator_runtime=com.apple.CoreSimulator.SimRuntime.iOS-26-2
+          device_list=$(xcrun simctl list devices available -j)
+          selection=$(SIMULATOR_RUNTIME="$simulator_runtime" python3 -c '
+          import json
+          import os
+          import sys
+
+          runtime = os.environ["SIMULATOR_RUNTIME"]
+          devices = json.load(sys.stdin).get("devices", {})
+          runtime_devices = devices.get(runtime)
+          if runtime_devices is None:
+              raise SystemExit(f"required simulator runtime is unavailable: {runtime}")
+          matches = [
+              device
+              for device in runtime_devices
+              if device.get("isAvailable") is True
+              and device.get("state") == "Shutdown"
+              and device.get("name") == "iPhone 17 Pro"
+              and device.get("udid")
+          ]
+          if len(matches) != 1:
+              raise SystemExit(f"expected exactly one eligible iPhone in {runtime}, found {len(matches)}")
+          device = matches[0]
+          print("\t".join((runtime, device["name"], device["udid"])))
+          ' <<<"$device_list")
+          IFS=$'\t' read -r selected_runtime selected_device selected_udid <<<"$selection"
+          [[ "$selected_runtime" == "$simulator_runtime" ]]
+          [[ -n "$selected_device" && -n "$selected_udid" ]]
+          xcode_version=$(xcodebuild -version | tr '\n' ' ')
+          printf '%s\n' \
+            "xcode_version=$xcode_version" \
+            "requested_runtime=$simulator_runtime" \
+            "selected_runtime=$selected_runtime" \
+            "selected_device=$selected_device" \
+            "selected_udid=$selected_udid"
+          printf 'THORCHAIN_SIMULATOR_UDID=%s\n' "$selected_udid" >> "$GITHUB_ENV"
+"""
+SIMULATOR_CONSUMER_BLOCK = r"""      - name: Run fixture acceptance
+        run: |
+          set -euo pipefail
+          : "${THORCHAIN_SIMULATOR_UDID:?exact simulator selection missing}"
+          export THORCHAIN_SIMULATOR_UDID
+          Scripts/run-maestro.sh s1-01
+          Scripts/run-maestro.sh s1-02
+"""
+RIPGREP_CONSUMER_LINE = "          Scripts/verify-s1-02.sh\n"
+RIPGREP_FALLBACK_RE = re.compile(
+    r"(?im)^\s*(?:run:\s*)?(?:brew|port|apt(?:-get)?|yum|dnf|pacman)\b[^\n]*\bripgrep\b"
+)
+RIPGREP_DOWNLOAD_RE = re.compile(
+    r"(?im)^\s*(?:-\s*)?(?:run:\s*)?(?:curl|wget)\b[^\n]*\bripgrep\b"
+)
+RIPGREP_PATH_RE = re.compile(
+    r"(?im)^\s*(?:echo|printf|export)?[^\n]*(?:ripgrep|rg_(?:dir|path))[^\n]*(?:PATH|GITHUB_PATH)"
+)
+PATH_MUTATION_RE = re.compile(
+    r"(?im)^\s*(?:-\s*)?(?:run:\s*)?(?:export\s+)?PATH\s*="
+)
 DISPATCH_PREFLIGHT = r"""      - name: Preflight exact pull request head
         env:
           GH_TOKEN: ${{ github.token }}
@@ -170,6 +260,49 @@ def verify_dispatch_policy(workflow):
     top_level_jobs = re.findall(r"(?m)^  ([A-Za-z0-9_-]+):\n(?=    )", workflow.split("\njobs:\n", 1)[-1])
     if len(top_level_jobs) != 1:
         fail("workflow must contain exactly one job")
+
+
+def verify_ripgrep_provisioning(workflow):
+    if workflow.count(RIPGREP_PROVISION_BLOCK) != 1:
+        fail("workflow must contain exactly one pinned ripgrep provisioning block")
+    normalized_workflow = re.sub(r"\\[ \t]*\r?\n[ \t]*", " ", workflow)
+    if RIPGREP_FALLBACK_RE.search(normalized_workflow):
+        fail("workflow must not contain a mutable ripgrep package-manager fallback")
+    provision_at = workflow.find(RIPGREP_PROVISION_BLOCK)
+    if workflow.count(PACKAGE_CONTRACT_BLOCK) != 1:
+        fail("workflow must contain exactly one exact package and S1-02 contract block")
+    consumer_at = workflow.find(PACKAGE_CONTRACT_BLOCK)
+    if provision_at > consumer_at:
+        fail("ripgrep provisioning must precede the S1-02 verifier consumer")
+    interval = workflow[provision_at + len(RIPGREP_PROVISION_BLOCK) : consumer_at]
+    if interval != SIMULATOR_SELECTION_BLOCK:
+        fail("only the approved simulator selection may occur before the S1-02 consumer")
+    outside_provision = re.sub(
+        r"\\[ \t]*\r?\n[ \t]*",
+        " ",
+        workflow.replace(RIPGREP_PROVISION_BLOCK, "", 1),
+    )
+    if RIPGREP_DOWNLOAD_RE.search(outside_provision):
+        fail("workflow must not contain a second ripgrep download")
+    if RIPGREP_PATH_RE.search(outside_provision):
+        fail("workflow must not mutate ripgrep PATH outside the pinned block")
+    after_provision = workflow[provision_at + len(RIPGREP_PROVISION_BLOCK) : consumer_at]
+    if PATH_MUTATION_RE.search(after_provision) or "GITHUB_PATH" in after_provision:
+        fail("workflow must not mutate PATH between ripgrep provisioning and its consumer")
+
+
+def verify_simulator_selection(workflow):
+    if workflow.count(SIMULATOR_SELECTION_BLOCK) != 1:
+        fail("workflow must contain exactly one exact iOS 26.2 simulator selection block")
+    if workflow.count(SIMULATOR_CONSUMER_BLOCK) != 1:
+        fail("fixture acceptance must consume the selected simulator identity")
+    selection_at = workflow.find(SIMULATOR_SELECTION_BLOCK)
+    contract_at = workflow.find(PACKAGE_CONTRACT_BLOCK)
+    if selection_at > contract_at:
+        fail("simulator selection must precede build and test commands")
+    outside_selection = workflow.replace(SIMULATOR_SELECTION_BLOCK, "", 1)
+    if "xcrun simctl list devices available -j" in outside_selection:
+        fail("workflow must not select a simulator through an all-runtime fallback")
 
 
 def expected_bootstrap_workflow(base_workflow):
@@ -294,6 +427,246 @@ def run_bootstrap_mutants(base_workflow, candidate_workflow, changed_paths):
     run_policy_mutants(candidate_workflow)
 
 
+def run_ripgrep_mutants(workflow):
+    expect_mutant_failure(
+        "missing ripgrep provisioning",
+        lambda: verify_ripgrep_provisioning(workflow.replace(RIPGREP_PROVISION_BLOCK, "", 1)),
+    )
+    without_provision = workflow.replace(RIPGREP_PROVISION_BLOCK, "", 1)
+    expect_mutant_failure(
+        "ripgrep provisioning after consumer",
+        lambda: verify_ripgrep_provisioning(
+            without_provision.replace(RIPGREP_CONSUMER_LINE, RIPGREP_CONSUMER_LINE + RIPGREP_PROVISION_BLOCK, 1)
+        ),
+    )
+    for label, needle, replacement in (
+        ("wrong ripgrep URL", "BurntSushi/ripgrep/releases/download", "wrong/ripgrep/releases/download"),
+        ("wrong ripgrep digest", "3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4", "0" * 64),
+        ("verify after extraction", "shasum -a 256 -c -\n          tar -xzf", "tar -xzf"),
+        ("PATH before verification", "shasum -a 256 -c -\n          tar -xzf", "echo \"$rg_dir\" >> \"$GITHUB_PATH\"\n          tar -xzf"),
+        ("mutable package-manager fallback", "curl -fsSL", "brew install ripgrep\n          # curl -fsSL"),
+        ("missing arm64 guard", "          [[ \"$(uname -m)\" == \"arm64\" ]]\n", ""),
+        ("wrong ripgrep version", "rg_version=15.2.0", "rg_version=15.3.0"),
+        ("missing binary assertion", "          [[ -x \"$rg_path\" ]]\n", ""),
+        (
+            "corrupt rg version assertion",
+            "          [[ \"$rg_version_line\" =~ ^ripgrep\\ 15\\.2\\.0\\ \\(rev\\ [0-9a-f]+\\)$ ]]\n",
+            "          [[ \"$rg_version_line\" =~ ^ripgrep\\ 15\\.3\\.0\\ \\(rev\\ [0-9a-f]+\\)$ ]]\n",
+        ),
+        (
+            "missing version command-status guard",
+            "          if ! rg_version_output=$(\"$rg_path\" --version); then exit 1; fi\n",
+            "          rg_version_output=$(\"$rg_path\" --version)\n",
+        ),
+        (
+            "inexact version pattern",
+            "          [[ \"$rg_version_line\" =~ ^ripgrep\\ 15\\.2\\.0\\ \\(rev\\ [0-9a-f]+\\)$ ]]\n",
+            "          [[ \"$rg_version_line\" == \"ripgrep 15.2.0\"* ]]\n",
+        ),
+        (
+            "missing validated version log emission",
+            "          printf 'rg_version_line=%s\\n' \"$rg_version_line\"" + "\n",
+            "",
+        ),
+    ):
+        expect_mutant_failure(
+            label,
+            lambda needle=needle, replacement=replacement: verify_ripgrep_provisioning(
+                workflow.replace(needle, replacement, 1)
+        ),
+    )
+    expect_mutant_failure(
+        "separate mutable package-manager fallback",
+        lambda: verify_ripgrep_provisioning(
+            workflow + "\n      - name: Mutable ripgrep fallback\n        run: brew install ripgrep\n"
+        ),
+    )
+    expect_mutant_failure(
+        "multiline mutable package-manager fallback",
+        lambda: verify_ripgrep_provisioning(
+            workflow + "\n      - run: |\n          brew install \\\n            ripgrep\n"
+        ),
+    )
+    expect_mutant_failure(
+        "second ripgrep download",
+        lambda: verify_ripgrep_provisioning(
+            workflow + "\n      - run: curl -fsSL https://example.test/ripgrep.tar.gz\n"
+        ),
+    )
+    expect_mutant_failure(
+        "multiline second ripgrep download",
+        lambda: verify_ripgrep_provisioning(
+            workflow + "\n      - run: |\n          curl -fsSL \\\n            https://example.test/ripgrep.tar.gz\n"
+        ),
+    )
+    expect_mutant_failure(
+        "ripgrep PATH shadowing",
+        lambda: verify_ripgrep_provisioning(
+            workflow.replace(
+                PACKAGE_CONTRACT_BLOCK,
+                '      - name: Shadow ripgrep PATH\n        run: echo "/tmp/ripgrep" >> "$GITHUB_PATH"\n'
+                + PACKAGE_CONTRACT_BLOCK,
+                1,
+            )
+        ),
+    )
+    expect_mutant_failure(
+        "PATH mutation before consumer",
+        lambda: verify_ripgrep_provisioning(
+            workflow.replace(
+                PACKAGE_CONTRACT_BLOCK,
+                '      - name: Shadow PATH\n        run: export PATH="/tmp:$PATH"\n'
+                + PACKAGE_CONTRACT_BLOCK,
+                1,
+            )
+        ),
+    )
+    expect_mutant_failure(
+        "GITHUB_ENV PATH shadowing between provisioning and consumer",
+        lambda: verify_ripgrep_provisioning(
+            workflow.replace(
+                PACKAGE_CONTRACT_BLOCK,
+                '      - name: Shadow runner PATH\n        run: echo "PATH=/tmp:$PATH" >> "$GITHUB_ENV"\n'
+                + PACKAGE_CONTRACT_BLOCK,
+                1,
+            )
+        ),
+    )
+    expect_mutant_failure(
+        "extracted binary replacement between provisioning and consumer",
+        lambda: verify_ripgrep_provisioning(
+            workflow.replace(
+                PACKAGE_CONTRACT_BLOCK,
+                '      - name: Replace extracted ripgrep\n        run: cp "$RUNNER_TEMP/replacement" "$RUNNER_TEMP/ripgrep-15.2.0-aarch64-apple-darwin/rg"\n'
+                + PACKAGE_CONTRACT_BLOCK,
+                1,
+            )
+        ),
+    )
+
+
+def run_simulator_mutants(workflow):
+    expect_mutant_failure(
+        "missing exact simulator runtime selection",
+        lambda: verify_simulator_selection(
+            workflow.replace(SIMULATOR_SELECTION_BLOCK, "", 1)
+        ),
+    )
+    flattened_selector = """      - name: Select exact iOS 26.2 simulator
+        run: |
+          set -euo pipefail
+          THORCHAIN_SIMULATOR_UDID=$(xcrun simctl list devices available -j \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x[\"udid\"] for ds in d[\"devices\"].values() for x in ds if x.get(\"isAvailable\") and x.get(\"state\")==\"Shutdown\" and x[\"name\"].startswith(\"iPhone\")))')
+          printf '%s\\n' \"selected_udid=$THORCHAIN_SIMULATOR_UDID\"
+          printf 'THORCHAIN_SIMULATOR_UDID=%s\\n' "$THORCHAIN_SIMULATOR_UDID" >> "$GITHUB_ENV"
+"""
+    expect_mutant_failure(
+        "flattened all-runtime selection",
+        lambda: verify_simulator_selection(
+            workflow.replace(SIMULATOR_SELECTION_BLOCK, flattened_selector, 1)
+        ),
+    )
+    for label, needle, replacement in (
+        (
+            "missing runtime filter",
+            'runtime_devices = devices.get(runtime)',
+            'runtime_devices = next(iter(devices.values()), None)',
+        ),
+        ("nondeterministic device selection", "if len(matches) != 1:", "if not matches:"),
+        (
+            "missing simulator identity logging",
+            'xcode_version=$(xcodebuild -version | tr \'\\n\' \' \')',
+            'xcode_version=unknown',
+        ),
+        (
+            "broad iPhone eligibility",
+            'device.get("name") == "iPhone 17 Pro"',
+            'device.get("name", "").startswith("iPhone")',
+        ),
+        (
+            "silent newer runtime fallback",
+            "simulator_runtime=com.apple.CoreSimulator.SimRuntime.iOS-26-2",
+            "simulator_runtime=com.apple.CoreSimulator.SimRuntime.iOS-26-4",
+        ),
+    ):
+        expect_mutant_failure(
+            label,
+            lambda needle=needle, replacement=replacement: verify_simulator_selection(
+                workflow.replace(needle, replacement, 1)
+            ),
+        )
+    expect_mutant_failure(
+        "fixture consumer reselects all runtimes",
+        lambda: verify_simulator_selection(
+            workflow.replace(
+                SIMULATOR_CONSUMER_BLOCK,
+                SIMULATOR_CONSUMER_BLOCK.replace(
+                    '          : "${THORCHAIN_SIMULATOR_UDID:?exact simulator selection missing}"\n',
+                    '          THORCHAIN_SIMULATOR_UDID=$(xcrun simctl list devices available -j)\n',
+                    1,
+                ),
+                1,
+            )
+        ),
+    )
+
+
+def run_contract_mutants(workflow):
+    contract_lines = PACKAGE_CONTRACT_BLOCK.rstrip("\n").splitlines()
+    commands = contract_lines[2:]
+    for index, label in enumerate(
+        (
+            "policy after first build",
+            "policy after strict-concurrency build",
+            "policy after test",
+            "policy after consumer",
+        ),
+        start=1,
+    ):
+        reordered = "\n".join(
+            contract_lines[:2]
+            + commands[1 : index + 1]
+            + commands[:1]
+            + commands[index + 1 :]
+        ) + "\n"
+        expect_mutant_failure(
+            label,
+            lambda reordered=reordered: verify_ripgrep_provisioning(
+                workflow.replace(PACKAGE_CONTRACT_BLOCK, reordered, 1)
+            ),
+        )
+    policy_command = '          Scripts/verify-s1-02-ci-policy.sh steady-state --ref "$(git rev-parse HEAD)"\n'
+    for label, insertion in (
+        (
+            "GITHUB_ENV PATH mutation after policy command",
+            '          echo "PATH=/tmp:$PATH" >> "$GITHUB_ENV"\n',
+        ),
+        (
+            "extracted binary replacement after policy command",
+            '          cp "$RUNNER_TEMP/replacement" "$RUNNER_TEMP/ripgrep-15.2.0-aarch64-apple-darwin/rg"\n',
+        ),
+    ):
+        mutated_contract = PACKAGE_CONTRACT_BLOCK.replace(
+            policy_command,
+            policy_command + insertion,
+            1,
+        )
+        expect_mutant_failure(
+            label,
+            lambda mutated_contract=mutated_contract: verify_ripgrep_provisioning(
+                workflow.replace(PACKAGE_CONTRACT_BLOCK, mutated_contract, 1)
+            ),
+        )
+    expect_mutant_failure(
+        "symbolic policy ref",
+        lambda: verify_ripgrep_provisioning(
+            workflow.replace(
+                PACKAGE_CONTRACT_BLOCK,
+                PACKAGE_CONTRACT_BLOCK.replace('$(git rev-parse HEAD)', 'HEAD', 1),
+                1,
+            )
+        ),
+    )
 mode, base_ref, candidate_ref, ref = sys.argv[1:]
 try:
     if mode == "bootstrap":
@@ -313,7 +686,12 @@ try:
         commit = exact_commit(ref, "ref")
         workflow = workflow_at(commit)
         verify_dispatch_policy(workflow)
+        verify_ripgrep_provisioning(workflow)
+        verify_simulator_selection(workflow)
         run_policy_mutants(workflow)
+        run_ripgrep_mutants(workflow)
+        run_simulator_mutants(workflow)
+        run_contract_mutants(workflow)
         print(f"steady-state policy verified: ref={commit}")
 except PolicyFailure as error:
     print(f"S1-02 CI policy verification failed: {error}", file=sys.stderr)
