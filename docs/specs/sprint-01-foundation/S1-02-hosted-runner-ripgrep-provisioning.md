@@ -23,8 +23,10 @@ architecture guard, staging, extraction order, PATH ownership, and consumer
 position. This revision authorizes only the minimal tightening of the existing
 version assertion needed for explicit command-status capture and exact first
 line matching; it does not authorize re-adding or otherwise redesigning the
-block. The remaining implementation delta is the policy invocation move plus
-exact workflow-order, exact-SHA, and no-shadowing guards.
+block. The existing exact policy ordering is preserved and is not part of the
+recovery implementation delta. The remaining recovery work is runtime
+selection/identity logging plus matching runtime-selector mutants in the same
+two implementation paths.
 
 Assumptions: `macos-26` is Apple Silicon, but implementation must assert
 `uname -m == arm64` and fail closed otherwise; the official ripgrep 15.2.0
@@ -283,11 +285,12 @@ review/QA attestations; repeat them against the new exact head.
   changes; it does not block this slice.
 - **D-003 Minimum scope — CLOSED in revision 10.** Current-tree anchors are
   `.github/workflows/ci.yml:97-103` and
-  `Scripts/verify-s1-02-ci-policy.sh:97-105,455-489`. The outcome is the
-  smallest two-path delta: move the existing policy invocation before product
-  verification and extend the existing policy verifier with the required
-  order, exact-SHA, no-shadowing, and runtime-selector mutants. No new script,
-  package path, trigger, secret, binary, or unrelated file is authorized.
+  `Scripts/verify-s1-02-ci-policy.sh:97-105,455-489`. The existing exact policy
+  ordering is preserved; it is completed work at implementation base
+  `64575a9`. The only new implementation work is runtime selector/identity
+  logging plus matching runtime-selector mutants in these same two paths. No
+  new script, package path, trigger, secret, binary, or unrelated file is
+  authorized.
 - **D-004 Verification validity — CLOSED in revision 10.** Current-tree anchors
   are the five-command workflow block at `.github/workflows/ci.yml:97-103` and
   the policy/mutant entry points at

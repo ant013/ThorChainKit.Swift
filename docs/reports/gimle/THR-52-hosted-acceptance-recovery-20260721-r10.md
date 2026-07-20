@@ -52,9 +52,11 @@ remain unchanged.
 
 Revision-10 closure decisions are explicit: D-002 is closed by the pinned
 workflow block and existing no-second-install/PATH-shadowing policy checks;
-D-003 is closed by the existing two-file implementation boundary and no-new-
-path restriction; and D-004 is closed by the existing policy-order, exact-SHA,
-and mutant entry points. Their only residual backlog is the separately
+D-003 is closed by preserving the existing exact policy ordering at
+implementation base `64575a9`; the only new work is runtime selector/identity
+logging plus matching runtime-selector mutants in the same two paths. D-004 is
+closed by the existing policy-order, exact-SHA, and mutant entry points. Their
+only residual backlog is the separately
 approved Maestro/XCUITest design if the post-implementation iOS 26.2 hosted
 flow still fails.
 
