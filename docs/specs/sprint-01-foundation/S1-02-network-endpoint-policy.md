@@ -38,7 +38,8 @@ Sources/ThorChainKit/Network/ProviderError.swift
 Sources/ThorChainKit/Network/NodeProbing.swift
 Sources/ThorChainKit/Network/LiveNodeProbe.swift
 Tests/ThorChainKitTests/EndpointPoolTests.swift
-iOS Example/Sources/Controllers/EndpointsController.swift
+iOS Example/Sources/Presentation/EndpointsViewModel.swift
+iOS Example/Sources/Views/EndpointsView.swift
 .maestro/flows/01-endpoint-policy.yaml
 ```
 
@@ -198,7 +199,7 @@ Sensitive URL credentials/query are prohibited during construction; diagnostics 
 
 ### Example/Maestro Acceptance
 
-`EndpointsController` displays the selected family, Cosmos/Comet URLs without credentials, expected/actual chain ID, both role heights, cross-role skew, catching-up, and rejection reason. In fixture mode, flow `01-endpoint-policy.yaml`:
+`EndpointsViewModel` observes the kit through Combine and supplies `EndpointsView` with the selected family, Cosmos/Comet URLs without credentials, expected/actual chain ID, both role heights, cross-role skew, catching-up, and rejection reason. It does not become a second endpoint/state owner. The Example remains SwiftUI-only and imports no UIKit. In fixture mode, flow `01-endpoint-policy.yaml`:
 
 - selects a family with matching identity;
 - rejects mixed Cosmos/Comet identity;

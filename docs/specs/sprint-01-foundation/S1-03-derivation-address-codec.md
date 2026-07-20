@@ -56,7 +56,8 @@ Sources/ThorChainKit/Address/AddressCodec.swift
 Tests/ThorChainKitTests/DerivationTests.swift
 Tests/ThorChainKitTests/AddressCodecTests.swift
 Tests/ThorChainKitTests/Fixtures/AddressVectors.json
-iOS Example/Sources/Controllers/AddressController.swift
+iOS Example/Sources/Presentation/AddressViewModel.swift
+iOS Example/Sources/Views/AddressView.swift
 .maestro/flows/02-address-codec.yaml
 ```
 
@@ -206,7 +207,7 @@ The fixture mnemonic must be an explicitly public test mnemonic with no funds.
 
 ### Example/Maestro Acceptance
 
-`AddressController` accepts a public compressed-key fixture or watch-only address, but not a mnemonic/seed. Flow `02-address-codec.yaml` verifies the full expected `thor1…`, canonical uppercase normalization, bad checksum, mixed case, and wrong HRP. Values are read through stable accessibility IDs; a prefix-only assertion is prohibited.
+`AddressViewModel` and `AddressView` accept a public compressed-key fixture or watch-only address, but not a mnemonic/seed. They extend the SwiftUI + Combine Example and import no UIKit. Flow `02-address-codec.yaml` verifies the full expected `thor1…`, canonical uppercase normalization, bad checksum, mixed case, and wrong HRP. Values are read through stable accessibility IDs; a prefix-only assertion is prohibited.
 
 ## Host Verification
 

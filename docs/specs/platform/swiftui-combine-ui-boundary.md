@@ -1,6 +1,6 @@
 # SwiftUI + Combine UI Boundary
 
-**Status:** proposed; documentation update only, pending explicit approval.
+**Status:** approved on 2026-07-20; normative documentation synchronized by this branch.
 **Applies to:** the ThorChainKit product documentation, its `iOS Example`, and all future roadmap slices.
 
 ## Goal

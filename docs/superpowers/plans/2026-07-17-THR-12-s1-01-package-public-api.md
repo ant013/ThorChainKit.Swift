@@ -8,6 +8,10 @@ Implementation may begin only after the revised slice spec, this plan, the Gimle
 
 The cross-slice verification authority remains `docs/specs/sprint-01-foundation/test-plan.md`; its S1-01 iOS floor, publisher replay, lifecycle, protocol-boundary, and Maestro requirements must stay identical to this plan.
 
+## Post-Merge Platform Correction
+
+S1-01 originally merged a UIKit-based diagnostics Example. The completed steps below remain historical evidence and are not rewritten as if SwiftUI had already shipped. The approved repository boundary now requires `Sources/ThorChainKit` to remain UI-agnostic with Combine publication, and requires `iOS Example` to use a SwiftUI `App`, SwiftUI views, and Combine-backed observation without UIKit. The bounded migration in step 5A must complete before S1-02 adds another Example screen.
+
 ## Acceptance Criteria
 
 - Parsed `swift package dump-package` JSON shows exactly one `ThorChainKit` library product, one library target, and one `ThorChainKitTests` target.
@@ -16,10 +20,10 @@ The cross-slice verification authority remains `docs/specs/sprint-01-foundation/
 - Whitespace-only wallet IDs fail with a stable typed error; `Kit.instance` derives its sole network from `address.network`; the persistence namespace remains internal. One exact positive syntax/callee allowlist covers the three Core files plus the transitive `Network.persistenceKey` getter, while a separate exact positive closure enumerates every Network/endpoint/Denom/Address initializer, stored/static construction root, transitive validation body, and default expression. The factory creates no network, storage, task, operation/global queue, timer, dispatch source, alias, wrapper, or unaudited helper capability; seven Address/endpoint/Network/Denom/default-path canaries fail the value gate.
 - One serial facade dispatcher owns snapshots, `desiredRunning`, sequence assignment, FIFO append, collaborator invocation, and reentry post-draining; no owner lock or second drain exists. One retained `DispatchSpecificKey<UInt8>` identifies true dispatcher reentry. The barrier-controlled `C0, R, C1` trace proves a reentrant command is post-drained before an already-waiting ordinary caller; the deferred-async mutant fails. S1-01 has no post-construction publication interface; S1-05 extends the same owner with publication turns and the deterministic `P0 → C → P1` regression.
 - Initial/current-value replay is mandatory and exactly nil/idle/zero/no-account; an absent account rejects every nonempty balance set; S1-01 promises no later snapshot mutation. The fixed namespace input `wallet-01\0mainnet\0thorchain-1` yields `e2df225b7a00d471b1b09ec2d3344df89a11e9cfe116c05f5290683480623015`.
-- Public source/API contains no seed/private key and no MarketKit, RxSwift, SwiftUI, or WalletCore import; BigUInt-containing types make no unproven `Sendable` claim. S1-04 adds no public `CoinBalance`; S1-04/S1-05 cross reader, synchronizer, and storage isolation only with internal `Sendable` canonical-decimal records bounded to 256 bits, reconstruct public BigUInt snapshots on the facade dispatcher only after exact active-address/chain-ID validation, and own an actual-source strict-concurrency baseline plus non-`Sendable` boundary mutants.
+- Public source/API contains no seed/private key and no MarketKit, RxSwift, UIKit, SwiftUI, or WalletCore import; Combine remains the state-publication framework, and BigUInt-containing types make no unproven `Sendable` claim. S1-04 adds no public `CoinBalance`; S1-04/S1-05 cross reader, synchronizer, and storage isolation only with internal `Sendable` canonical-decimal records bounded to 256 bits, reconstruct public BigUInt snapshots on the facade dispatcher only after exact active-address/chain-ID validation, and own an actual-source strict-concurrency baseline plus non-`Sendable` boundary mutants.
 - CI asserts Xcode 26.3 (`17C529`) and Apple Swift 6.2.4, compiles in Swift 5 mode, promotes complete strict-concurrency warnings to errors, requires the committed default BigInt `5.7.0` lock, and separately resolves/builds/tests the declared `5.0.0` floor in a temporary copy.
 - A temporary Swift-tools-5.10/iOS-13 public-only consumer builds with the pinned Xcode for generic iOS Simulator.
-- The named `verify-s1-01-example-workspace` subgate asserts exactly `container:iOS Example.xcodeproj` plus `group:..`; the shared workspace then builds on one exact simulator destination and launches in visibly labeled `FIXTURE` mode.
+- The library retains its iOS 13 floor. The named `verify-s1-01-example-workspace` subgate asserts exactly `container:iOS Example.xcodeproj` plus `group:..`; after step 5A, the iOS 14-or-later SwiftUI Example builds on one exact simulator destination and launches in visibly labeled `FIXTURE` mode.
 - `THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh` uses pinned full action commits and a SHA-256-verified Maestro `2.6.1` archive with Temurin `17.0.19+10`, uses that UDID for boot/build/install/launch/`maestro --device`, resolves every output to one repo-root-absolute artifact tree, and reports JUnit `tests=1`, `failures=0`, `errors=0`, `skipped=0`.
 - Command-shim canaries prove device argv, CLI/Java identity, immutable artifact provenance, and component-aware canonical artifact containment. OCR recursively processes every regular in-root PNG, rejects a symlink in any root/component, sibling-prefix and path escapes, and any read/decode/OCR error, asserts enumerated equals processed, and fails safe-first/secret-second plus malformed-image canaries.
 - S1-01's exact public-symbol, inert-factory, and public-value construction gates are slice-versioned; the owning S1-02…S1-05 specs define exact current baselines, cumulative prior subsets, and explicit capability transitions. S1-04 names `Core/TestingKitFactory.swift` as its sole SPI root, positively pins its enumerated initializer/getter closure independently of production, and separately pins one executable `TestingKitInstance.readAccount` → `AccountReading.read` → `TestingAccountReadProjection` path that cannot mutate Kit snapshots. The committed Gimle report contains no operator-local absolute root.
@@ -75,17 +79,27 @@ The cross-slice verification authority remains `docs/specs/sprint-01-foundation/
 - Check: `Scripts/verify-s1-01.sh` under Xcode 26.3 (`17C529`) / Apple Swift 6.2.4.
 - Commit: `test: lock S1-01 public API surface`.
 
-### 5. Add and independently build the fixture-only iOS Example
+### 5. Historical: add and independently build the fixture-only iOS Example
 
 - [x] Completion evidence recorded in this plan and the implementation commit.
 - Suggested owner: ThorChainSwiftEngineer.
 - Dependencies: step 4; an exact simulator UDID for the build check.
 - Affected paths: `iOS Example/iOS Example.xcodeproj/`, shared scheme, `.xcworkspace/`, and the minimal `Sources/` files listed in the spec.
 - Test first: the named executable `verify-s1-01-example-workspace` subgate fails until the workspace contains exactly `container:iOS Example.xcodeproj` and `group:..`; the exact destination build then fails until the scheme is complete.
-- Implementation: add the UIKit diagnostics app using a valid public THOR address and safe `.invalid` fixture endpoints through the public factory; it never starts the kit or exposes an unchecked SPI.
-- Acceptance: exact workspace/scheme build, visible `FIXTURE`, canonical address, nil/idle/zero/no-account state, and no mnemonic/key/provider-credential/wallet-ID/internal-namespace output or persistence.
+- Historical implementation: PR #1 added a UIKit diagnostics app using a valid public THOR address and safe `.invalid` fixture endpoints through the public factory. It remains completed S1-01 evidence, but it is superseded as the presentation base and must not be extended with additional UIKit screens.
+- Historical acceptance: exact workspace/scheme build, visible `FIXTURE`, canonical address, nil/idle/zero/no-account state, and no mnemonic/key/provider-credential/wallet-ID/internal-namespace output or persistence.
 - Check: `THORCHAIN_SIMULATOR_UDID=<exact> xcodebuild -workspace 'iOS Example/iOS Example.xcworkspace' -scheme 'iOS Example' -destination "platform=iOS Simulator,id=$THORCHAIN_SIMULATOR_UDID" CODE_SIGNING_ALLOWED=NO build`.
 - Commit: `feat: add fixture-only iOS Example`.
+
+### 5A. Required: migrate the Example to SwiftUI + Combine before S1-02 UI work
+
+- [ ] Source migration is intentionally not part of this documentation-only correction.
+- Dependencies: completed historical step 5 and the approved `docs/specs/platform/swiftui-combine-ui-boundary.md`.
+- Replace `AppDelegate`, `UIWindow`, and controller-based presentation with a SwiftUI `App`, SwiftUI views, and one Combine-backed presentation model without duplicate state ownership.
+- Preserve the existing workspace/local-package topology, shared scheme, application identifier, fixture behavior, accessibility identifiers, exact-UDID runner, and Maestro flow.
+- Keep the library deployment floor at iOS 13 and raise only the Example target to iOS 14 or later.
+- Add a fail-closed gate rejecting UIKit imports/types/representables in repository-owned library and Example source, while also rejecting SwiftUI in `Sources/ThorChainKit`.
+- Acceptance: the platform gate, exact-destination Example build, 18 XCTest cases, strict-concurrency build, and existing Maestro fixture flow are green before any S1-02 Example view is added.
 
 ### 6. Add the guarded exact-UDID Maestro flow and artifact scanner
 

@@ -51,7 +51,8 @@ Tests/ThorChainKitTests/Fixtures/S1-04-spi-factory-syntax.txt
 Tests/ThorChainKitTests/Fixtures/S1-04-spi-read-syntax.txt
 Tests/ThorChainKitLiveTests/MainnetReadTests.swift
 Scripts/verify-s1-04.sh
-iOS Example/Sources/Controllers/AccountReadController.swift
+iOS Example/Sources/Presentation/AccountReadViewModel.swift
+iOS Example/Sources/Views/AccountReadView.swift
 .maestro/flows/03-account-read-fixture.yaml
 .maestro/flows-live/03-account-read-mainnet.yaml
 ```
@@ -310,7 +311,7 @@ Clock/sleeper/transport/pool/client are injected; fixed sleeps forbidden.
 
 ### Example/Maestro acceptance
 
-The fixture flow launches the Example app, obtains `TestingKitInstance`, explicitly awaits exactly one `readAccount()`, and displays its projection without mutating `kit` snapshots. Canned multi-page bank responses must therefore produce the complete raw `rune` balance, account existence, accepted height, and endpoint family while the enclosed `kit` remains nil/idle/zero/no-account. A request-count assertion proves the UI used the executable SPI read path rather than static labels. The live flow uses only a public address passed through the environment, explicitly displays a `LIVE` badge, and verifies chain ID/height/balance without sending transactions. A missing opt-in variable means an explicit skip at the launcher-script level, not a silently green flow.
+The fixture flow launches the SwiftUI Example. `AccountReadViewModel` obtains `TestingKitInstance`, explicitly awaits exactly one `readAccount()`, and supplies `AccountReadView` with its projection without mutating `kit` snapshots or becoming a second state owner. Canned multi-page bank responses must therefore produce the complete raw `rune` balance, account existence, accepted height, and endpoint family while the enclosed `kit` remains nil/idle/zero/no-account. A request-count assertion proves the UI used the executable SPI read path rather than static labels. The Example imports no UIKit. The live flow uses only a public address passed through the environment, explicitly displays a `LIVE` badge, and verifies chain ID/height/balance without sending transactions. A missing opt-in variable means an explicit skip at the launcher-script level, not a silently green flow.
 
 ## Live gate
 
