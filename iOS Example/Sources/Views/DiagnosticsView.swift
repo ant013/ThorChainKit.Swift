@@ -2,6 +2,12 @@ import SwiftUI
 
 struct DiagnosticsView: View {
     @ObservedObject var model: DiagnosticsViewModel
+    @StateObject private var endpoints: EndpointsViewModel
+
+    init(model: DiagnosticsViewModel) {
+        self.model = model
+        _endpoints = StateObject(wrappedValue: EndpointsViewModel(runtime: model.runtime))
+    }
 
     var body: some View {
         ScrollView {
@@ -27,6 +33,12 @@ struct DiagnosticsView: View {
             .padding(20)
         }
         .navigationTitle("THORChainKit")
+        .toolbar {
+            NavigationLink(destination: EndpointsView(model: endpoints)) {
+                Text("Endpoints")
+                    .accessibilityIdentifier("endpoint-policy-open")
+            }
+        }
     }
 
     private func row(_ title: String, value: String, identifier: String) -> some View {

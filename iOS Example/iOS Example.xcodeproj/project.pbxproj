@@ -13,6 +13,8 @@
 		A20000000000000000000004 /* DiagnosticsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000004 /* DiagnosticsViewModel.swift */; };
 		A20000000000000000000005 /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000005 /* DiagnosticsView.swift */; };
 		A20000000000000000000006 /* ThorChainKit in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000002 /* ThorChainKit */; };
+		A20000000000000000000007 /* EndpointsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000007 /* EndpointsViewModel.swift */; };
+		A20000000000000000000008 /* EndpointsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000008 /* EndpointsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,6 +24,8 @@
 		A30000000000000000000004 /* DiagnosticsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsViewModel.swift; sourceTree = "<group>"; };
 		A30000000000000000000005 /* DiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsView.swift; sourceTree = "<group>"; };
 		A30000000000000000000006 /* iOS Example.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "iOS Example.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A30000000000000000000007 /* EndpointsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndpointsViewModel.swift; sourceTree = "<group>"; };
+		A30000000000000000000008 /* EndpointsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndpointsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -68,6 +72,7 @@
 			isa = PBXGroup;
 			children = (
 				A30000000000000000000004 /* DiagnosticsViewModel.swift */,
+				A30000000000000000000007 /* EndpointsViewModel.swift */,
 			);
 			path = Presentation;
 			sourceTree = "<group>";
@@ -76,6 +81,7 @@
 			isa = PBXGroup;
 			children = (
 				A30000000000000000000005 /* DiagnosticsView.swift */,
+				A30000000000000000000008 /* EndpointsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -169,6 +175,8 @@
 				A20000000000000000000003 /* ExampleRuntime.swift in Sources */,
 				A20000000000000000000004 /* DiagnosticsViewModel.swift in Sources */,
 				A20000000000000000000005 /* DiagnosticsView.swift in Sources */,
+				A20000000000000000000007 /* EndpointsViewModel.swift in Sources */,
+				A20000000000000000000008 /* EndpointsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
