@@ -114,7 +114,7 @@ match exactly `ripgrep 15.2.0 (rev <lowercase-hex>)`, not a prefix such as
 
 After the exact version assertion succeeds, emit the validated line to the
 hosted log with a stable field such as
-`printf 'rg_version_line=%s\\n' "$rg_version_line"`. The log line is evidence
+`printf 'rg_version_line=%s\n' "$rg_version_line"`. The log line is evidence
 of the checked absolute binary, not a replacement for the fail-closed check.
 
 The required version check shape is equivalent to:
@@ -123,7 +123,7 @@ The required version check shape is equivalent to:
 if ! rg_version_output=$("$rg_path" --version); then exit 1; fi
 rg_version_line="${rg_version_output%%$'\n'*}"
 [[ "$rg_version_line" =~ ^ripgrep\ 15\.2\.0\ \(rev\ [0-9a-f]+\)$ ]]
-printf 'rg_version_line=%s\\n' "$rg_version_line"
+printf 'rg_version_line=%s\n' "$rg_version_line"
 ```
 
 ## Proposed workflow shape
@@ -310,7 +310,8 @@ gh workflow run CI --ref <same-repository-feature-branch> -f pr_number=<PR> -f e
 gh run view <run-id> --log > <full-hosted-log>
 gh api repos/<owner>/<repo>/actions/runs/<run-id> \
   --jq '{id,head_sha,head_branch,event,status,conclusion,workflow_id,run_attempt}' > <run-fields-json>
-rg -n 'workflow_ref=|workflow_sha=|event_sha=|pr_head_sha=|checkout_sha=|ripgrep 15\.2\.0|PASS verify-s1-02-test-discovery' <full-hosted-log>
+rg -n 'workflow_ref=|workflow_sha=|event_sha=|pr_head_sha=|checkout_sha=|PASS verify-s1-02-test-discovery' <full-hosted-log>
+test "$(rg -c '^rg_version_line=ripgrep 15\.2\.0 \(rev [0-9a-f]+\)$' <full-hosted-log>)" = 1
 jq -e --arg approved '<exact-head>' '.head_sha == $approved and .conclusion == "success"' <run-fields-json>
 for field in workflow_sha event_sha pr_head_sha checkout_sha; do
   test "$(rg -c "^${field}=<exact-head>$" <full-hosted-log>)" = 1
@@ -638,8 +639,8 @@ provisioning is absent must not be used as a current-tree claim. Current-tree
 presence and policy gaps are verified directly at the assigned head and must be
 rechecked at the exact pushed review head.
 
-This is the complete spec-only deliverable for THR-52 revision 10. The prior
+This is the complete spec-only deliverable for THR-52 revision 11. The prior
 hosted ripgrep failure, local-pass/hosted-failure contrast, deterministic
 runtime-selector proof, one-run hosted gate, and recovery boundary are recorded
 above. Symbolic `HEAD` remains explicitly rejected as a policy input. Explicit
-user approval of this revision is required before any recovery implementation.
+user approval of revision 11 is required before any recovery implementation.
