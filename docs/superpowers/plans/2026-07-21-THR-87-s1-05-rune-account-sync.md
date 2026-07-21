@@ -1,13 +1,14 @@
 # THR-87 — S1-05 RUNE account sync implementation plan
 
-**Status:** design revision 2; implementation is blocked until discovery 2/2
-acceptance and explicit user approval of the revised spec.
+**Status:** design revision 3; discovery is frozen at 2/2 and implementation
+is blocked until fresh adversarial acceptance and explicit user approval of the
+revised spec.
 
 **Spec:** [`docs/specs/sprint-01-foundation/S1-05-rune-account-sync.md`](../../specs/sprint-01-foundation/S1-05-rune-account-sync.md)
 
 **Base:** `origin/main` at `d35770a0430eee921fa1fe91b2f8812a8c0535ff`
 
-**Discovery:** 1/2 → revision 2 pending discovery 2/2. **Closure:** 0/5.
+**Discovery:** 2/2 frozen. **Closure:** 0/5.
 
 ## Goal and boundaries
 
@@ -53,9 +54,11 @@ Wallet integration, and changes to the frozen S1-01 public model shape.
 **Acceptance:** tests cover idempotent facade admission, actor invariant
 failures, refresh coalescing, complete-read success/error/cancellation,
 generation races, reentrant publication ordering, restart/cache identity,
-atomic height publication, stop-control failure, and exact public-surface
-compatibility. The new tests are red before production implementation and
-preserve the S1-01…S1-04 public declarations as an exact unchanged subset.
+atomic height publication, stop-control failure, successful-stop and
+control-failure completion barriers, current-generation failure ingress with
+cached preservation, and exact public-surface compatibility. The new tests are
+red before production implementation and preserve the S1-01…S1-04 public
+declarations as an exact unchanged subset.
 
 ### 2. Implement the isolated storage record and CAS persistence
 
@@ -102,16 +105,25 @@ and schedules bounded polling. Stop closes admission, attempts the durable
 increment, cancels and drains owned work, and returns only after the
 publication/write barrier is established; the control-failure path fails
 closed. The bridge never waits on or calls back into the facade dispatcher.
-Account, RUNE, and height are one state update with `lastBlockHeight` equal to
-`acceptedHeight`. Old generations cannot save or publish. Transport, decode,
-storage, missing-account, zero-RUNE, and cancellation outcomes remain
-distinct; cancellation is never surfaced as a sync error or failover trigger.
+The internal S1-01 `KitLifecycle` collaborator returns a
+`LifecycleCommandBarrier` for each effective command; `Kit.submit` waits only
+after leaving the facade dispatcher, and the control-failure path uses an
+explicit no-token `cancelStop()` command rather than a fabricated generation.
+`LifecycleGate.publishFailureIfCurrent(SyncFailure)` is the sole current-
+generation error ingress; it checks generation, exact address, and chain ID,
+preserves the dispatcher-owned cached state, and publishes `.notSynced` after
+getter mutation without `.synced`. Account, RUNE, and height are one state
+update with `lastBlockHeight` equal to `acceptedHeight`. Old generations
+cannot save or publish. Transport, decode, storage, missing-account, zero-RUNE,
+and cancellation outcomes remain distinct; cancellation is never surfaced as
+a sync error or failover trigger.
 
 ### 4. Wire the existing facade and fixture Example
 
 **Owner:** ThorChainSwiftEngineer. **Depends on:** Step 3.
 
 **Paths:** `Sources/ThorChainKit/Core/Kit.swift`,
+`Sources/ThorChainKit/Core/KitDependencies.swift`,
 `Sources/ThorChainKit/Core/KitFactory.swift`,
 `iOS Example/Sources/Core/ExampleRuntime.swift`,
 `iOS Example/Sources/Presentation/LifecycleViewModel.swift`,
@@ -190,6 +202,8 @@ AccountStateStorageTests.testInvalidFreshRecordIsRejectedBeforeSave
 AccountStateStorageTests.testStorageSaveFailurePublishesStorageUnavailableWithoutSynced
 KitLifecycleTests.testLastBlockHeightMatchesAcceptedHeightBeforePublisherDelivery
 KitLifecycleTests.testRuneBalanceUsesExactRuneProjection
+KitLifecycleTests.testStopCompletionWaitsForSuccessAndControlFailureCancellation
+KitLifecycleTests.testCurrentGenerationFailureIngressPreservesCachedState
 ```
 
 `test-s1-05-lifecycle-invariants.sh` runs exactly three fresh subprocesses
