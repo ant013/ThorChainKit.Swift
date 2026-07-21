@@ -75,10 +75,12 @@ THORCHAIN_SIMULATOR_UDID=0A88BC07-1DF9-490A-BCAF-6FA2165F6B17 Scripts/verify-s1-
 THORCHAIN_SIMULATOR_UDID=0A88BC07-1DF9-490A-BCAF-6FA2165F6B17 Scripts/verify-s1-03.sh --fixtures-only >/dev/null
 
 selectors=(
+    AccountSyncerTests/testRefreshAfterOfflinePendingFailureStartsNewReadAndPublishesSynced
     AccountSyncerTests/testRefreshUsesOneCompleteReadAndPublishesOneSnapshot
     AccountSyncerTests/testStopRacingSaveEstablishesGenerationAndPublicationBarrier
     AccountSyncerTests/testStopControlFailureFailsClosedAndDrainsOldGeneration
     AccountSyncerTests/testReentrantStopDoesNotWaitOnFacadeDispatcher
+    EndpointPoolTests/testTransientEmptyProbeIsNotCachedBeforeImmediateRecovery
     AccountStateStorageTests/testLoadUsesOneConsistentReadSnapshot
     AccountStateStorageTests/testInvalidFreshRecordIsRejectedBeforeSave
     AccountStateStorageTests/testStorageSaveFailurePublishesStorageUnavailableWithoutSynced
@@ -87,7 +89,7 @@ selectors=(
     KitLifecycleTests/testStopCompletionWaitsForSuccessAndControlFailureCancellation
     KitLifecycleTests/testCurrentGenerationFailureIngressPreservesCachedState
 )
-[[ ${#selectors[@]} -eq 11 ]] || { echo "FAIL S1-05 selector contract changed" >&2; exit 1; }
+[[ ${#selectors[@]} -eq 13 ]] || { echo "FAIL S1-05 selector contract changed" >&2; exit 1; }
 
 result_bundle=${S105_RESULT_BUNDLE:-artifacts/s1-05/Test.xcresult}
 mkdir -p "$(dirname "$result_bundle")"
