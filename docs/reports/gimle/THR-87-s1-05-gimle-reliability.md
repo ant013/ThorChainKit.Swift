@@ -3,11 +3,11 @@
 ## Review binding
 
 - Repository: `ThorChainKit.Swift`
-- Reviewed design head: `0694dbc399c1087349e0dd2cd137d699b8e829b3`
+- Reviewed design head: `54096a2a1970becdca2dba601d48bb27eadcea89`
 - Base: `d35770a0430eee921fa1fe91b2f8812a8c0535ff`
 - Spec: `docs/specs/sprint-01-foundation/S1-05-rune-account-sync.md`
 - Plan: `docs/superpowers/plans/2026-07-21-THR-87-s1-05-rune-account-sync.md`
-- Review phase: discovery 2/2 frozen, closure 0/5
+- Review phase: discovery 2/2 frozen, closure 2/5
 
 ## Gimle trust
 
@@ -73,13 +73,13 @@ control-failure contract test. It closes `S105-ARCH-008` by defining
 `LifecycleGate.publishFailureIfCurrent(SyncFailure)` with generation, address,
 chain-ID, cached-state, and publisher-ordering checks. No product code changed.
 
-## Dependency-floor correction after implementation checkpoint
+## Dependency-floor design evidence; implementation acceptance deferred
 
-The previously approved GRDB `6.27.0` pin was not reproducibly green under
-Xcode 26. The minimum fixed compatible 6.x pin is now `6.29.1` at revision
-`dd6b98ce04eda39aa22f066cd421c24d7236ea8a`.
+The revised design selects GRDB `6.29.1` at revision
+`dd6b98ce04eda39aa22f066cd421c24d7236ea8a` after the previously approved
+`6.27.0` pin was not reproducibly green under Xcode 26.
 
-- Source: a fresh temporary ThorChainKit copy, with the manifest and lock both
+- Design evidence source: a fresh temporary ThorChainKit copy, with the manifest and lock both
   reporting GRDB `6.29.1`.
 - Command: `xcodebuild -scheme ThorChainKit -destination
   'generic/platform=iOS'` with fresh DerivedData, SourcePackages, and package
@@ -88,9 +88,15 @@ Xcode 26. The minimum fixed compatible 6.x pin is now `6.29.1` at revision
   the library for `arm64-apple-ios13.0`.
 - No repository dependency cache or external checkout was edited.
 
-This clean result is the dependency-floor acceptance evidence for the revised
-spec and plan; Gimle trust remains RED because the ThorChainKit project mapping
-is unavailable and current-tree fallback remains authoritative.
+This is design-selection evidence, not exact-head implementation acceptance.
+At reviewed head `54096a2`, `Package.swift` and `Package.resolved` still select
+GRDB `6.27.0` at revision `639fa9168d36931b36a79e60dc06b7d23852f1f4`, and the
+implementation-only `Scripts/test-s1-05-dependency-floor.sh` and
+`Scripts/verify-s1-05.sh` do not yet exist. Dependency acceptance is deferred
+until an implementation head contains the `6.29.1` manifest/lock and passes
+the named dependency-floor verifier (and its `Scripts/verify-s1-05.sh` exact-
+head gate). Gimle trust remains RED because the ThorChainKit project mapping is
+unavailable and current-tree fallback remains authoritative.
 
 ## Historical non-blocking backlog from discovery 1
 
@@ -110,4 +116,4 @@ is unavailable and current-tree fallback remains authoritative.
 **FRESH ADVERSARIAL ACCEPT REQUIRED.** The revised design is pushed and the
 Gimle state/report has been reworked and rehashed. Implementation remains
 blocked until `ThorChainCodeReviewer` posts a fresh adversarial ACCEPT for
-head `0694dbc` and the user then approves the exact resulting plan revision.
+the exact reviewed head `54096a2` and the user then approves the exact resulting plan revision.
