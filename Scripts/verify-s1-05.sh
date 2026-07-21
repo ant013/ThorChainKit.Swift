@@ -15,12 +15,22 @@ destination='id=0A88BC07-1DF9-490A-BCAF-6FA2165F6B17'
 allowed=(
     Package.swift Package.resolved
     Sources/ThorChainKit/Core/KitFactory.swift
+    Sources/ThorChainKit/Core/Kit.swift
+    Sources/ThorChainKit/Core/KitDependencies.swift
+    Sources/ThorChainKit/Network/EndpointPool.swift
     Sources/ThorChainKit/State/StatePublishing.swift
+    Sources/ThorChainKit/State/AccountStateManager.swift
+    Sources/ThorChainKit/State/StateSnapshot.swift
+    Sources/ThorChainKit/Storage/AccountStateStorage.swift
     Sources/ThorChainKit/Storage/GrdbAccountStateStorage.swift
+    Sources/ThorChainKit/Storage/Migrations.swift
     Sources/ThorChainKit/Storage/StorageRecord.swift
     Sources/ThorChainKit/Sync/AccountSyncer.swift
+    Sources/ThorChainKit/Sync/AccountSyncing.swift
     Sources/ThorChainKit/Sync/LifecycleCommandBridge.swift
     Sources/ThorChainKit/Sync/LifecycleGate.swift
+    Sources/ThorChainKit/Sync/SyncGeneration.swift
+    Sources/ThorChainKit/Sync/SyncSchedule.swift
     iOS\ Example/Sources/Configuration.swift
     iOS\ Example/Sources/Core/ExampleRuntime.swift
     iOS\ Example/Sources/Presentation/LifecycleViewModel.swift
@@ -36,10 +46,15 @@ allowed=(
     Scripts/verify-s1-05.sh
     Tests/ThorChainKitTests/AccountStateStorageTests.swift
     Tests/ThorChainKitTests/AccountSyncerTests.swift
+    Tests/ThorChainKitTests/EndpointPoolTests.swift
     Tests/ThorChainKitTests/KitLifecycleTests.swift
     Tests/ThorChainKitTests/LifecycleInvariantProbeTests.swift
+    Tests/ThorChainKitTests/PublicApiTests.swift
     Tests/ThorChainKitTests/Fixtures/S1-05-public-symbols.txt
     Tests/ThorChainKitTests/Fixtures/S1-05-tests.txt
+    docs/reports/gimle/THR-87-s1-05-gimle-reliability.md
+    docs/specs/sprint-01-foundation/S1-05-rune-account-sync.md
+    docs/superpowers/plans/2026-07-21-THR-87-s1-05-rune-account-sync.md
 )
 changed=$(git diff --name-only "$base..HEAD")
 while IFS= read -r path; do
