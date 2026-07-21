@@ -16,6 +16,7 @@ namespace_test="ThorChainKitTests.PublicApiTests/testPersistenceNamespaceIsDeter
 
 run_test() {
     local label=$1 package_path=$2 test_name=$3 expect_failure=${4:-false}
+    local selector="${test_name/./\/}"
     local result_bundle="$temporary_root/$label.xcresult"
     local allowlist="$temporary_root/$label-tests.txt"
     printf '%s\n' "$test_name" > "$allowlist"
@@ -23,7 +24,7 @@ run_test() {
         -destination "platform=iOS Simulator,id=${simulator_udid}" \
         -derivedDataPath "$temporary_root/$label-derived-data" \
         -resultBundlePath "$result_bundle" \
-        "-only-testing:$test_name" \
+        "-only-testing:$selector" \
         CODE_SIGNING_ALLOWED=NO test); then
         [[ "$expect_failure" == true ]] \
             || "$repository_root/Scripts/verify-xcresult.sh" "$label" "$result_bundle" "$allowlist"
@@ -31,8 +32,9 @@ run_test() {
         [[ "$expect_failure" == true ]] \
             || { echo "FAIL $label: simulator test command failed" >&2; exit 1; }
     fi
-    [[ "$expect_failure" == true ]] && \
+    if [[ "$expect_failure" == true ]]; then
         "$repository_root/Scripts/verify-xcresult.sh" "$label" "$result_bundle" "$allowlist" true
+    fi
 }
 
 run_test s1-01-lifecycle "$repository_root" "$lifecycle_test"

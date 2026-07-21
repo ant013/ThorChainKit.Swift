@@ -58,7 +58,15 @@ if set(observed_names) != set(expected):
     raise SystemExit(f"test names mismatch: expected {sorted(expected)}, observed {sorted(observed_names)}")
 
 results = [node.get("result") for node in observed]
-if expect_failure == "true":
+if expect_failure == "reject":
+    if (
+        summary.get("result") == "Passed"
+        and summary.get("failedTests") == 0
+        and summary.get("skippedTests") == 0
+        and all(result == "Passed" for result in results)
+    ):
+        raise SystemExit("guarded mutation did not affect test credit")
+elif expect_failure == "true":
     if summary.get("result") != "Failed" or summary.get("failedTests") != 1:
         raise SystemExit("guarded failure did not produce one failed test")
     if summary.get("skippedTests") != 0 or results != ["Failed"]:

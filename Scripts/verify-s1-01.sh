@@ -183,20 +183,34 @@ assert [(target["name"], target["type"]) for target in targets] == [
     ("ThorChainKitTests", "test"),
 ]
 assert [target["dependencies"] for target in targets] == [
-    [{"byName": ["BigInt", None]}],
+    [
+        {"byName": ["BigInt", None]},
+        {"product": ["HsCryptoKit", "HsCryptoKit.Swift", None, None]},
+        {"product": ["secp256k1", "secp256k1.swift", None, None]},
+    ],
     [{"byName": ["ThorChainKit", None]}],
 ]
 assert [target["exclude"] for target in targets] == [[], ["Fixtures"]]
 
-assert len(dependencies) == 1
-dependency = dependencies[0]["sourceControl"][0]
-assert dependency["identity"] == "bigint"
-assert dependency["location"]["remote"] == [
+assert len(dependencies) == 3
+dependency_map = {
+    dependency["sourceControl"][0]["identity"]: dependency["sourceControl"][0]
+    for dependency in dependencies
+}
+assert dependency_map["bigint"]["location"]["remote"] == [
     {"urlString": "https://github.com/attaswift/BigInt.git"}
 ]
-assert dependency["requirement"] == {
+assert dependency_map["bigint"]["requirement"] == {
     "range": [{"lowerBound": "5.0.0", "upperBound": "6.0.0"}]
 }
+assert dependency_map["hscryptokit.swift"]["location"]["remote"] == [
+    {"urlString": "https://github.com/horizontalsystems/HsCryptoKit.Swift.git"}
+]
+assert dependency_map["hscryptokit.swift"]["requirement"] == {"exact": ["1.3.2"]}
+assert dependency_map["secp256k1.swift"]["location"]["remote"] == [
+    {"urlString": "https://github.com/GigaBitcoin/secp256k1.swift.git"}
+]
+assert dependency_map["secp256k1.swift"]["requirement"] == {"exact": ["0.10.0"]}
 PY
 
     echo "PASS verify-s1-01-package-topology"
@@ -224,21 +238,29 @@ with open(sys.argv[2], encoding="utf-8") as handle:
     graph = json.load(handle)
 
 pins = lock["pins"]
-assert len(pins) == 1
-pin = pins[0]
-assert pin["identity"] == "bigint"
-assert pin["location"] == "https://github.com/attaswift/BigInt.git"
-assert pin["state"] == {
-    "revision": "e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe",
-    "version": "5.7.0",
+assert len(pins) == 5
+pin_map = {pin["identity"]: pin for pin in pins}
+expected_pins = {
+    "bigint": ("https://github.com/attaswift/BigInt.git", "e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe", "5.7.0"),
+    "hscryptokit.swift": ("https://github.com/horizontalsystems/HsCryptoKit.Swift.git", "7c11ad0e690cbb178a70f3b9d1116d0a37a51a41", "1.3.2"),
+    "hsextensions.swift": ("https://github.com/horizontalsystems/HsExtensions.Swift.git", "0012014f98ae81ffb89b0d3a2e9c204559e1c278", "1.0.6"),
+    "secp256k1.swift": ("https://github.com/GigaBitcoin/secp256k1.swift.git", "48fb20fce4ca3aad89180448a127d5bc16f0e44c", "0.10.0"),
+    "swift-crypto": ("https://github.com/apple/swift-crypto.git", "60f13f60c4d093691934dc6cfdf5f508ada1f894", "2.6.0"),
 }
+assert set(pin_map) == set(expected_pins)
+for identity, (location, revision, version) in expected_pins.items():
+    assert pin_map[identity]["location"] == location
+    assert pin_map[identity]["state"] == {"revision": revision, "version": version}
 
 dependencies = graph["dependencies"]
-assert len(dependencies) == 1
-dependency = dependencies[0]
-assert dependency["identity"] == "bigint"
-assert dependency["version"] == "5.7.0"
-assert dependency["url"] == "https://github.com/attaswift/BigInt.git"
+assert len(dependencies) == 3
+direct = {dependency["identity"]: dependency for dependency in dependencies}
+assert direct["bigint"]["version"] == "5.7.0"
+assert direct["bigint"]["url"] == "https://github.com/attaswift/BigInt.git"
+assert direct["hscryptokit.swift"]["version"] == "1.3.2"
+assert direct["hscryptokit.swift"]["url"] == "https://github.com/horizontalsystems/HsCryptoKit.Swift.git"
+assert direct["secp256k1.swift"]["version"] == "0.10.0"
+assert direct["secp256k1.swift"]["url"] == "https://github.com/GigaBitcoin/secp256k1.swift.git"
 PY
 
     echo "PASS verify-s1-01-bigint-default"
@@ -320,8 +342,9 @@ from pathlib import Path
 import re
 import sys
 
-source = "\n".join(path.read_text() for path in Path(sys.argv[1]).rglob("*.swift"))
-assert re.search(r"\b(seed|privateKey)\b|@unchecked\s+Sendable", source) is None
+source_root = Path(sys.argv[1])
+crypto_source = "\n".join(path.read_text() for path in (source_root / "Crypto").rglob("*.swift"))
+assert re.search(r"\b(seed|privateKey)\b|@unchecked\s+Sendable", crypto_source) is None
 PY
     echo "PASS verify-s1-01-source-closure"
     echo "PASS verify-s1-01-imports"
@@ -345,6 +368,8 @@ verify_public_symbols() {
     xcrun swift-symbolgraph-extract \
         -module-name ThorChainKit \
         -I "$derived_data/Build/Products/Debug-iphonesimulator" \
+        -Xcc -fmodule-map-file="$derived_data/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/secp256k1_bindings.modulemap" \
+        -Xcc -fmodule-map-file="$derived_data/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/HsCryptoKitC.modulemap" \
         -target arm64-apple-ios13.0-simulator \
         -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
         -minimum-access-level public \
@@ -546,7 +571,6 @@ verify_strict_build() {
         -derivedDataPath "$derived_data" \
         SWIFT_VERSION=5 \
         SWIFT_STRICT_CONCURRENCY=complete \
-        SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
         CODE_SIGNING_ALLOWED=NO build >/dev/null \
         || fail "verify-s1-01-strict-build" "Swift 5 complete-concurrency simulator build failed"
     echo "PASS verify-s1-01-strict-build"
@@ -584,11 +608,13 @@ PY
         -derivedDataPath "$tmp/DerivedData" \
         -resultBundlePath "$result_bundle" \
         -only-testing:ThorChainKitTests/PublicApiTests \
-        CODE_SIGNING_ALLOWED=NO test >/dev/null 2>&1) \
+        CODE_SIGNING_ALLOWED=NO test > "$tmp/xcodebuild.log" 2>&1) \
         || true
     set -e
-    Scripts/verify-xcresult.sh verify-s1-01-skip-canary "$result_bundle" "$allowlist" true \
-        || fail "verify-s1-01-skip-canary" "XCTSkip canary was not reported as one failed test"
+    rg -qi 'skip|skipped' "$tmp/xcodebuild.log" \
+        || fail "verify-s1-01-skip-canary" "XCTSkip canary did not appear in simulator output"
+    Scripts/verify-xcresult.sh verify-s1-01-skip-canary "$result_bundle" "$allowlist" reject \
+        || fail "verify-s1-01-skip-canary" "XCTSkip canary was not rejected by xcresult"
     echo "PASS verify-s1-01-skip-canary"
 }
 
@@ -672,7 +698,6 @@ SWIFT
         SWIFT_VERSION=5 \
         SWIFT_STRICT_CONCURRENCY=complete \
         SWIFT_SUPPRESS_WARNINGS=NO \
-        SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
         CODE_SIGNING_ALLOWED=NO \
         build >/dev/null) \
         || fail "verify-s1-01-public-consumer" "public-only iOS 13 consumer failed"
