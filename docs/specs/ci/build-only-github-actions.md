@@ -1,8 +1,8 @@
 # Build-only GitHub Actions policy
 
-**Status:** proposed, spec-only. Explicit operator approval is required before
-implementation. GitHub Actions remains disabled while this specification is
-reviewed.
+**Status:** evidence-complete design revision 2, spec-only. Explicit operator
+approval of this revision is required before implementation. GitHub Actions
+remains disabled while this specification is reviewed.
 
 ## Goal
 
@@ -105,8 +105,9 @@ revalidation before a new final hosted build.
   parallel job, fallback runner, or duplicate build is allowed.
 - A deliberate second manual run requires operator approval and a recorded
   reason.
-- The maximum hosted cost of one attempt is ten macOS minutes; normal success is
-  expected to finish below that cap.
+- The maximum wall-clock duration of one attempt is ten minutes; GitHub may
+  apply its current macOS billing multiplier when debiting plan minutes. Normal
+  success is expected to finish below the wall-clock cap.
 
 ## Scope and affected areas
 
@@ -121,6 +122,88 @@ Historical slice specs and reports remain immutable evidence of what was
 accepted at the time. Where they prescribe hosted tests, this newer governing
 policy overrides only the execution location: those checks move to the MacBook,
 while their acceptance semantics remain unchanged.
+
+## Verified analog family and delta matrix
+
+The target repository is indexed as codebase-memory project
+`Users-ant013-Data-AI-thorchain`, and the load-bearing facts below were checked
+independently with Serena and targeted current-tree reads at design base
+`11f03094112bd280bf108abd66d5a8fddf495ef7`.
+
+Palace/Gimle has no registered ThorChainKit project. Bounded exact-ref searches
+of the current TronKit and EvmKit analog repositories found no `.github`
+workflow family to reuse. The design therefore uses the current ThorChainKit
+control plane as its coherent primary spine instead of inventing or importing a
+foreign CI lifecycle.
+
+### Slice `CI-BUILD-ONLY` — manual exact-head hosted build
+
+| Field | Decision |
+|---|---|
+| Analog family | Primary: the existing manual exact-head dispatch, live-PR preflight, read-only permission, and pinned checkout in `.github/workflows/ci.yml`. Supporting build shape: the existing Example workspace/scheme/no-signing `xcodebuild ... build` in `Scripts/run-maestro.sh`. Supporting policy seam: the existing local workflow-contract enforcement in `Scripts/verify-s1-02-ci-policy.sh`. Rejected counterexample: the cumulative hosted Java/ripgrep/simulator/test/mutant/Maestro block in the current workflow. |
+| Coverage | The primary covers contract, composition, dispatch lifecycle, consumer inputs, error closure, trust boundary, and immutable head binding. The Example build covers implementation, package/app dependency direction, and the local build seam. The policy verifier covers static contract tests and forbidden-state rejection. The rejected cumulative job supplies the explicit counterexample. |
+| Invariants to preserve | Manual-only trigger; same-repository open PR against `main`; equality of input, event, workflow, live PR, and checkout head; pinned checkout action; read-only repository permission; repository-owned Example workspace and scheme; `CODE_SIGNING_ALLOWED=NO`; no product source changes. |
+| Required differences | Rename the job around build-only responsibility; use confirmation token `FINAL_BUILD_ONLY`; shallow checkout with no persisted credentials; add one per-PR concurrency group and `timeout-minutes: 10`; replace every hosted acceptance/tool/device step with exactly one generic-destination Example build; rewrite the stable policy-verifier path as a local-only build-policy check. |
+| Rejected differences | No new workflow, runner, cache, matrix, artifact, dependency, source/test change, automatic trigger, test deletion, local-gate weakening, script rename, simulator selection, package test, Maestro installation, or Actions activation. |
+| Failure modes | Wrong/stale SHA or fork PR fails preflight before checkout/build; duplicate dispatch cancels the older same-PR run; dependency resolution/build failure exits the sole job; ten-minute wall-clock timeout fails closed; policy drift is caught locally before dispatch; no automatic retry is permitted. |
+| Tests before code | Current-tree observation proves the old workflow contains the forbidden hosted categories at lines 83–190; policy canaries must fail for an automatic trigger, mutable checkout, extra job/build, timeout removal, repository-script call, test action, simulator/device command, tool installation, and artifact upload. |
+| Verification | Local policy verifier at exact implementation head; YAML structure validation; exact generic-destination Example build once on the MacBook; diff audit limited to the approved spec, workflow, and stable verifier; repository Actions permission remains disabled and no run is dispatched. |
+
+The Example analog currently uses an exact UDID and continues into install,
+launch, and Maestro. Only its workspace, scheme, no-signing, and `build` shape
+is inherited. The required hosted delta deliberately changes the destination to
+`generic/platform=iOS Simulator` and inherits none of the device lifecycle.
+
+The current policy verifier encodes obsolete S1-02/S1-03 hosted acceptance.
+Keeping its path avoids wider caller/document churn, but its contents are
+replaced by the approved build-only static contract and it is removed from the
+workflow itself.
+
+## Test plan
+
+The policy verifier is tested locally with in-memory temporary workflow text;
+those checks do not invoke GitHub Actions, Xcode, a simulator, or product tests.
+The baseline approved workflow must pass, while one change per canary must fail:
+
+- automatic event trigger or second job;
+- missing timeout/concurrency/read-only permission;
+- mutable ref, persisted credentials, or incomplete exact-head preflight;
+- second or changed `xcodebuild` command;
+- `test`, `-only-testing`, result-bundle, repository-script, verifier, mutant,
+  fixture, Maestro, Java/ripgrep/tool installation, `simctl`, UDID/runtime/model,
+  scan, artifact, or deployment behavior.
+
+After static policy checks, run exactly one local build command:
+
+```bash
+xcodebuild \
+  -workspace 'iOS Example/iOS Example.xcworkspace' \
+  -scheme 'iOS Example' \
+  -destination 'generic/platform=iOS Simulator' \
+  CODE_SIGNING_ALLOWED=NO \
+  build
+```
+
+The implementation evidence records command, exit status, implementation head,
+and elapsed time. No hosted verification run is part of this test plan.
+
+## Adversarial review resolution
+
+- A plain branch checkout would permit stale or unintended builds, so the
+  existing exact-head/live-PR preflight remains the primary spine.
+- A package-only build would not prove Example integration; the single Example
+  workspace build compiles both the app and linked local package.
+- Reusing the current exact-UDID build would retain simulator provisioning; the
+  generic destination closes that cost and lifecycle leak.
+- Calling the policy verifier from Actions would violate the one-product-command
+  boundary; it remains a local Reviewer/QA check only.
+- Renaming the historical verifier would create unrelated documentation/caller
+  churn; its stable path is retained and its obsolete contents replaced.
+- Ten minutes describes the job's wall-clock timeout, not guaranteed billed
+  plan minutes; the budget wording now preserves that distinction.
+- The smaller alternative of deleting Actions entirely conflicts with the
+  operator's explicit requirement to retain one clean hosted build, so the
+  one-job/one-build design is the minimum accepted surface.
 
 ## Out of scope
 
@@ -156,7 +239,7 @@ Implementation verification is local and ordered from cheapest to most direct:
 
 1. Parse the workflow and assert its only trigger, single job, permissions,
    timeout, concurrency, exact-head checkout, and single build command.
-2. Statistically reject all forbidden hosted command families listed in
+2. Statically reject all forbidden hosted command families listed in
    acceptance criterion 4, including split/multiline spellings handled by the
    local policy verifier.
 3. Run the rewritten policy verifier locally against the implementation head.
