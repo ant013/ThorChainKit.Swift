@@ -148,7 +148,8 @@ actual_tests=$(mktemp)
 actual_symbols=$(mktemp)
 symbol_dir=$(mktemp -d)
 live_tool_dir=$(mktemp -d)
-trap 'rm -f "$expected_sources" "$actual_sources" "$actual_tests" "$actual_symbols"; rm -rf "$symbol_dir" "$live_tool_dir"' EXIT
+test_allowlist_dir=$(mktemp -d)
+trap 'rm -f "$expected_sources" "$actual_sources" "$actual_tests" "$actual_symbols"; rm -rf "$symbol_dir" "$live_tool_dir" "$test_allowlist_dir"' EXIT
 
 cat > "$expected_sources" <<'EOF'
 Sources/ThorChainKit/Address/AddressCodec.swift
@@ -236,9 +237,12 @@ for name in [
     assert re.search(r"XCTSkip|XCTExpectFailure|^\s*#if", source, re.MULTILINE) is None
 PY
 require_simulator
-run_simulator_tests endpoints EndpointDiagnosticsTests <(rg '^ThorChainKitTests\.EndpointDiagnosticsTests/' Tests/ThorChainKitTests/Fixtures/S1-02-tests.txt)
-run_simulator_tests pool EndpointPoolTests <(rg '^ThorChainKitTests\.EndpointPoolTests/' Tests/ThorChainKitTests/Fixtures/S1-02-tests.txt)
-run_simulator_tests live LiveNodeProbeTests <(rg '^ThorChainKitTests\.LiveNodeProbeTests/' Tests/ThorChainKitTests/Fixtures/S1-02-tests.txt)
+rg '^ThorChainKitTests\.EndpointDiagnosticsTests/' Tests/ThorChainKitTests/Fixtures/S1-02-tests.txt > "$test_allowlist_dir/endpoints.txt"
+rg '^ThorChainKitTests\.EndpointPoolTests/' Tests/ThorChainKitTests/Fixtures/S1-02-tests.txt > "$test_allowlist_dir/pool.txt"
+rg '^ThorChainKitTests\.LiveNodeProbeTests/' Tests/ThorChainKitTests/Fixtures/S1-02-tests.txt > "$test_allowlist_dir/live.txt"
+run_simulator_tests endpoints EndpointDiagnosticsTests "$test_allowlist_dir/endpoints.txt"
+run_simulator_tests pool EndpointPoolTests "$test_allowlist_dir/pool.txt"
+run_simulator_tests live LiveNodeProbeTests "$test_allowlist_dir/live.txt"
 echo "PASS verify-s1-02-test-discovery"
 
 derived_data=$(mktemp -d)
