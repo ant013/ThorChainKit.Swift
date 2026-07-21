@@ -18,7 +18,8 @@ case "$slice" in
     s1-01) flow_path=.maestro/flows/00-launch-foundation.yaml ;;
     s1-02) flow_path=.maestro/flows/01-endpoint-policy.yaml ;;
     s1-03) flow_path=.maestro/flows/02-address-codec.yaml ;;
-    *) fail "slice must be s1-01, s1-02, or s1-03" ;;
+    s1-04) flow_path=.maestro/flows/03-account-read-fixture.yaml ;;
+    *) fail "slice must be s1-01, s1-02, s1-03, or s1-04" ;;
 esac
 
 udid=${THORCHAIN_SIMULATOR_UDID:-}
@@ -51,9 +52,9 @@ PY
 ) || fail "the configured simulator is unavailable"
 
 flow_count=$(find .maestro/flows -type f -name '*.yaml' | wc -l | tr -d ' ')
-[[ "$flow_count" == 3 ]] || fail "exactly three slice flows are required"
-[[ "$(<.maestro/config.yaml)" == $'flows:\n  - flows/00-launch-foundation.yaml\n  - flows/01-endpoint-policy.yaml\n  - flows/02-address-codec.yaml' ]] \
-    || fail "Maestro manifest must contain exactly the three slice flows"
+[[ "$flow_count" == 4 ]] || fail "exactly four slice flows are required"
+[[ "$(<.maestro/config.yaml)" == $'flows:\n  - flows/00-launch-foundation.yaml\n  - flows/01-endpoint-policy.yaml\n  - flows/02-address-codec.yaml\n  - flows/03-account-read-fixture.yaml' ]] \
+    || fail "Maestro manifest must contain exactly the four slice flows"
 [[ -f "$flow_path" ]] || fail "selected slice flow is unavailable"
 
 results_root="$repository_root/build/$slice-maestro-results"

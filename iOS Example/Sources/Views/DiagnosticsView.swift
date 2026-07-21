@@ -3,10 +3,12 @@ import SwiftUI
 struct DiagnosticsView: View {
     @ObservedObject var model: DiagnosticsViewModel
     @StateObject private var endpoints: EndpointsViewModel
+    @StateObject private var accountRead: AccountReadViewModel
 
     init(model: DiagnosticsViewModel) {
         self.model = model
         _endpoints = StateObject(wrappedValue: EndpointsViewModel(runtime: model.runtime))
+        _accountRead = StateObject(wrappedValue: AccountReadViewModel(runtime: model.runtime))
     }
 
     var body: some View {
@@ -42,6 +44,10 @@ struct DiagnosticsView: View {
                 NavigationLink(destination: EndpointsView(model: endpoints)) {
                     Text("Endpoints")
                         .accessibilityIdentifier("endpoint-policy-open")
+                }
+                NavigationLink(destination: AccountReadView(model: accountRead)) {
+                    Text("Account Read")
+                        .accessibilityIdentifier("account-read-open")
                 }
             }
         }

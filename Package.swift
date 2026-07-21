@@ -37,5 +37,12 @@ let package = Package(
             exclude: ["Fixtures"],
             swiftSettings: [.unsafeFlags(["-warnings-as-errors"])]
         ),
+        .testTarget(
+            name: "ThorChainKitLiveTests",
+            dependencies: ["ThorChainKit"],
+            path: "Tests/ThorChainKitLiveTests",
+            exclude: ["Fixtures"],
+            swiftSettings: [.unsafeFlags(["-warnings-as-errors"])]
+        ),
     ]
 )

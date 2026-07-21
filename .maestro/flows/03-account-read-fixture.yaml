@@ -1,0 +1,25 @@
+appId: org.horizontalsystems.thorchainkit.example
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: account-read-open
+- extendedWaitUntil:
+    visible:
+      id: account-read-mode
+      text: FIXTURE
+    timeout: 5000
+- assertVisible:
+    id: account-read-exists
+    text: "true"
+- assertVisible:
+    id: account-read-rune
+    text: "340282366920938463463374607431768211456"
+- assertVisible:
+    id: account-read-height
+    text: "12345678"
+- assertVisible:
+    id: account-read-family
+    text: fixture-primary
+- assertNotVisible: "(?i).*(mnemonic|seed phrase|private key).*"
+- takeScreenshot: account-read-fixture-success

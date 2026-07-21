@@ -122,12 +122,24 @@ import sys
 
 source = Path(sys.argv[1]).read_text()
 required = [
+    "name: Build Only",
+    "workflow_dispatch:",
     "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5",
-    "actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9",
-    "https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.6.1/maestro.zip",
-    "3440825f514f537c6a96bcf5de995780c2a4a7f83a43208fdc95d4f1fecfad3b",
+    "- name: Build Example",
+    "-destination 'generic/platform=iOS Simulator'",
 ]
 assert all(source.count(value) == 1 for value in required)
+for forbidden in [
+    "actions/setup-java@",
+    "mobile-dev-inc/Maestro",
+    "maestro test",
+    "simctl",
+    "swift test",
+    "xcodebuild test",
+    "test-run-maestro.sh",
+    "run-maestro.sh",
+]:
+    assert forbidden not in source
 PY
 }
 
@@ -198,6 +210,47 @@ assert "01-endpoint-policy.yaml" not in maestro
 PY
 echo "PASS run-maestro-shim-s1-03"
 
+happy="$test_root/happy-s1-04"
+copy_fixture_repo "$happy"
+run_fixture "$happy" s1-04
+python3 - "$happy/commands.log" <<'PY' \
+    || fail "S1-04 exact flow argv audit failed"
+import sys
+
+lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+maestro = next(line for line in lines if line.startswith("maestro --device "))
+assert maestro.endswith(" .maestro/flows/03-account-read-fixture.yaml"), maestro
+for earlier in [
+    "00-launch-foundation.yaml",
+    "01-endpoint-policy.yaml",
+    "02-address-codec.yaml",
+]:
+    assert earlier not in maestro
+PY
+echo "PASS run-maestro-shim-s1-04"
+
+fixture="$test_root/wrong-s1-04-mapping"
+copy_fixture_repo "$fixture"
+mutated="$fixture/Scripts/run-maestro.sh"
+python3 - "$mutated" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text()
+old = "s1-04) flow_path=.maestro/flows/03-account-read-fixture.yaml ;;"
+assert source.count(old) == 1
+path.write_text(source.replace(old, "s1-04) flow_path=.maestro/flows/02-address-codec.yaml ;;"))
+PY
+if run_fixture "$fixture" s1-04 >/dev/null 2>&1; then
+    maestro_line=$(rg '^maestro --device ' "$fixture/commands.log")
+    [[ "$maestro_line" != *'03-account-read-fixture.yaml' ]] \
+        || fail "wrong S1-04 mapping canary did not mutate the selected flow"
+else
+    fail "wrong S1-04 mapping canary did not reach the shim audit"
+fi
+echo "PASS wrong-s1-04-mapping"
+
 fixture="$test_root/missing-slice"
 copy_fixture_repo "$fixture"
 if SHIM_LOG="$fixture/commands.log" SHIM_UDID="$canary_udid" PATH="$fixture/shims:$PATH" \
@@ -241,7 +294,7 @@ if verify_provenance "$fixture/.github/workflows/ci.yml" 2>/dev/null; then
 fi
 echo "PASS action-provenance"
 
-fixture="$test_root/archive-provenance"
+fixture="$test_root/build-only-provenance"
 copy_fixture_repo "$fixture"
 python3 - "$fixture/.github/workflows/ci.yml" <<'PY'
 from pathlib import Path
@@ -249,14 +302,14 @@ import sys
 
 path = Path(sys.argv[1])
 source = path.read_text()
-old = "3440825f514f537c6a96bcf5de995780c2a4a7f83a43208fdc95d4f1fecfad3b"
+old = "-destination 'generic/platform=iOS Simulator'"
 assert source.count(old) == 1
-path.write_text(source.replace(old, "0" * 64))
+path.write_text(source.replace(old, "-destination 'platform=iOS Simulator,name=iPhone 17 Pro'"))
 PY
 if verify_provenance "$fixture/.github/workflows/ci.yml" 2>/dev/null; then
-    fail "changed archive provenance was accepted"
+    fail "changed build-only provenance was accepted"
 fi
-echo "PASS archive-provenance"
+echo "PASS build-only-provenance"
 
 fixture="$test_root/wrong-maestro"
 copy_fixture_repo "$fixture"

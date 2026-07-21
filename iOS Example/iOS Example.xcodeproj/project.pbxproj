@@ -17,6 +17,8 @@
 		A20000000000000000000008 /* EndpointsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000008 /* EndpointsView.swift */; };
 		A20000000000000000000009 /* AddressViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000009 /* AddressViewModel.swift */; };
 		A2000000000000000000000A /* AddressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3000000000000000000000A /* AddressView.swift */; };
+		A2000000000000000000000B /* AccountReadViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3000000000000000000000B /* AccountReadViewModel.swift */; };
+		A2000000000000000000000C /* AccountReadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3000000000000000000000C /* AccountReadView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -30,6 +32,8 @@
 		A30000000000000000000008 /* EndpointsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndpointsView.swift; sourceTree = "<group>"; };
 		A30000000000000000000009 /* AddressViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddressViewModel.swift; sourceTree = "<group>"; };
 		A3000000000000000000000A /* AddressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddressView.swift; sourceTree = "<group>"; };
+		A3000000000000000000000B /* AccountReadViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountReadViewModel.swift; sourceTree = "<group>"; };
+		A3000000000000000000000C /* AccountReadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountReadView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -78,6 +82,7 @@
 				A30000000000000000000004 /* DiagnosticsViewModel.swift */,
 				A30000000000000000000007 /* EndpointsViewModel.swift */,
 				A30000000000000000000009 /* AddressViewModel.swift */,
+				A3000000000000000000000B /* AccountReadViewModel.swift */,
 			);
 			path = Presentation;
 			sourceTree = "<group>";
@@ -88,6 +93,7 @@
 				A30000000000000000000005 /* DiagnosticsView.swift */,
 				A30000000000000000000008 /* EndpointsView.swift */,
 				A3000000000000000000000A /* AddressView.swift */,
+				A3000000000000000000000C /* AccountReadView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -185,6 +191,8 @@
 				A20000000000000000000008 /* EndpointsView.swift in Sources */,
 				A20000000000000000000009 /* AddressViewModel.swift in Sources */,
 				A2000000000000000000000A /* AddressView.swift in Sources */,
+				A2000000000000000000000B /* AccountReadViewModel.swift in Sources */,
+				A2000000000000000000000C /* AccountReadView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

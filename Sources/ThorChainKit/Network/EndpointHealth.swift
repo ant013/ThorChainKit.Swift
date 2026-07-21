@@ -8,7 +8,16 @@ struct EndpointInstant: Comparable, Equatable, Sendable {
     }
 
     func advanced(seconds: TimeInterval) -> EndpointInstant {
-        EndpointInstant(nanoseconds: nanoseconds &+ UInt64(seconds * 1_000_000_000))
+        guard seconds.isFinite, seconds >= 0 else { return self }
+        let nanosecondsDouble = seconds * 1_000_000_000
+        guard nanosecondsDouble.isFinite,
+              nanosecondsDouble < Double(UInt64.max)
+        else {
+            return EndpointInstant(nanoseconds: .max)
+        }
+        let delta = UInt64(nanosecondsDouble)
+        let (sum, overflow) = nanoseconds.addingReportingOverflow(delta)
+        return EndpointInstant(nanoseconds: overflow ? .max : sum)
     }
 }
 
