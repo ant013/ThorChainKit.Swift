@@ -14,6 +14,7 @@ struct AddressView: View {
                 row("Derived Address", model.derivedAddress, "derived-address")
                 row("Uppercase Normalization", model.canonicalUppercase, "canonical-uppercase")
                 row("Mixed Case", model.mixedCaseResult, "mixed-case-result")
+                row("Bad Checksum", model.badChecksumResult, "bad-checksum-result")
                 row("Wrong HRP", model.wrongHrpResult, "wrong-hrp-result")
             }
             .frame(maxWidth: .infinity, alignment: .leading)

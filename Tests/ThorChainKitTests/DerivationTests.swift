@@ -17,6 +17,7 @@ final class DerivationTests: XCTestCase {
             ("m/44'/931'/0'/1'/0", .invalidChain),
             ("m/44'/931'/0'/0/-1", .invalidIndex),
             ("m/44'/931'/00'/0/0", .malformedComponent),
+            ("m/44'/931'/٠'/0/0", .malformedComponent),
             ("m /44'/931'/0'/0/0", .malformedComponent),
         ]
 

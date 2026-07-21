@@ -25,8 +25,7 @@ let package = Package(
                 "BigInt",
                 .product(
                     name: "HsCryptoKit",
-                    package: "HsCryptoKit.Swift",
-                    condition: .when(platforms: [.iOS])
+                    package: "HsCryptoKit.Swift"
                 ),
                 .product(name: "secp256k1", package: "secp256k1.swift"),
             ]

@@ -7,6 +7,7 @@ final class AddressViewModel: ObservableObject {
     @Published private(set) var derivedAddress = "unavailable"
     @Published private(set) var canonicalUppercase = "unavailable"
     @Published private(set) var mixedCaseResult = "unavailable"
+    @Published private(set) var badChecksumResult = "unavailable"
     @Published private(set) var wrongHrpResult = "unavailable"
 
     init(network: Network) {
@@ -28,6 +29,9 @@ final class AddressViewModel: ObservableObject {
                     address.raw.prefix(6).uppercased() + String(address.raw.dropFirst(6)),
                     network: network
                 )
+            }
+            badChecksumResult = Self.failureName {
+                try codec.decode(address.raw.dropLast() + "q", network: network)
             }
             let stagenet = try Network.stagenet(expectedChainId: "stage-1")
             let wrongNetworkAddress = try codec.encode(payload: Data(repeating: 0, count: 20), network: stagenet)

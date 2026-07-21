@@ -64,6 +64,15 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ inputs.expected_head_sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Establish exact expected base ref
+        env:
+          EXPECTED_BASE_SHA: 7fd9663442a0e6dcd9c01c4ab04d35f3abd96fc4
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --prune origin "+refs/heads/main:refs/remotes/origin/main"
+          test "$(git rev-parse refs/remotes/origin/main)" = "$EXPECTED_BASE_SHA"
       - name: Verify exact checkout
         env:
           EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
@@ -134,13 +143,18 @@ jobs:
             "selected_device=$selected_device" \
             "selected_udid=$selected_udid"
           printf 'THORCHAIN_SIMULATOR_UDID=%s\n' "$selected_udid" >> "$GITHUB_ENV"
-      - name: Verify package and S1-02 contract
+      - name: Verify package and S1-03 contract
+        env:
+          EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
         run: |
+          set -euo pipefail
           Scripts/verify-s1-02-ci-policy.sh steady-state --ref "$(git rev-parse HEAD)"
           swift build
           swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
           swift test
           Scripts/verify-s1-02.sh
+          Scripts/verify-s1-03.sh --expected-base 7fd9663442a0e6dcd9c01c4ab04d35f3abd96fc4 --expected-head "$EXPECTED_HEAD_SHA"
+          Scripts/test-s1-03-mutants.sh
       - name: Verify guarded Maestro runner
         run: Scripts/test-run-maestro.sh
       - name: Install pinned Maestro CLI
@@ -159,9 +173,4 @@ jobs:
           export THORCHAIN_SIMULATOR_UDID
           Scripts/run-maestro.sh s1-01
           Scripts/run-maestro.sh s1-02
-      - name: Verify S1-03 derivation and address codec
-        run: |
-          set -euo pipefail
-          Scripts/verify-s1-03.sh
-      - name: Run S1-03 fixture acceptance
-        run: Scripts/run-maestro.sh s1-03
+          Scripts/run-maestro.sh s1-03

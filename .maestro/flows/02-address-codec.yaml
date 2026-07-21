@@ -16,6 +16,9 @@ appId: org.horizontalsystems.thorchainkit.example
     id: mixed-case-result
     text: mixedCase
 - assertVisible:
+    id: bad-checksum-result
+    text: invalidAddress
+- assertVisible:
     id: wrong-hrp-result
     text: wrongHrp
 - assertNotVisible: "(?i).*(mnemonic|seed phrase|private key).*"
