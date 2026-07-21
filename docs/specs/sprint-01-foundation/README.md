@@ -2,7 +2,9 @@
 
 ## Status
 
-**Architecture review:** S1-01 revision 11 awaits fresh adversarial review; implementation remains blocked until explicit revision-bound user approval.
+**Architecture review:** S1-01 through S1-03 are implemented. S1-04 revision 13
+is the active evidence-complete design and remains blocked until adversarial
+acceptance plus explicit revision-bound operator approval.
 
 This package divides the first standalone `ThorChainKit` sprint into seven sequential vertical slices. Each slice concludes with an observable result in the evolving `iOS Example`; S1-06 and S1-07 additionally verify the real Unstoppable Wallet integration surface.
 
@@ -42,13 +44,14 @@ Consolidated verification: [`test-plan.md`](test-plan.md).
 ## Assumptions
 
 - This repository is the product authority for the standalone kit; Unstoppable Wallet is a separate future consumer.
-- The repository remains documentation-only until S1-01 receives explicit revision-bound approval.
+- S1-01 through S1-03 are implemented; exactly one later roadmap slice is active at a time.
 - `Sources/ThorChainKit` is UI-agnostic: Combine is allowed for state publication, while UIKit and SwiftUI imports are prohibited.
 - `iOS Example` retains the verified TronKit project/workspace structure only. Its lifecycle and presentation use SwiftUI + Combine, with no UIKit import/type/representable; it also does not copy TronKit's hardcoded mnemonic, plaintext persistence, or demo lifecycle ownership.
 - The library retains iOS 13; the UIKit-free SwiftUI Example targets iOS 14 or later.
 - Vultisig is used only as a THORChain-specific supporting reference and a source of missing protocol details.
 - Production integration follows the exact current-tree Unstoppable contracts; similar names do not constitute evidence.
-- Live-network and Example UI gates are opt-in; fixture success is never labeled as live evidence.
+- Product tests, mutants, simulator, Maestro, and live-network gates run on the shared MacBook. Fixture success is never labeled as live evidence.
+- GitHub Actions is governed by the manual generic build-only policy and remains disabled until a separate explicit operator activation.
 - Maestro applies only to `ThorChainKit/iOS Example`; no `.maestro`, runner, acceptance fixtures, or launch-argument hooks are added to Unstoppable.
 
 ## Sprint Scope
@@ -81,20 +84,27 @@ The user term `Meteora` means **Maestro**. Its scope is limited to `ThorChainKit
 
 ## Integrity Manifest
 
-SHA-256 pins the exact versions of the seven slice specs, the S1-02 recovery spec, both approved S1-02 implementation plans, and the consolidated test plan. Values are updated after any design edit; a plan pin does not imply approval.
+SHA-256 pins the exact versions of the seven slice specs, the S1-02 recovery
+spec, the governing build-only Actions spec, implementation plans through the
+active S1-04 design, and the consolidated test plan. Values are updated after
+any design edit; a plan pin does not imply approval.
 
 <!-- SPEC_HASHES_START -->
 | Artifact | SHA-256 |
 |---|---|
-| `S1-01-package-public-api.md` | `a1dc63ef44b40f2e778bd1c86df0de42846fa9e119c2c12989268a455257dd4d` |
+| `S1-01-package-public-api.md` | `59f24c2ab452b804a2435306b4ed7caceff255b6f308fe50177d7cb98fc9b18b` |
 | `S1-02-network-endpoint-policy.md` | `48f88590331c5cfca24c39632a690d69417c3be979ed61a3df355262091909cf` |
 | `S1-02-swiftui-integration-recovery.md` | `13382503e6b60fd60839039794da636617a6eddfbb31abd3982a2b8860ed4569` |
-| `S1-03-derivation-address-codec.md` | `429e894c2144c6f1b4b65f7fbc48838ee663472e036c4061df444df1f91c609c` |
-| `S1-04-thornode-read-client.md` | `c17f04ea8d4343f558af745a58666ce3122757919a6a27600fa54d849e4ff886` |
+| `S1-03-derivation-address-codec.md` | `e0b742799b14222947b8e43f56a17bfc92b3f0279c3a5abbe4a2a0fcb2a335cd` |
+| `S1-04-thornode-read-client.md` | `72d9054b52a987bee0e056af9cdfd0039b66a48271bf77f279214615240ed4a0` |
 | `S1-05-rune-account-sync.md` | `5345c4ef169d4c39187bef7371a16cae5a779164ddecbbe97a99ff12b471a0ff` |
 | `S1-06-unstoppable-lifecycle-composition.md` | `0a598cdc320e5da99c805bb676241b9c1924eb2a4d9078f68a21896681fa1703` |
 | `S1-07-unstoppable-rune-surface.md` | `9da09bfc288bf9e43565f503d2db06b29f57291f0870c1d9729f9d092e2f502c` |
+| `docs/specs/ci/build-only-github-actions.md` | `57f2a0dd85c50aeeaa67ffd87da278b5b9897103138a8dafee901b1ab6b66f15` |
 | `docs/superpowers/plans/2026-07-19-THR-13-s1-02-network-endpoint-policy.md` | `b6f98cda1a9e6c04107633a871e63b5c47be7e456150288ca63f716a814fd497` |
 | `docs/superpowers/plans/2026-07-20-THR-32-s1-02-swiftui-integration-recovery.md` | `02078fd98f9bdea0c064e91d1449524eb8ca943e0b10458f323cfaadf886635a` |
-| `test-plan.md` | `e504823b0b22ae202fd453d0bec7283e79e04ee0b39b985c86535a0fccbc8ce8` |
+| `docs/superpowers/plans/2026-07-21-THR-62-s1-03-derivation-address-codec.md` | `857adf98751c368195167f5f1c68e5bb05257fccd85e35e6c0492479ac02cccd` |
+| `docs/superpowers/plans/2026-07-21-S1-04-thornode-read-client.md` | `4e75390c2b9b018d4b40ff0ed7201c15eac37ed9fe716b87277c017cb4266b33` |
+| `docs/reports/gimle/S1-04-thornode-read-client-gimle-reliability.md` | `44e25c67ff1389cd344982ab43e62901fa8590382ec9768be16681abcebd5772` |
+| `test-plan.md` | `dfa5a82cc9bfaf0f437d413fe6fac97cf2c5c7829c8d2383fdf9804e2ed40f73` |
 <!-- SPEC_HASHES_END -->

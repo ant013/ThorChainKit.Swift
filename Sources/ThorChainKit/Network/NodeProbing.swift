@@ -97,7 +97,3 @@ struct IndexedProbeOutcome: Equatable, Sendable {
 protocol NodeProbing: Sendable {
     func probe(index: Int, family: EndpointFamilyDescriptor) async -> [IndexedProbeOutcome]
 }
-
-protocol HTTPTransporting: Sendable {
-    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse)
-}

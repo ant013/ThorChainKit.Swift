@@ -65,6 +65,11 @@ actor EndpointPool {
         return true
     }
 
+    func isCurrent(_ lease: EndpointLease) -> Bool {
+        lease.poolGeneration == generation
+            && configuration.families.contains(where: { $0 == lease.family })
+    }
+
     func reset() {
         generation &+= 1
         sharedProbe?.task.cancel()

@@ -88,6 +88,7 @@ result_bundle="$temporary_root/bigint-floor.xcresult"
     -destination "platform=iOS Simulator,id=${simulator_udid}" \
     -derivedDataPath "$derived_data" \
     -resultBundlePath "$result_bundle" \
+    -only-testing:ThorChainKitTests \
     SWIFT_VERSION=5 \
     SWIFT_STRICT_CONCURRENCY=complete \
     SWIFT_SUPPRESS_WARNINGS=NO \

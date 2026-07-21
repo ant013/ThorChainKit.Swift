@@ -1,173 +1,140 @@
-# S1-04 — THORChain read client, coordinated failover, and freshness
+# S1-04 — THORNode read client, coordinated failover, and freshness
 
-**Status:** synchronized to S1-01 revision 11 after revision-10 adversarial REVISE; implementation blocked pending fresh review and approval.
-**Risk:** high/network and data-integrity boundary.
-**Observable outcome:** fixtures and a controlled mainnet test return one complete typed account read; retry repeats the entire operation on another verified family, while malformed/partial/wrong-network/cancelled results do not become zeros or partial successes.
+**Status:** evidence-complete design revision 13 after `D-S104-001` review;
+implementation requires
+adversarial acceptance and explicit revision-bound operator approval.
+**Design base:** `4f67b57274b299d320ca8d06dc4b046aa4a43258` on
+`feature/s1-04-thornode-read-client`.
+**Risk:** high — network, freshness, cancellation, and account-integrity
+boundary.
 
-## Goal
+## Goal and observable outcome
 
-Implement a narrow Cosmos REST/CometBFT client and a single owner of read-operation attempts. The client builds/decodes one request; the coordinator obtains a family lease, performs a complete account read, and repeats the entire operation according to the error classification.
+Add one strict, read-only THORNode account pipeline on top of the S1-02
+`EndpointPool`. A complete attempt leases one already-verified endpoint family,
+reads the account and every balance page at the lease's Cosmos height, and
+publishes one immutable transport record. A retry discards the entire failed
+attempt and starts again with another family.
 
-## Endpoint surfaces Sprint 1
+Done means deterministic fixtures and an explicit mainnet run on the shared
+MacBook return typed chain metadata, account existence/number/sequence, all
+balances, accepted height, and provider family. Malformed, partial,
+wrong-height, unsupported-account, cancelled, and stale-generation outcomes
+never become zero balances or partial success.
 
-| Operation | Role | Path | Result |
-|---|---|---|---|
-| status | CometBFT | `/status` | chain ID, height, time, catching-up |
-| node info | Cosmos REST | `/cosmos/base/tendermint/v1beta1/node_info` | network/application identity |
-| account | Cosmos REST | `/cosmos/auth/v1beta1/accounts/{address}` | account number, sequence, exists |
-| balances | Cosmos REST | `/cosmos/bank/v1beta1/balances/{address}` | complete paginated denoms |
+## Assumptions and governing decisions
 
-The `/thorchain/network` endpoint and `thorNode` role are removed from Sprint 1: they are needed for fee/send in Sprint 2. Legacy `/auth/accounts` is not implemented; if the approved mainnet families do not support the modern route, the spec returns for review; silent fallback is prohibited.
+- S1-02 already owns status/node-info probing, identity, role freshness,
+  selection, leasing, and health. S1-04 consumes `EndpointLease`; it does not
+  duplicate those requests in a second client.
+- `HTTPTransporting`, `URLSessionTransport`, and the current
+  `LiveNodeProbe` transport/error shape are extended, not replaced by a parallel
+  `HttpTransport` family.
+- All S1-04 tests, verifier/mutant scripts, strict builds, deterministic
+  Maestro, and live-network gates run on the shared MacBook and are bound to the
+  exact PR head.
+- GitHub Actions supplies no S1-04 acceptance evidence. The governing
+  build-only policy permits only one separately activated manual generic
+  Example build; repository Actions stays disabled until a separate operator
+  instruction enables it.
+- The current modern Cosmos account response for a derived user address is
+  `/cosmos.auth.v1beta1.BaseAccount`. Module, vesting, nested, or unknown
+  wrappers are rejected in this slice.
+- The live provider URLs and public test addresses are runtime inputs. They are
+  never committed as credentials, and no mnemonic, seed, or private key enters
+  the repository or evidence.
 
-## Files
+## Scope
 
-```text
-Package.swift
-Sources/ThorChainKit/Network/ThorNodeClient.swift
-Sources/ThorChainKit/Network/LiveThorNodeClient.swift
-Sources/ThorChainKit/Network/ReadOperationCoordinator.swift
-Sources/ThorChainKit/Network/AccountReading.swift
-Sources/ThorChainKit/Network/AccountReadTransport.swift
-Sources/ThorChainKit/Network/BalanceTransport.swift
-Sources/ThorChainKit/Network/HttpTransport.swift
-Sources/ThorChainKit/Network/URLSessionHttpTransport.swift
-Sources/ThorChainKit/Network/TestingHttpTransportAdapter.swift
-Sources/ThorChainKit/Network/CancellationClassifier.swift
-Sources/ThorChainKit/Network/RequestBuilder.swift
-Sources/ThorChainKit/Network/ApiError.swift
-Sources/ThorChainKit/Network/DTO/StatusResponse.swift
-Sources/ThorChainKit/Network/DTO/NodeInfoResponse.swift
-Sources/ThorChainKit/Network/DTO/AccountResponse.swift
-Sources/ThorChainKit/Network/DTO/BankBalancesResponse.swift
-Sources/ThorChainKit/Models/NodeStatus.swift
-Sources/ThorChainKit/Models/Account.swift
-Sources/ThorChainKit/Core/TestingKitFactory.swift
-Tests/ThorChainKitTests/LiveThorNodeClientTests.swift
-Tests/ThorChainKitTests/ReadOperationCoordinatorTests.swift
-Tests/ThorChainKitTests/FixtureDecodingTests.swift
-Tests/ThorChainKitTests/Fixtures/*.json
-Tests/ThorChainKitTests/Fixtures/S1-04-public-symbols.txt
-Tests/ThorChainKitTests/Fixtures/S1-04-spi-factory-syntax.txt
-Tests/ThorChainKitTests/Fixtures/S1-04-spi-read-syntax.txt
-Tests/ThorChainKitLiveTests/MainnetReadTests.swift
-Scripts/verify-s1-04.sh
-iOS Example/Sources/Presentation/AccountReadViewModel.swift
-iOS Example/Sources/Views/AccountReadView.swift
-.maestro/flows/03-account-read-fixture.yaml
-.maestro/flows-live/03-account-read-mainnet.yaml
-```
+### In scope
 
-S1-04 adds a separate `.testTarget(name: "ThorChainKitLiveTests", dependencies: ["ThorChainKit"])`. Each live test first checks `THORCHAIN_LIVE_TESTS == "1"`; the absence of opt-in skips this target specifically through `XCTSkip` with a reason and does not affect the deterministic `ThorChainKitTests`.
+- base-path-preserving request construction;
+- `/cosmos/auth/v1beta1/accounts/{address}`;
+- complete `/cosmos/bank/v1beta1/balances/{address}` pagination;
+- exact `x-cosmos-block-height` request/response pinning;
+- strict typed envelopes, decimal parsing, absence recognition, and error
+  classification;
+- whole-operation family failover, bounded backoff, stale-lease rejection, and
+  cancellation cleanup;
+- a narrow `@_spi(Testing)` fixture session used only by tests and the SwiftUI
+  Example;
+- deterministic fixture UI acceptance and an explicit mainnet test target;
+- cumulative public/platform/secret/diff contract gates.
 
-## Internal contracts
+### Out of scope
+
+- fee, send, sign, broadcast, transaction history, `/thorchain/network`,
+  Midgard, gRPC, persistence, polling, public snapshot publication, or host
+  integration;
+- legacy `/auth/accounts` fallback;
+- automatic provider discovery or a production endpoint preset;
+- live Maestro, hosted tests, hosted mutants, hosted simulator selection, or
+  GitHub Actions activation;
+- public read APIs beyond the narrow unstable testing SPI.
+
+## Existing contracts preserved
+
+- `EndpointPool.lease(excludingFamilyIds:)` is the only family-selection entry.
+- `EndpointPool.recordFailure(for:failure:) -> Bool` accepts only a current
+  generation lease and retryable transport/status health.
+- S1-04 adds one read-only `EndpointPool.isCurrent(_:)` check and uses it as
+  the success linearization point; `recordFailure` reuses the same predicate.
+- `EndpointLease.family`, `verifiedChainId`, `cosmosReadHeight`,
+  `cometReferenceHeight`, and `poolGeneration` remain the source of verified
+  identity and freshness.
+- `EndpointClock` remains monotonic and is used only for health/backoff.
+- `AccountState` still requires account number and sequence exactly when
+  `exists == true`, and an absent account still requires empty balances.
+- `Denom` remains exact ASCII
+  `[A-Za-z][A-Za-z0-9/:._-]{2,127}`; native RUNE is exact lowercase `rune`.
+- `Kit.instance` remains inert. S1-04 adds no lifecycle, request, storage, or
+  task capability to production construction.
+- `Sources/ThorChainKit` imports neither UIKit nor SwiftUI; the Example remains
+  SwiftUI/Combine with no UIKit.
+
+## Internal design
+
+### Shared HTTP and request construction
+
+Move the existing private `URLSessionTransport` into the internal shared HTTP
+seam and keep the already-existing `HTTPTransporting` spelling:
 
 ```swift
-protocol ThorNodeClient: Sendable {
-    func status(using lease: EndpointLease) async throws -> NodeStatus
-    func nodeInfo(using lease: EndpointLease) async throws -> NodeInfo
-    func account(address: Address, using lease: EndpointLease) async throws -> Account?
-    func balances(address: Address, using lease: EndpointLease) async throws -> [BalanceTransport]
+protocol HTTPTransporting: Sendable {
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse)
+}
+
+struct URLSessionTransport: HTTPTransporting { /* current behavior */ }
+```
+
+`RequestBuilder` extracts the current `LiveNodeProbe.appending(path:to:)`
+behavior. Both probe and account clients use it. It:
+
+- retains the base URL's percent-encoded prefix;
+- appends route components without replacing the provider prefix;
+- encodes the validated address as one path component;
+- constructs pagination with `URLComponents.queryItems`;
+- sets `Accept: application/json`, configured timeout, and optional non-empty
+  `X-Client-ID`;
+- sets `x-cosmos-block-height` only for account and balance requests.
+
+No code constructs request URLs by interpolating an unvalidated absolute URL.
+
+### Read client and transport records
+
+```swift
+protocol ThorNodeReading: Sendable {
+    func account(address: Address, using lease: EndpointLease) async throws
+        -> AccountTransport?
+    func balances(address: Address, using lease: EndpointLease) async throws
+        -> [BalanceTransport]
 }
 
 protocol AccountReading: Sendable {
     func read(address: Address) async throws -> AccountReadTransport
 }
 
-actor ReadOperationCoordinator: AccountReading {
-    func read(address: Address) async throws -> AccountReadTransport
-}
-
-protocol HttpTransport: Sendable {
-    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse)
-}
-```
-
-All contracts are internal; the public consumer sees `Kit`, config, snapshots, and the sanitized `SyncError`.
-
-Every value returned from an async `ThorNodeClient` or `AccountReading` requirement—`NodeStatus`, `NodeInfo`, `Account`, `BalanceTransport`, and `AccountReadTransport`—is an immutable `Sendable` value whose stored fields are themselves `Sendable`. Only the balance/public-snapshot conversion needs BigInt, and that conversion follows the decimal-record boundary below.
-
-### Example-only acceptance SPI
-
-For a reproducible `ThorChainKit/iOS Example` UI harness, S1-04 provides a narrow unstable SPI that is absent from the normal consumer surface:
-
-```swift
-@_spi(Testing)
-public protocol TestingHttpTransport: Sendable {
-    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse)
-}
-
-@_spi(Testing)
-public struct TestingAccountReadProjection: Equatable, Sendable {
-    public let accountExists: Bool
-    public let runeAmountDecimal: String
-    public let acceptedHeight: Int64
-    public let providerFamilyId: String
-}
-
-@_spi(Testing)
-@MainActor
-public final class TestingKitInstance {
-    public let kit: Kit
-    public func readAccount() async throws -> TestingAccountReadProjection
-}
-
-@_spi(Testing)
-public extension Kit {
-    @MainActor
-    static func testingInstance(
-        address: Address,
-        walletId: String,
-        endpoints: EndpointConfiguration,
-        transport: any TestingHttpTransport
-    ) throws -> TestingKitInstance
-}
-```
-
-Production `Kit.instance` does not accept a transport and never activates fixtures. Only the Example fixture target imports `@_spi(Testing) ThorChainKit`; Unstoppable does not import this SPI in either production or tests. A separate public API compile check proves that a normal `import ThorChainKit` cannot see `TestingHttpTransport`, `TestingAccountReadProjection`, `TestingKitInstance`, or `testingInstance`.
-
-`Sources/ThorChainKit/Core/TestingKitFactory.swift` is the sole SPI root and owns all four SPI declarations plus `Kit.testingInstance`. Construction derives the sole network from `address.network`; there is no redundant network argument. Its executed composition closure is limited to the initializer bodies of `TestingHttpTransportAdapter`, `EndpointPool`, `RequestBuilder`, `LiveThorNodeClient`, `ReadOperationCoordinator`, `KitDependencies`, `Kit`, and `TestingKitInstance`, plus the already-pinned `Network.persistenceKey` getter. The `S1-04-spi-factory-syntax.txt` partition contains exactly that root and those initializer/getter bodies; it excludes request execution, retry, storage, lifecycle-start, and every production `Kit.instance` body. A helper, wrapper, initializer, import, identifier/member reference, or call outside this list fails the SPI construction audit. The production partition independently reruns the unchanged S1-01 inert `Kit.instance` baseline.
-
-`TestingKitInstance` retains the exact constructed internal `AccountReading` and validated `Address` only for the Example fixture handle. `readAccount()` performs one explicit `reader.read(address:)`, rejects a nil account with nonempty balances, selects exact `Denom.rune` or canonical `"0"` when absent, and returns only `TestingAccountReadProjection`. It never calls a Kit snapshot setter, subject `send`, lifecycle method, storage API, or another request owner; the enclosed public `kit` therefore remains at the S1-01 nil/idle/zero/no-account snapshot. `S1-04-spi-read-syntax.txt` positively pins the declarations and exact call/member shapes of `TestingKitInstance.readAccount` and the projection initializer. Temporary-copy canaries that return `AccountState`, add a second `AccountReading.read`, call any Kit lifecycle/publication path, or route through an out-of-closure helper must fail this independent SPI read gate.
-
-## Sole failover algorithm
-
-```text
-attemptedFamilyIds = ∅
-for attempt in 1...configuration.effectiveMaximumAttempts
-  check cancellation
-  lease = pool.lease(excluding: attemptedFamilyIds)
-  attemptedFamilyIds += lease.familyId
-  do
-    status = client.status(lease)
-    nodeInfo = client.nodeInfo(lease)
-    validate both identities against lease
-    pin Cosmos reads to lease.cosmosReadHeight
-    async let account = client.account(address, lease)
-    async let balances = client.balances(address, lease)
-    await both completely
-    return AccountReadTransport(
-      acceptedHeight: lease.cosmosReadHeight,
-      account: account,
-      balances: balances,
-      familyId: lease.familyId,
-      observedAt: clock.now
-    )
-  catch
-    normalized = CancellationClassifier.normalize(error)
-    if cancellation → throw immediately
-    classification = classify(normalized)
-    pool.recordFailure(familyId, classification)
-    if terminal or attempts exhausted → throw
-    await injectedBackoff.sleep(attempt, classification)
-throw exhausted
-```
-
-A retry creates a new lease and retrieves status/account/all balance pages again. An account from family A is never combined with balances from family B. `AccountSyncer` S1-05 calls the coordinator once and contains no retry loop.
-
-## Domain models
-
-```swift
-struct Account: Equatable, Sendable {
+struct AccountTransport: Equatable, Sendable {
     let accountNumber: UInt64
     let sequence: UInt64
 }
@@ -179,165 +146,424 @@ struct BalanceTransport: Equatable, Sendable {
 
 struct AccountReadTransport: Equatable, Sendable {
     let acceptedHeight: Int64
-    let account: Account?
+    let account: AccountTransport?
     let balances: [BalanceTransport]
     let familyId: String
     let observedAt: Date
 }
 ```
 
-S1-01 owns `Denom`; S1-04 consumes it without redeclaration. `CoinBalance` is not introduced: there is no approved public consumer beyond `AccountState.balances`. Low-level account/status and both transport records remain internal.
+`AccountReadTransport` validates the inherited absence invariant again:
+`account == nil` requires an empty balance list. It also rejects duplicate
+denominations and nonpositive heights. Records crossing async boundaries hold
+only genuinely `Sendable` values. They do not contain `BigUInt`,
+`AccountState`, or `@unchecked Sendable` declarations.
 
-`Denom`: non-empty, no whitespace/control; opaque/case-sensitive; `/` allowed; native only exact `rune`.
+`BalanceTransport.amountDecimal` is canonical unsigned decimal: exactly `0` or
+a nonzero digit followed by digits. A local `BigUInt` validation accepts values
+through `2^256 - 1` and rejects `2^256`, signs, leading zeroes, whitespace,
+empty values, and malformed digits. The transport stores the canonical string,
+not `BigUInt`.
 
-`BalanceTransport.amountDecimal` is a canonical unsigned decimal string (`"0"` or a nonzero digit followed by digits). `LiveThorNodeClient` validates it by constructing a local `BigUInt`, requiring that value's decimal description equals the input, and requiring `value.bitWidth <= 256`, matching `cosmossdk.io/math v1.5.3`'s `MaxBitLen = 256`. Exact `2^256 - 1` is accepted and `2^256` is rejected as `.invalidField`; no unbounded or “max BigUInt” criterion is valid. The client never stores `BigUInt` in either transport. The genuinely `Sendable` transport crosses the actor boundary; S1-05 reconstructs the public BigUInt-backed snapshot only on the S1-01 facade dispatcher. S1-04 must pass the strict-concurrency build without `@unchecked Sendable`.
+### Account response contract
 
-## Request construction
+A successful account response must:
 
-- role URL only from immutable lease;
-- validated address inserted as one encoded path component;
-- pagination uses `pagination.limit` and exact `pagination.key`;
-- optional non-empty `x-client-id`;
-- the account request and every balances page send `x-cosmos-block-height: lease.cosmosReadHeight`;
-- the response must return a parseable `x-cosmos-block-height` exactly equal to the requested height; a missing/mismatched value discards the entire attempt;
-- `Accept: application/json`, configured timeout;
-- URLComponents/path APIs, no injectable string concatenation.
+1. have HTTP 2xx;
+2. echo the requested height in `Grpc-Metadata-X-Cosmos-Block-Height`
+   (case-insensitive HTTP lookup);
+3. decode `account.@type` exactly as
+   `/cosmos.auth.v1beta1.BaseAccount`;
+4. contain canonical, non-overflowing `UInt64` decimal strings for
+   `account_number` and `sequence`.
 
-Height pinning follows the documented Cosmos REST `x-cosmos-block-height` contract: [Interacting with a Node](https://docs.cosmos.network/sdk/latest/node/interact-node). Compatibility with the exact THORChain providers is confirmed by the live gate before a family is accepted into the production preset.
+Only this exact absence response maps to `nil`:
 
-## Complete balance pagination
+- HTTP 404;
+- JSON `code == 5`;
+- `details` is an empty array;
+- `message` exactly equals
+  `rpc error: code = NotFound desc = account <requested-address> not found: key not found`.
+
+That observed gateway response may omit the height header. Absence is accepted
+for the complete operation only when the sibling balances request succeeds at
+the pinned height and returns no balances. Any other 404, changed message,
+nonempty details, malformed body, or unsupported account type is terminal.
+
+### Balance response contract
+
+Every page must be HTTP 2xx, echo the requested Cosmos height, and decode every
+coin strictly. Pagination starts without a key, uses a fixed limit of `100`,
+then forwards the exact nonempty `pagination.next_key` value. The `total` field
+is ignored because providers may return `"0"` while a next key exists.
+
+The client rejects:
+
+- a missing or mismatched height on any page;
+- a repeated nonempty next key;
+- more than `EndpointPolicy.maximumBalancePageCount` pages;
+- a duplicate denomination across or within pages;
+- an invalid `Denom` or amount;
+- a malformed/unknown envelope or a later-page failure.
+
+The final list is sorted by exact `Denom.rawValue`. No partial page result
+escapes.
+
+### Whole-operation failover
+
+`ReadOperationCoordinator` is the sole business-read retry owner. It is an
+immutable `Sendable` coordinator; mutable family health remains in the
+`EndpointPool` actor.
 
 ```text
-key = nil; seenKeys = ∅; balances = [:]
-repeat
+excluded = empty set
+for attempt in 1...configuration.effectiveMaximumAttempts
   check cancellation
-  require response x-cosmos-block-height == lease.cosmosReadHeight
-  decode every item strictly
-  reject any duplicate denom
-  if next_key empty → return deterministic denom order
-  reject repeated next_key
-  enforce policy.maximumBalancePageCount
-  key = next_key
+  lease = await pool.lease(excludingFamilyIds: excluded)
+  excluded += lease.family.id
+  start tagged account and balances child tasks for this lease
+  collect tagged outcomes; after first failure cancel and drain the sibling
+  parent cancellation -> throw CancellationError
+  if both valid, require await pool.isCurrent(lease)
+  current success -> construct one AccountReadTransport and return
+  stale success -> throw staleLease
+  deterministically select and normalize one real child error
+  cancellation -> throw immediately
+  terminal response/decode/identity/stale-lease -> throw immediately
+  retryable transport/status -> calculate bounded delay
+  accepted = await pool.recordFailure(for: lease, failure: typed failure)
+  accepted == false -> throw staleLease; do not sleep or retry
+  attempts exhausted -> throw attemptsExhausted; do not sleep
+  await injected sleeper for the same delay
+throw attemptsExhausted
 ```
 
-Second/later-page failure discards the whole attempt. Coordinator may repeat whole operation on another family only for retryable classification.
+A family is used at most once per `read`. Account data from one family is never
+combined with balances from another. If one sibling fails, the coordinator
+tags the observed outcome, cancels the sibling, awaits its termination, and
+only then classifies the attempt. Child work cannot escape the read call.
 
-## Account decoding
+Error precedence is independent of child completion order:
 
-- explicit contract-approved not-found → nil;
-- BaseAccount and allowlisted wrappers with `base_account` → account;
-- unknown `@type` → `.unsupportedAccountType`;
-- invalid/missing/overflow decimal string → `.invalidField`;
-- arbitrary 404 is not automatically account absence; fixture pins accepted error code/body.
+1. external parent cancellation wins over every child result;
+2. induced sibling cancellation after coordinator `cancelAll()` is ignored;
+3. a real terminal error outranks a real retryable error;
+4. within the same class, account outranks balances.
 
-## Internal errors
+Tests use barriers to make both real failures observable in both completion
+orders and prove the same selected error. If cancellation prevents the sibling
+from producing a real error, only the first real error remains.
+
+After two successful children drain, `EndpointPool.isCurrent(_:)` checks the
+lease generation and configured family inside the pool actor. That actor call
+is the success linearization point: a reset ordered before it rejects the
+result; a reset ordered after it is later lifecycle work and S1-05 owns any
+publication-generation guard. S1-04 itself publishes no public snapshot.
+
+### Error, retry, backoff, and cancellation policy
+
+Retryable outcomes are only:
+
+- transport errors after cancellation normalization; and
+- HTTP status codes already present in
+  `EndpointPolicy.retryableStatusCodes` (`408`, `429`, `502`, `503`, `504` by
+  default).
+
+All decoding, unsupported type, invalid field, arbitrary 404, height mismatch,
+pagination, duplicate-denom, wrong-role/identity, and stale-generation errors
+are terminal and do not mutate endpoint health.
+
+`Retry-After` accepts only an exact nonnegative integer delta in `0...60`
+seconds. HTTP-date, signed, fractional, whitespace-polluted, overflow, or values
+above 60 are ignored. The deterministic fallback delay by failed attempt is
+`1, 2, 4, 8` seconds, capped at 8. A valid `Retry-After` takes precedence.
+
+The chosen delay is used twice and must be identical: first as
+`endpointClock.now.advanced(seconds:)` in the `EndpointFailure`, then as the
+argument to the injected sleeper. `EndpointClock` never supplies `Date`.
+`AccountReadWallClock.now` is a separate injected wall clock used only for
+`observedAt` after a complete success.
+
+S1-04 corrects the inherited `EndpointInstant.advanced(seconds:)` wraparound.
+It rejects negative/nonfinite input fail-closed and uses checked nanosecond
+conversion plus `addingReportingOverflow`; an unrepresentable delta or sum
+saturates at `UInt64.max`. Zero and representable values retain their exact
+current result. A cooldown can never wrap into the past.
+
+`CancellationError`, or `URLError.cancelled` while `Task.isCancelled`, exits
+immediately. Cancellation detected before failure classification records no
+health and starts no new lease. If a real retryable failure was already
+classified and recorded, cancellation thrown by the injected sleeper preserves
+that truthful cooldown, exits immediately, and starts no new lease. An
+unsolicited `.cancelled` while the task is not cancelled remains a retryable
+transport error.
+
+## Narrow testing SPI and Example
+
+S1-04 follows `TestingEndpointPolicySession` with a separate, narrow fixture
+owner instead of widening `Kit`:
 
 ```swift
-enum ApiError: Error, Equatable {
-    case invalidURL
-    case http(statusCode: Int, bodyCode: Int?, message: String?)
-    case emptyBody
-    case malformedJSON
-    case invalidField(path: String, value: String?)
-    case unsupportedAccountType(String)
-    case duplicateDenom(Denom)
-    case paginationCycle
-    case paginationLimitExceeded(Int)
-    case missingBlockHeightHeader
-    case unexpectedBlockHeight(expected: Int64, actual: Int64)
-    case roleMismatch(expected: EndpointRole)
+@_spi(Testing)
+public protocol TestingHTTPTransport: Sendable {
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse)
+}
+
+@_spi(Testing)
+public struct TestingAccountReadProjection: Equatable, Sendable {
+    public let accountExists: Bool
+    public let accountNumber: UInt64?
+    public let sequence: UInt64?
+    public let runeAmountDecimal: String
+    public let acceptedHeight: Int64
+    public let providerFamilyId: String
+}
+
+@_spi(Testing)
+public struct TestingAccountReadSession: Sendable {
+    public init(
+        address: Address,
+        configuration: EndpointConfiguration,
+        transport: any TestingHTTPTransport
+    )
+    public func read() async throws -> TestingAccountReadProjection
 }
 ```
 
-Internal transport/provider errors retain family diagnostics. S1-05 maps to public `SyncError`; raw response bodies and full URLs are not exposed.
+The session adapts the injected transport into the real `LiveNodeProbe`,
+`EndpointPool`, `LiveThorNodeClient`, and `ReadOperationCoordinator`. It does
+not accept a second network value: endpoint identity is derived only from
+`address.network`. It does not own `Kit`, snapshots, lifecycle, storage,
+timers, or polling. A normal
+`import ThorChainKit` cannot reference these SPI symbols.
 
-## Cancellation normalization
+The SwiftUI Example adds `AccountReadViewModel` and `AccountReadView`. Fixture
+mode uses one scripted multi-page read, displays `FIXTURE`, existence, RUNE
+amount, height, and family, and exposes stable accessibility identifiers.
+`03-account-read-fixture.yaml` selects those identifiers. The guarded local
+runner gains exactly the `s1-04` fixture flow; prior flows remain unchanged.
 
-`URLSession.data(for:)` can throw `CancellationError` or `URLError(.cancelled)`. `CancellationClassifier` maps to `CancellationError` when:
+## Affected areas
 
-- error is `CancellationError`; or
-- `Task.isCancelled` and underlying URL error code is `.cancelled`.
+Expected implementation paths are limited to:
 
-Unsolicited `.cancelled` while task is not cancelled remains a transport failure with bounded policy. Pagination checks cancellation between pages. Cancellation never records endpoint failure, sleeps or starts another attempt.
+```text
+Package.swift
+Sources/ThorChainKit/Network/NodeProbing.swift
+Sources/ThorChainKit/Network/LiveNodeProbe.swift
+Sources/ThorChainKit/Network/EndpointPool.swift
+Sources/ThorChainKit/Network/EndpointHealth.swift
+Sources/ThorChainKit/Network/HTTPTransporting.swift
+Sources/ThorChainKit/Network/RequestBuilder.swift
+Sources/ThorChainKit/Network/ThorNodeReading.swift
+Sources/ThorChainKit/Network/LiveThorNodeClient.swift
+Sources/ThorChainKit/Network/ReadOperationCoordinator.swift
+Sources/ThorChainKit/Network/AccountReadTransport.swift
+Sources/ThorChainKit/Network/ThorNodeReadError.swift
+Sources/ThorChainKit/Core/TestingAccountReadSession.swift
+Tests/ThorChainKitTests/*S1_04*.swift
+Tests/ThorChainKitTests/EndpointPoolTests.swift
+Tests/ThorChainKitTests/EndpointInstantTests.swift
+Tests/ThorChainKitTests/Fixtures/S1-04-*.{json,txt}
+Tests/ThorChainKitLiveTests/MainnetReadTests.swift
+iOS Example/iOS Example.xcodeproj/project.pbxproj
+iOS Example/Sources/Core/ExampleRuntime.swift
+iOS Example/Sources/Presentation/AccountReadViewModel.swift
+iOS Example/Sources/Views/AccountReadView.swift
+.maestro/config.yaml
+.maestro/flows/03-account-read-fixture.yaml
+Scripts/verify-s1-04.sh
+Scripts/test-s1-04-mutants.sh
+Scripts/verify-s1-04-live.sh
+Scripts/verify-s1-03.sh
+Scripts/verify-bigint-floor.sh
+Scripts/run-maestro.sh
+Scripts/test-run-maestro.sh
+docs/roadmap/sprint-01-foundation.md
+```
 
-## Freshness semantics
+If implementation needs a path outside this list for build membership,
+slice-versioned baselines, or a proven compile dependency, the PR explains the
+exact acceptance criterion. Any behavioral expansion returns to design review.
 
-- Family probe S1-02 decides lease freshness.
-- Coordinator revalidates Comet status/Cosmos node-info identities on attempt.
-- Account and every balance page are queried at one explicit Cosmos height and must echo that exact response height.
-- `AccountReadTransport.acceptedHeight = lease.cosmosReadHeight`; Comet height remains diagnostic and is never persisted as account observation height.
-- REST response without exact height evidence fails closed; no invented height and no publication using another host's height.
+## Verified component analog family and delta matrices
 
-## Analog delta
+The target repository was queried first through codebase-memory project
+`Users-ant013-Data-AI-thorchain`, then checked in the exact active Serena
+project and with targeted current-tree reads at the design base. Palace has no
+registered ThorChainKit project (`GIM-S104-001`), so it was used only for
+bounded current TronKit/EvmKit analog discovery; target facts came from the
+current worktree.
 
-| Source | Adopted | Corrected |
-|---|---|---|
-| Tron providers | narrow async contracts | no broad fallback/`try?` |
-| Evm provider seam | transport injection | no client-owned rotation |
-| Vultisig | concrete paths/envelopes/denom escaping | pagination, numeric validation, immutable Sendable DTOs |
-| S1-02 family policy | identity/health selection | coordinator explicitly owns whole-operation retry |
+### `S104-READ` — strict typed read pipeline
 
-## Fixtures
+| Field | Decision |
+|---|---|
+| Primary | Current `LiveNodeProbe`: injected `HTTPTransporting`, typed decode, status classification, timeout/client ID, and base-path-preserving URL construction. |
+| Supporting | `EndpointPool` composition; existing `AccountState`/`Denom` contracts; current probe/pool tests. |
+| Counterexample | Current EvmKit `EtherscanTransactionProvider`: untyped dictionaries, message-text outcome handling, and recursive retry. |
+| Preserve | Existing HTTP seam, URLComponents behavior, strict typed failure, immutable values, inherited account/denom invariants. |
+| Change | Extract the shared builder/URLSession transport; add only account and paginated balance DTOs; exact BaseAccount and exact code-5 absence; strict height and 256-bit decimal proof. |
+| Reject | Parallel `HttpTransport`, string URL concatenation, vague wrapper allowlist, zero coercion, total-based pagination, raw body/public URL errors. |
+| Tests | Exact URLs/headers/base path; success/absence/unsupported/malformed account; pagination/cycle/duplicate/height; decimal boundaries; public/SPI surface. |
 
-- `status-mainnet.json`, `node-info-mainnet.json`;
-- `account-base.json`, `account-not-found.json`, `account-wrapped-base.json`;
-- `balances-page-1.json`, `balances-page-2.json`, `balances-empty.json`;
-- malformed/missing/overflow/HTTP error variants.
+### `S104-FAILOVER` — coordinated complete attempts
 
-Each fixture records source class, capture date, chain ID/height and redaction note.
+| Field | Decision |
+|---|---|
+| Primary | Current `EndpointPool` lease, exclusion, generation, health, and `recordFailure` contracts. |
+| Supporting | Current `LiveNodeProbe` classification, lease models/tests, Testing SPI composition, and EvmKit's exact-operation cancellation handler. |
+| Counterexample | Current TronKit `Syncer`: saves height before all account/token work, changes provider mid-operation, and permits partial `try?` results. |
+| Preserve | Actor-owned health, monotonic clock, configuration attempt/page limits, family generation, cancellation as no-health-effect. |
+| Change | One coordinator owns tagged account+balances child tasks, deterministic error precedence, sibling drain, success-generation linearization, family-at-most-once, bounded retry delay, saturating monotonic advancement, and a separate wall clock. |
+| Reject | Per-request rotation, mixed-family assembly, partial publication, nested retry, fixed sleeps, stale-lease retry, Comet height as account height. |
+| Tests | Exact call/family order; partial discard; both-error completion permutations; retryable versus terminal matrix; Retry-After/fallback; stale generation before success linearization; monotonic overflow; cancellation at every phase; no escaped task. |
+
+### `S104-LOCAL-ACCEPTANCE` — inert fixture and MacBook gates
+
+| Field | Decision |
+|---|---|
+| Primary | Current `TestingEndpointPolicySession` narrow SPI pattern. |
+| Supporting | `ExampleRuntime`, `AccountState`, real pool, current tests, guarded local Maestro runner. |
+| Preserve | Production `Kit.instance` inertness, SPI-only fixture capability, SwiftUI/no-UIKit Example, provenance/secret checks. |
+| Change | Add a separate `TestingAccountReadSession`, deterministic S1-04 view/flow, explicit live XCTest target, and slice verifier/mutants. |
+| Reject | Public mutable provider, fixture transport in production, static UI labels, live secrets, live Maestro, and hosted acceptance. |
+| Tests | SPI visibility/composition; one executable read; request count; Example build; deterministic Maestro; live target on exact PR head; zero Actions test runs. |
 
 ## Tests before implementation
 
-### Client/decoding
+### Deterministic client tests
 
-- exact role URLs, headers, address/denom/page encoding;
-- valid/wrong/malformed status/node info;
-- BaseAccount/wrapper/not-found/unknown type;
-- zero and `2^256 - 1` accepted; `2^256`, noncanonical, signed, and malformed amounts rejected rather than coerced to zero;
-- full pagination, cycle, max pages, duplicate denom, later-page failure;
-- account/all pages exact pinned height; missing/mismatched `x-cosmos-block-height` rejects whole attempt;
-- strict-concurrency compile checks over the actual `BalanceTransport`, `AccountReadTransport`, `AccountReading`, and actor witness, with no BigUInt-containing transport or `@unchecked Sendable` claim.
+- exact base-prefix/address/query/header construction and no URL replacement;
+- BaseAccount success, exact not-found, changed not-found, unknown/nested type,
+  malformed/overflow fields;
+- zero and `2^256 - 1` accepted; `2^256`, leading zero, signed, whitespace,
+  empty, and malformed amounts rejected;
+- one/many/empty pages, null/empty/real next keys, misleading total, cycle,
+  page limit, duplicate denom, later-page failure;
+- required exact height on success and every balance page; absent account plus
+  nonempty balances rejected;
+- strict concurrency over actual records/protocol witnesses with no
+  `@unchecked Sendable`.
 
-### Coordinator
+### Deterministic coordinator tests
 
-- transport/429/503 retries entire operation on next family in exact order;
-- first-family partial success never merges with second;
-- maximum attempts and one-use-per-family enforced;
-- 400/401/decode/wrong identity terminal;
-- cancellation at probe/status/account/page/backoff starts no further request and records no health failure;
-- coordinator is only retry owner: mock client call count proves no hidden nested retry.
+- transport and each configured retryable status repeat the complete operation
+  on the next family in exact order;
+- terminal statuses/decode/identity/height errors make no health change and do
+  not retry;
+- integer Retry-After boundaries and every rejected spelling/value;
+- fallback delay sequence/cap and identical health/sleeper delay;
+- maximum attempts, one family at most once, and stale `recordFailure == false`;
+- reset after child completion but before success linearization rejects the
+  result; reset ordered after the linearization does not retroactively fail it;
+- account success plus balance failure never publishes/merges;
+- both real child failures select the same documented error under every
+  completion permutation, and induced sibling cancellation never replaces it;
+- cancellation before lease, during each sibling, pagination, classification,
+  and sleep starts no later request and leaves no child; cancellation before
+  classification records no failure, while cancellation during sleep preserves
+  the already-recorded real retryable failure;
+- `EndpointInstant.advanced` exact, invalid, near-maximum, conversion-overflow,
+  and addition-overflow cases never wrap into the past;
+- mock call counts prove the coordinator is the only business retry owner.
 
-Clock/sleeper/transport/pool/client are injected; fixed sleeps forbidden.
+### Contract, Example, and mutant gates
 
-### Example/Maestro acceptance
+- cumulative public-symbol and exact test-discovery baselines;
+- every deterministic full Xcode test command selects only
+  `ThorChainKitTests`; only the live launcher selects `ThorChainKitLiveTests`;
+- a normal public-only consumer cannot see the testing SPI;
+- positive source/callee partitions prove production inertness and the one
+  testing-session composition/read path;
+- platform scan, package iOS 13 floor, Example iOS 14+ SwiftUI lifecycle, and
+  generic Example build;
+- guarded canaries reject parallel transport, string URL construction,
+  account-wrapper widening, missing height proof, partial merge, nested retry,
+  cancellation retry, stale-lease retry, Kit publication, second read, static
+  UI result, and Actions test/runner invocation;
+- `Scripts/test-run-maestro.sh`, then exact-UDID
+  `Scripts/run-maestro.sh s1-04` on the MacBook.
 
-The fixture flow launches the SwiftUI Example. `AccountReadViewModel` obtains `TestingKitInstance`, explicitly awaits exactly one `readAccount()`, and supplies `AccountReadView` with its projection without mutating `kit` snapshots or becoming a second state owner. Canned multi-page bank responses must therefore produce the complete raw `rune` balance, account existence, accepted height, and endpoint family while the enclosed `kit` remains nil/idle/zero/no-account. A request-count assertion proves the UI used the executable SPI read path rather than static labels. The Example imports no UIKit. The live flow uses only a public address passed through the environment, explicitly displays a `LIVE` badge, and verifies chain ID/height/balance without sending transactions. A missing opt-in variable means an explicit skip at the launcher-script level, not a silently green flow.
+### Explicit live gate on the MacBook
 
-## Live gate
+After deterministic gates, `Scripts/verify-s1-04-live.sh` invokes only the
+`ThorChainKitLiveTests` target against the exact implementation head. It
+requires opt-in, public provider role URLs, one known public existing address,
+and the deterministic valid absent address. Missing inputs produce `UNRUN` and
+nonzero; they never become a pass. Before merge, this slice requires a real
+pass unless the operator explicitly waives it in the exact-head review record.
+The target contains no `XCTSkip`; missing inputs fail the launcher before
+Xcode. `verify-s1-03.sh`, `verify-bigint-floor.sh`, and the new S1-04
+deterministic command use `-only-testing:ThorChainKitTests`, so the live target
+cannot enter default/cumulative results. A source canary enforces this split.
 
-1. Validate approved mainnet family/families.
-2. Exact `thorchain-1`, positive Cosmos/Comet heights, bounded skew, not catching up.
-3. Read known public address; compare raw `rune` with direct captured response.
-4. Empty/new address distinguishes absence from error.
-5. Controlled proxy/provider failure proves whole-operation retry when two families are configured.
+The live assertions are:
 
-Current research environment DNS failure is recorded as unrun, not success.
+1. exact `thorchain-1`, positive Cosmos/Comet heights, bounded configured skew,
+   and not catching up through the real S1-02 lease;
+2. existing BaseAccount plus every balance at one echoed Cosmos height;
+3. direct captured raw RUNE amount equals the implementation result;
+4. deterministic absent address produces the exact account-not-found envelope,
+   empty height-pinned balances, and `exists == false`;
+5. no write, sign, broadcast, mnemonic, private key, or user-funded account.
 
-## Slice-versioned contract gates
+Two-family failover is deterministic fixture evidence; a second public provider
+is live evidence only when the operator supplies it and is not required for a
+single-provider protocol compatibility pass.
 
-S1-04 adds `Tests/ThorChainKitTests/Fixtures/S1-04-public-symbols.txt`, `Tests/ThorChainKitTests/Fixtures/S1-04-spi-factory-syntax.txt`, `Tests/ThorChainKitTests/Fixtures/S1-04-spi-read-syntax.txt`, and `Scripts/verify-s1-04.sh`; its CI job compares the generated public graph exactly with the S1-04 baseline and requires every canonical declaration in S1-01…S1-03 to remain an unchanged subset. The exact public baseline adds only the declared SPI surface and does not contain `CoinBalance`. Prior removal or signature mutation fails. The script owns three independent positive normalized syntax/callee paths: production `Kit.instance` must still match the exact S1-01 inert baseline, including its transitive `Network.persistenceKey` getter and dispatcher-context key operations; the SPI construction partition starts only at `Core/TestingKitFactory.swift` and includes exactly the transitive initializer/getter bodies enumerated above; and the SPI read partition pins the one `readAccount` → `AccountReading.read` → projection path without Kit publication. A missing or extra declaration/import/identifier/member/call shape fails its owning path; production imports or reachability to the SPI, and SPI capabilities beyond the enumerated transport fixture/projection, fail named temporary-copy canaries. No blacklist-only audit substitutes for a positive baseline.
+## Verification order
+
+All commands below run locally on the shared MacBook:
+
+1. shell/Swift syntax and fixture-schema checks;
+2. narrow new decoder/request tests;
+3. narrow coordinator/cancellation tests;
+4. full deterministic `ThorChainKitTests` target with zero failure/error/skip;
+5. `Scripts/verify-s1-04.sh` with warnings as errors;
+6. `Scripts/test-s1-04-mutants.sh` and existing cumulative verifier/mutant gates;
+7. generic Example build;
+8. guarded Maestro runner self-tests and `run-maestro.sh s1-04` on the exact
+   local simulator UDID;
+9. explicit `verify-s1-04-live.sh` pass;
+10. platform/public/secret/provenance/diff hygiene and roadmap-marker audit;
+11. independent Reviewer and QA rerun against the same exact PR head.
+
+No GitHub Actions run is part of S1-04 verification. If Actions is later
+enabled by a separate operator instruction, its one generic Example build is a
+clean-host compile signal only.
 
 ## Acceptance criteria
 
-- Four operations only; no Sprint 2 THORNode fee surface.
-- Complete pagination and strict string integers.
-- Account absence distinct from errors.
-- `ReadOperationCoordinator` is sole failover owner.
-- Every attempt uses one verified family end-to-end.
-- Published `acceptedHeight` is proven by Cosmos REST pinned response headers, never borrowed from Comet.
-- Cancellation normalized and never retried.
-- Client owns neither lifecycle nor persistence.
-- Only internal `Sendable` decimal-string transport records cross the reader actor boundary; `CoinBalance` is absent from the public surface and the actual-source strict-concurrency gate passes without `@unchecked Sendable`.
-- Decimal amounts are canonical unsigned values bounded to 256 bits; exact `2^256 - 1` passes and `2^256` fails.
-- The Example has one executable SPI read-to-projection path; it displays one real fixture projection while the enclosed Kit remains immutable at its S1-01 snapshot, and the independent positive SPI read audit rejects publication or extra-read capability.
-- Deterministic suite and controlled live read/failover pass.
+1. The S1-02 lease is the sole identity/freshness input; no duplicate status or
+   node-info client is introduced.
+2. Account and every balance page stay in one family and one exact Cosmos
+   height per attempt.
+3. Only exact BaseAccount and exact code-5 absence are accepted; absence plus
+   nonempty balances is impossible.
+4. Pagination is complete, cycle/page/duplicate protected, and independent of
+   `pagination.total`.
+5. Amounts are canonical unsigned decimal and at most 256 bits.
+6. Whole-operation retry is bounded, family-at-most-once, cancellation-clean,
+   generation-safe at an actor-linearized success check, and owned only by
+   `ReadOperationCoordinator`.
+7. Only transport and configured retryable statuses mutate health/retry; all
+   other failures are terminal.
+8. Async records are genuinely `Sendable`; no BigUInt-backed transport or
+   `@unchecked Sendable` crosses the reader boundary.
+9. Production `Kit` remains inert and normal consumers cannot see or inject the
+   testing transport.
+10. Deterministic unit/contract/mutant/Example/Maestro gates and the explicit
+    mainnet gate pass locally on the MacBook at the exact reviewed head.
+11. GitHub Actions performs no S1-04 tests, mutants, simulator work, Maestro,
+    live probes, or verifier scripts and remains disabled absent separate
+    activation.
+12. The canonical roadmap row is changed from `Pending` only after the exact PR
+    head is accepted and the real PR number/date are known.
+
+## Open questions
+
+None block implementation. A provider outage is recorded as a failed or unrun
+live gate, never reclassified as fixture success. Any request to accept a live
+waiver, broaden account wrapper support, add legacy routes, or enable Actions is
+a separate explicit operator decision.

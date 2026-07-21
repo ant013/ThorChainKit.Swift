@@ -50,11 +50,11 @@ struct LiveNodeProbe: NodeProbing {
         let result: ProbeRequestResult
 
         do {
-            var urlRequest = URLRequest(url: appending(path: request.path, to: baseURL))
-            urlRequest.timeoutInterval = requestTimeout
-            if let clientId {
-                urlRequest.setValue(clientId, forHTTPHeaderField: "X-Client-ID")
-            }
+            let urlRequest = RequestBuilder(
+                baseURL: baseURL,
+                requestTimeout: requestTimeout,
+                clientId: clientId
+            ).request(path: request.path.split(separator: "/").map(String.init))
             let (data, response) = try await transport.data(for: urlRequest)
             guard (200..<300).contains(response.statusCode) else {
                 let failure = RoleProbeFailure.httpStatus(
@@ -159,13 +159,6 @@ struct LiveNodeProbe: NodeProbing {
         }
     }
 
-    private func appending(path: String, to baseURL: URL) -> URL {
-        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
-        let base = components.percentEncodedPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        components.percentEncodedPath = "/" + ([base, path].filter { !$0.isEmpty }.joined(separator: "/"))
-        return components.url!
-    }
-
     private func transportKind(_ code: URLError.Code) -> TransportFailureKind {
         switch code {
         case .cannotFindHost, .dnsLookupFailed: .dns
@@ -176,16 +169,6 @@ struct LiveNodeProbe: NodeProbing {
         case .notConnectedToInternet: .offline
         default: .other
         }
-    }
-}
-
-private struct URLSessionTransport: HTTPTransporting {
-    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let response = response as? HTTPURLResponse else {
-            throw URLError(.badServerResponse)
-        }
-        return (data, response)
     }
 }
 

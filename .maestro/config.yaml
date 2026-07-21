@@ -2,3 +2,4 @@ flows:
   - flows/00-launch-foundation.yaml
   - flows/01-endpoint-policy.yaml
   - flows/02-address-codec.yaml
+  - flows/03-account-read-fixture.yaml
