@@ -2,7 +2,7 @@
 
 ## Review binding
 
-- Repository: `/Users/ant013/Data/AI/thorchain`
+- Repository: `ThorChainKit.Swift`
 - Reviewed design head: `0694dbc399c1087349e0dd2cd137d699b8e829b3`
 - Base: `d35770a0430eee921fa1fe91b2f8812a8c0535ff`
 - Spec: `docs/specs/sprint-01-foundation/S1-05-rune-account-sync.md`
