@@ -47,7 +47,9 @@ struct LiveThorNodeClient: ThorNodeReading {
         guard account.type == "/cosmos.auth.v1beta1.BaseAccount" else {
             throw ThorNodeReadError.unsupportedAccountType
         }
-        guard let accountNumber = UInt64(account.accountNumber),
+        guard Self.isCanonicalUInt64Decimal(account.accountNumber),
+              Self.isCanonicalUInt64Decimal(account.sequence),
+              let accountNumber = UInt64(account.accountNumber),
               let sequence = UInt64(account.sequence)
         else {
             throw ThorNodeReadError.invalidAccount
@@ -176,6 +178,13 @@ struct LiveThorNodeClient: ThorNodeReading {
         else { return false }
         let maximum = "115792089237316195423570985008687907853269984665640564039457584007913129639935"
         return value.count < maximum.count || (value.count == maximum.count && value <= maximum)
+    }
+
+    private static func isCanonicalUInt64Decimal(_ value: String) -> Bool {
+        guard value == "0" || (value.first != "0" && !value.isEmpty),
+              value.utf8.allSatisfy({ (48...57).contains($0) })
+        else { return false }
+        return UInt64(value) != nil
     }
 
     private static func transportKind(_ code: URLError.Code) -> TransportFailureKind {

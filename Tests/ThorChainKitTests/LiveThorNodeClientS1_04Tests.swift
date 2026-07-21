@@ -93,6 +93,16 @@ final class LiveThorNodeClientS1_04Tests: XCTestCase {
                 .invalidAccount
             ),
             (
+                #"{"account":{"@type":"/cosmos.auth.v1beta1.BaseAccount","account_number":"01","sequence":"2"}}"#,
+                "12345678",
+                .invalidAccount
+            ),
+            (
+                #"{"account":{"@type":"/cosmos.auth.v1beta1.BaseAccount","account_number":"1","sequence":"+1"}}"#,
+                "12345678",
+                .invalidAccount
+            ),
+            (
                 #"{"account":{"@type":"/cosmos.auth.v1beta1.BaseAccount","account_number":"1","sequence":"2"}}"#,
                 "12345677",
                 .heightMismatch(expected: 12_345_678, actual: "12345677")
