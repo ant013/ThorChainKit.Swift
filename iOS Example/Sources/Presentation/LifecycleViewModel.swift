@@ -27,6 +27,11 @@ final class LifecycleViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
                 self?.syncDescription = Self.describe(state)
+                if case .synced = state {
+                    self?.updateRequestCount()
+                } else if case .notSynced = state {
+                    self?.updateRequestCount()
+                }
                 self?.writeEvidence()
             }
             .store(in: &cancellables)
@@ -59,27 +64,27 @@ final class LifecycleViewModel: ObservableObject {
     }
 
     func toggleOffline() {
-        offline.toggle()
-        let value = offline
+        let value = !offline
         Task {
             await runtime.setFixtureOffline(value)
+            offline = value
             updateRequestCount()
         }
     }
 
     func togglePending() {
-        pending.toggle()
-        let value = pending
+        let value = !pending
         Task {
             await runtime.setFixturePending(value)
+            pending = value
             updateRequestCount()
         }
     }
 
     func releasePending() {
-        pending = false
         Task {
             await runtime.releaseFixturePending()
+            pending = false
             updateRequestCount()
         }
     }

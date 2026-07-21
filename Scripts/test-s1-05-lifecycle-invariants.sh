@@ -20,19 +20,18 @@ if ! xcodebuild build-for-testing \
     echo "FAIL lifecycle baseline build" >&2
     exit 1
 fi
+xctestrun=$(find "$temporary_root/shared-derived" -name '*.xctestrun' -print -quit)
+[[ -n "$xctestrun" ]] || { echo "FAIL lifecycle missing xctestrun" >&2; exit 1; }
 
 run_probe() {
     local name=$1 selector=$2 marker=$3
     local log="$temporary_root/$name.log"
-    local result="$temporary_root/$name.xcresult"
     local pid status elapsed marker_count unexpected_count
     local started=$(date +%s)
 
     xcodebuild test-without-building \
-        -scheme ThorChainKit \
+        -xctestrun "$xctestrun" \
         -destination "$destination" \
-        -derivedDataPath "$temporary_root/shared-derived" \
-        -resultBundlePath "$result" \
         -collect-test-diagnostics never \
         -only-testing:"ThorChainKitTests/LifecycleInvariantProbeTests/$selector" \
         SWIFT_SUPPRESS_WARNINGS=NO \

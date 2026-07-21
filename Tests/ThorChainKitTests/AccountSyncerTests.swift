@@ -180,6 +180,90 @@ final class AccountSyncerTests: XCTestCase {
         cancellable.cancel()
     }
 
+    func testRefreshAfterOfflinePendingFailureStartsNewReadAndPublishesSynced() async throws {
+        let address = try Address("thor166aczv0jatlnyzz8zsczdzk9xxxgppfpu530jl", network: .mainnet)
+        let key = StorageKey(persistenceNamespace: String(repeating: "r", count: 64))
+        let record = try StorageRecord(
+            storageKey: key,
+            address: address.raw,
+            networkChainId: address.network.expectedChainId,
+            accountExists: true,
+            accountNumber: 1,
+            sequence: 2,
+            acceptedHeight: 9,
+            fetchedAt: Date(timeIntervalSince1970: 1),
+            providerFamilyId: "primary",
+            balances: [StoredBalance(denom: "rune", amountDecimalString: "7")]
+        )
+        let reader = RecoveringAccountReader()
+        let storage = TestSyncStorage(record: record)
+        let publishing = StatePublishing()
+        let gate = LifecycleGate(
+            dispatcher: DispatchQueue(label: "s1-05-recovery-gate"),
+            address: address,
+            key: key,
+            storage: storage,
+            publishing: publishing
+        )
+        let syncer = AccountSyncer(
+            address: address,
+            storageKey: key,
+            reader: reader,
+            storage: storage,
+            gate: gate,
+            schedule: SyncSchedule(normalInterval: 60, failureBackoff: 60)
+        )
+        let kit = Kit(
+            address: address,
+            dependencies: KitDependencies(
+                lifecycle: LifecycleCommandBridge(syncer: syncer, gate: gate)
+            ),
+            persistenceNamespace: String(repeating: "r", count: 64),
+            facadeDispatcher: DispatchQueue(label: "s1-05-recovery-facade"),
+            publishing: publishing
+        )
+        let box = SendableKit(kit)
+
+        kit.start()
+        for _ in 0..<100 {
+            if await reader.readCount == 1 { break }
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+        let initialReadCount = await reader.readCount
+        XCTAssertEqual(initialReadCount, 1)
+        XCTAssertEqual(kit.lastBlockHeight, 9)
+        XCTAssertEqual(kit.runeBalance, 7)
+
+        await reader.releasePending()
+        for _ in 0..<100 {
+            if case .notSynced(.nodeUnavailable, cached: .some) = kit.syncState { break }
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+        guard case .notSynced(.nodeUnavailable, cached: .some) = kit.syncState else {
+            return XCTFail("Expected offline failure with cached state")
+        }
+
+        await reader.setOnline()
+        let refreshReturned = expectation(description: "recovery refresh returns")
+        DispatchQueue.global().async {
+            box.kit.refresh()
+            refreshReturned.fulfill()
+        }
+        await fulfillment(of: [refreshReturned], timeout: 2)
+
+        for _ in 0..<100 {
+            if case .synced = kit.syncState { break }
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+        let recoveryReadCount = await reader.readCount
+        XCTAssertEqual(recoveryReadCount, 2)
+        guard case let .synced(account) = kit.syncState else {
+            return XCTFail("Expected a new synced publication after recovery refresh")
+        }
+        XCTAssertEqual(account.balances[.rune], 7)
+        kit.stop()
+    }
+
     func testStopControlFailureFailsClosedAndDrainsOldGeneration() throws {
         let address = try Address("thor166aczv0jatlnyzz8zsczdzk9xxxgppfpu530jl", network: .mainnet)
         let key = StorageKey(persistenceNamespace: String(repeating: "1", count: 64))
@@ -297,6 +381,44 @@ private actor PendingAccountReader: AccountReading {
         continuation?.resume(throwing: CancellationError())
         continuation = nil
     }
+}
+
+private actor RecoveringAccountReader: AccountReading {
+    private(set) var readCount = 0
+    private var pending = true
+    private var offline = true
+    private var continuations = [CheckedContinuation<Void, Never>]()
+
+    func read(address: Address) async throws -> AccountReadTransport {
+        _ = address
+        readCount += 1
+        if pending {
+            await withTaskCancellationHandler(operation: {
+                await withCheckedContinuation { continuation in
+                    continuations.append(continuation)
+                }
+            }, onCancel: {
+                Task { await self.releasePending() }
+            })
+        }
+        guard !offline else { throw URLError(.notConnectedToInternet) }
+        return try AccountReadTransport(
+            acceptedHeight: 10,
+            account: AccountTransport(accountNumber: 1, sequence: 2),
+            balances: [BalanceTransport(denom: .rune, amountDecimal: "7")],
+            familyId: "primary",
+            observedAt: Date(timeIntervalSince1970: 1)
+        )
+    }
+
+    func releasePending() {
+        pending = false
+        let waiting = continuations
+        continuations.removeAll()
+        waiting.forEach { $0.resume() }
+    }
+
+    func setOnline() { offline = false }
 }
 
 private final class SendableKit: @unchecked Sendable {

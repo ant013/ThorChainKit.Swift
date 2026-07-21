@@ -52,12 +52,17 @@ appId: org.horizontalsystems.thorchainkit.example
 - extendedWaitUntil:
     visible: "synced"
     timeout: 10000
-- assertVisible: "Requests: 10"
+- assertVisible: "Requests: 12"
 - assertVisible: "RUNE: 7"
 - tapOn:
     id: fixture-offline
 - extendedWaitUntil:
     visible: "Offline: true"
+    timeout: 5000
+- tapOn:
+    id: fixture-pending
+- extendedWaitUntil:
+    visible: "Pending: true"
     timeout: 5000
 - tapOn:
     id: lifecycle-stop
@@ -67,8 +72,9 @@ appId: org.horizontalsystems.thorchainkit.example
     id: lifecycle-open
 - tapOn:
     id: lifecycle-start
-- assertVisible: "syncing(previous: present)"
-- assertVisible: "notSynced"
+- extendedWaitUntil:
+    visible: "syncing(previous: present)"
+    timeout: 10000
 - assertVisible: "RUNE: 7"
 - scrollUntilVisible:
     element:
@@ -79,7 +85,13 @@ appId: org.horizontalsystems.thorchainkit.example
     visible: "Accepted Height: 12345678"
     timeout: 10000
 - assertVisible: "Last Block Height: 12345678"
-- assertVisible: "Requests: 18"
+- assertVisible: "Requests: 15"
+- tapOn:
+    id: fixture-release-pending
+- extendedWaitUntil:
+    visible: "notSynced(nodeUnavailable, cached: present)"
+    timeout: 10000
+- assertVisible: "Requests: 15"
 - tapOn:
     id: fixture-offline
 - extendedWaitUntil:
@@ -90,7 +102,7 @@ appId: org.horizontalsystems.thorchainkit.example
 - extendedWaitUntil:
     visible: "synced"
     timeout: 10000
-- assertVisible: "Requests: 23"
+- assertVisible: "Requests: 20"
 - assertVisible: "RUNE: 7"
 - assertVisible: "Accepted Height: 12345678"
 - assertVisible: "Last Block Height: 12345678"

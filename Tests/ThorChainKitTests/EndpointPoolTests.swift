@@ -23,6 +23,25 @@ final class EndpointPoolTests: XCTestCase {
         XCTAssertEqual(lease.cometReferenceHeight, 110)
     }
 
+    func testTransientEmptyProbeIsNotCachedBeforeImmediateRecovery() async throws {
+        let family = try family("primary")
+        let probe = TransientThenHealthyProbe()
+        let pool = try EndpointPool(
+            network: .mainnet,
+            configuration: EndpointConfiguration(families: [family]),
+            probe: probe,
+            clock: TestEndpointClock()
+        )
+
+        let firstError = await leaseError(pool)
+        XCTAssertEqual(firstError, .temporarilyUnavailable)
+        let lease = try await pool.lease(excludingFamilyIds: [])
+
+        XCTAssertEqual(lease.family.id, "primary")
+        let probeCount = await probe.count
+        XCTAssertEqual(probeCount, 2)
+    }
+
     func testForeignObservationLocksPoolEvenWhenSiblingIsHealthyAndAnotherRequestFails() async throws {
         let families = try [family("foreign"), family("healthy")]
         let probe = CountingProbe { index, family in
@@ -527,6 +546,24 @@ private actor CountingProbe: NodeProbing {
     func probe(index: Int, family: EndpointFamilyDescriptor) async -> [IndexedProbeOutcome] {
         count += 1
         return handler(index, family)
+    }
+}
+
+private actor TransientThenHealthyProbe: NodeProbing {
+    private(set) var count = 0
+
+    func probe(index: Int, family: EndpointFamilyDescriptor) async -> [IndexedProbeOutcome] {
+        count += 1
+        guard count > 1 else {
+            return outcomes(
+                index: index,
+                family: family,
+                node: .failure(.transport(kind: .connection)),
+                block: .failure(.transport(kind: .connection)),
+                comet: .failure(.transport(kind: .connection))
+            )
+        }
+        return healthy(index: index, family: family, heights: (100, 100))
     }
 }
 

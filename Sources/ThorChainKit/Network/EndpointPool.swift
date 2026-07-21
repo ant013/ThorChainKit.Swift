@@ -163,7 +163,7 @@ actor EndpointPool {
             if case let .failure(error) = evaluation, error.isIdentityFailure {
                 identityLock = error
             }
-            if case let .success(families, _) = evaluation {
+            if case let .success(families, _) = evaluation, !families.isEmpty {
                 cachedFamilies = families
                 cacheDate = clock.now
             }

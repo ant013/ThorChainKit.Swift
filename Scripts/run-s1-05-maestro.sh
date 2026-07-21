@@ -102,7 +102,7 @@ assert evidence["rune"] == "7"
 assert evidence["acceptedHeight"] == 12345678
 assert evidence["lastBlockHeight"] == 12345678
 assert evidence["acceptedHeight"] == evidence["lastBlockHeight"]
-assert evidence["requestCount"] == 23
+assert evidence["requestCount"] == 20
 assert isinstance(evidence["requestCount"], int)
 assert isinstance(evidence["acceptedHeight"], int)
 assert isinstance(evidence["lastBlockHeight"], int)
