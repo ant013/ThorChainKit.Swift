@@ -26,8 +26,9 @@ xctestrun=$(find "$temporary_root/shared-derived" -name '*.xctestrun' -print -qu
 run_probe() {
     local name=$1 selector=$2 marker=$3
     local log="$temporary_root/$name.log"
-    local pid status elapsed marker_count unexpected_count
-    local started=$(date +%s)
+    local pid watchdog_pid monitor_pid status marker_count unexpected_count
+    local timeout_flag="$temporary_root/$name.timeout"
+    rm -f "$timeout_flag"
 
     xcodebuild test-without-building \
         -xctestrun "$xctestrun" \
@@ -38,18 +39,33 @@ run_probe() {
         >"$log" 2>&1 &
     pid=$!
 
-    while kill -0 "$pid" 2>/dev/null; do
-        elapsed=$(( $(date +%s) - started ))
-        if (( elapsed >= 20 )); then
+    (
+        sleep 20
+        if kill -0 "$pid" 2>/dev/null; then
+            : >"$timeout_flag"
             kill -TERM "$pid" 2>/dev/null || true
-            wait "$pid" 2>/dev/null || true
-            tail -40 "$log" >&2 || true
-            echo "FAIL $name timed out" >&2
-            exit 1
         fi
-        sleep 0.1
-    done
+    ) &
+    watchdog_pid=$!
+
+    (
+        while ! rg -q 'S105_INVARIANT_[A-Z_]+' "$log" 2>/dev/null; do
+            sleep 0.05
+        done
+        kill -TERM "$pid" 2>/dev/null || true
+    ) &
+    monitor_pid=$!
+
     if wait "$pid"; then status=0; else status=$?; fi
+    kill -TERM "$watchdog_pid" 2>/dev/null || true
+    kill -TERM "$monitor_pid" 2>/dev/null || true
+    wait "$watchdog_pid" 2>/dev/null || true
+    wait "$monitor_pid" 2>/dev/null || true
+    if [[ -e "$timeout_flag" ]]; then
+        tail -40 "$log" >&2 || true
+        echo "FAIL $name timed out" >&2
+        exit 1
+    fi
     (( status != 0 )) || { tail -40 "$log" >&2 || true; echo "FAIL $name exited zero" >&2; exit 1; }
 
     marker_count=$(rg -o "$marker" "$log" | wc -l | tr -d ' ' || true)
