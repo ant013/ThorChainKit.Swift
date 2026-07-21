@@ -65,7 +65,9 @@ public final class Kit {
         if isOnFacadeDispatcher {
             let shouldDrain = pendingLifecycleCommands.isEmpty
             enqueueLifecycleCommand(kind)
-            if shouldDrain { _ = drainPendingLifecycleCommands() }
+            if shouldDrain, let barrier = drainPendingLifecycleCommands(), !barrier.isSuccessful {
+                desiredRunning = false
+            }
             return
         }
 
@@ -75,7 +77,9 @@ public final class Kit {
             enqueueLifecycleCommand(kind)
             if shouldDrain { barrier = drainPendingLifecycleCommands() }
         }
-        barrier?.wait()
+        if barrier?.wait() == false {
+            facadeDispatcher.sync { desiredRunning = false }
+        }
     }
 
     private func enqueueLifecycleCommand(_ kind: LifecycleCommandKind) {

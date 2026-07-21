@@ -89,8 +89,9 @@ selectors=(
     KitLifecycleTests/testRuneBalanceUsesExactRuneProjection
     KitLifecycleTests/testStopCompletionWaitsForSuccessAndControlFailureCancellation
     KitLifecycleTests/testCurrentGenerationFailureIngressPreservesCachedState
+    KitLifecycleTests/testFailedStartRollsBackFacadeAdmissionAndCanRetry
 )
-[[ ${#selectors[@]} -eq 13 ]] || { echo "FAIL S1-05 selector contract changed" >&2; exit 1; }
+[[ ${#selectors[@]} -eq 14 ]] || { echo "FAIL S1-05 selector contract changed" >&2; exit 1; }
 
 result_bundle=${S105_RESULT_BUNDLE:-artifacts/s1-05/Test.xcresult}
 mkdir -p "$(dirname "$result_bundle")"

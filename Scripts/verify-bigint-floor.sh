@@ -125,7 +125,7 @@ cat "$repository_root/Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt" \
     "$repository_root/Tests/ThorChainKitTests/Fixtures/S1-05-tests.txt" \
     | sort -u > "$temporary_root/full-tests.txt"
 [[ $(wc -l < "$temporary_root/full-tests.txt") -eq 82 ]] || {
-    echo "FAIL verify-bigint-floor: expected 82 deterministic tests" >&2
+    echo "FAIL verify-bigint-floor: expected 83 deterministic tests" >&2
     exit 1
 }
 "$repository_root/Scripts/verify-xcresult.sh" verify-bigint-floor \

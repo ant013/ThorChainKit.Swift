@@ -80,6 +80,43 @@ final class KitLifecycleTests: XCTestCase {
         }
     }
 
+    func testFailedStartRollsBackFacadeAdmissionAndCanRetry() async throws {
+        let address = try Address("thor166aczv0jatlnyzz8zsczdzk9xxxgppfpu530jl", network: .mainnet)
+        let key = StorageKey(persistenceNamespace: String(repeating: "d", count: 64))
+        let publishing = StatePublishing()
+        let storage = FailFirstStartStorage()
+        let gate = LifecycleGate(
+            dispatcher: DispatchQueue(label: "s1-05-failed-start-test"),
+            address: address,
+            key: key,
+            storage: storage,
+            publishing: publishing
+        )
+        let syncer = RecordingAccountSyncer()
+        let kit = Kit(
+            address: address,
+            dependencies: KitDependencies(lifecycle: LifecycleCommandBridge(syncer: syncer, gate: gate)),
+            persistenceNamespace: String(repeating: "d", count: 64),
+            facadeDispatcher: DispatchQueue(label: "s1-05-failed-start-facade"),
+            publishing: publishing
+        )
+
+        kit.start()
+
+        guard case .notSynced(.storageUnavailable, cached: nil) = kit.syncState else {
+            return XCTFail("Expected sanitized storage failure after start admission failure")
+        }
+        kit.refresh()
+        let failedEvents = await syncer.eventLog()
+        XCTAssertEqual(failedEvents, [])
+
+        storage.recover()
+        kit.start()
+
+        let recoveredEvents = await syncer.eventLog()
+        XCTAssertEqual(recoveredEvents, ["start"])
+    }
+
     func testStopCompletionWaitsForSuccessAndControlFailureCancellation() throws {
         let publishing = StatePublishing()
         let kit = Kit(
@@ -107,6 +144,62 @@ private final class TestLifecycleStorage: AccountStateStorage, @unchecked Sendab
         generation == expectedGeneration
     }
     func clear(key: StorageKey) async throws {}
+}
+
+private final class FailFirstStartStorage: AccountStateStorage, @unchecked Sendable {
+    private var generation: UInt64 = 0
+    private var failNextAdvance = true
+
+    func load(key: StorageKey) async throws -> StorageRecord? { nil }
+
+    func advanceGeneration(key: StorageKey) throws -> UInt64 {
+        if failNextAdvance {
+            failNextAdvance = false
+            throw StorageRecordError.invalid
+        }
+        generation += 1
+        return generation
+    }
+
+    func saveIfCurrent(_ record: StorageRecord, key: StorageKey, expectedGeneration: UInt64) async throws -> Bool {
+        generation == expectedGeneration
+    }
+
+    func clear(key: StorageKey) async throws {}
+
+    func recover() {
+        failNextAdvance = false
+    }
+}
+
+private actor RecordingAccountSyncer: AccountSyncing {
+    private(set) var events = [String]()
+
+    func eventLog() -> [String] {
+        events
+    }
+
+    func start(generation: UInt64) async {
+        _ = generation
+        events.append("start")
+    }
+
+    func stop(generation: UInt64) async {
+        _ = generation
+        events.append("stop")
+    }
+
+    func cancelRefresh() async {
+        events.append("cancelRefresh")
+    }
+
+    func cancelStop() async {
+        events.append("cancelStop")
+    }
+
+    func refresh() async {
+        events.append("refresh")
+    }
 }
 
 private extension SyncState {

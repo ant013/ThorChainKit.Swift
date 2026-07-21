@@ -3,17 +3,28 @@ import Foundation
 @preconcurrency final class LifecycleCommandBarrier {
     private let semaphore = DispatchSemaphore(value: 0)
     private var signalled = false
+    private var succeeded = true
     private let lock = NSLock()
 
-    func signal() {
+    func signal(success: Bool = true) {
         lock.lock()
         guard !signalled else { lock.unlock(); return }
+        succeeded = success
         signalled = true
         lock.unlock()
         semaphore.signal()
     }
 
-    func wait() { semaphore.wait() }
+    func wait() -> Bool {
+        semaphore.wait()
+        lock.lock(); defer { lock.unlock() }
+        return succeeded
+    }
+
+    var isSuccessful: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return succeeded
+    }
 }
 
 final class LifecycleCommandBridge: KitLifecycle {
@@ -28,7 +39,7 @@ final class LifecycleCommandBridge: KitLifecycle {
 
     func start(sequence: UInt64) -> LifecycleCommandBarrier {
         _ = sequence
-        guard let generation = gate.start() else { return completedBarrier() }
+        guard let generation = gate.start() else { return completedBarrier(success: false) }
         return enqueue { [syncer] in await syncer.start(generation: generation) }
     }
 
@@ -60,9 +71,9 @@ final class LifecycleCommandBridge: KitLifecycle {
         return enqueue { [syncer] in await syncer.refresh() }
     }
 
-    private func completedBarrier() -> LifecycleCommandBarrier {
+    private func completedBarrier(success: Bool = true) -> LifecycleCommandBarrier {
         let barrier = LifecycleCommandBarrier()
-        barrier.signal()
+        barrier.signal(success: success)
         return barrier
     }
 
