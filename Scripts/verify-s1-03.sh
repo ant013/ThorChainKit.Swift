@@ -207,6 +207,7 @@ if [[ "$fixtures_only" == false ]]; then
             -destination "platform=iOS Simulator,id=${simulator_udid}" \
             -derivedDataPath "$derived_data" \
             -resultBundlePath "$result_bundle" \
+            SWIFT_SUPPRESS_WARNINGS=NO \
             SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
             "${selection[@]}" \
             CODE_SIGNING_ALLOWED=NO test

@@ -90,6 +90,7 @@ result_bundle="$temporary_root/bigint-floor.xcresult"
     -resultBundlePath "$result_bundle" \
     SWIFT_VERSION=5 \
     SWIFT_STRICT_CONCURRENCY=complete \
+    SWIFT_SUPPRESS_WARNINGS=NO \
     SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
     CODE_SIGNING_ALLOWED=NO test)
 cat "$repository_root/Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt" \

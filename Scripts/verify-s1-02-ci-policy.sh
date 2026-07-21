@@ -110,6 +110,7 @@ PACKAGE_CONTRACT_BLOCK = r"""      - name: Verify package and S1-03 contract
             -destination "platform=iOS Simulator,id=${THORCHAIN_SIMULATOR_UDID}" \
             -derivedDataPath "$DERIVED_DATA_PATH" \
             -resultBundlePath "$RESULT_BUNDLE_PATH" \
+            SWIFT_SUPPRESS_WARNINGS=NO \
             SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
             CODE_SIGNING_ALLOWED=NO test
           cat Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt \
