@@ -1,6 +1,6 @@
 # S1-01 — Package and Public API Foundation
 
-**Status:** revision 11 after revision-10 adversarial REVISE; implementation blocked pending fresh review and explicit approval.
+**Status:** revision 12 after revision-10 adversarial REVISE; implementation blocked pending fresh review and explicit approval. Revision 12 binds the Board-approved iOS-only package verifier contract.
 **Risk:** high because lifecycle command admission and dispatcher reentry remain a greenfield concurrency delta, now reduced to one serial owner with explicit reentry post-draining.
 **Observable outcome:** the standalone Swift Package builds independently of Unstoppable Wallet; a public-only consumer constructs validated network, endpoint, address, and `Kit` values without starting work, while a locally connected `iOS Example` launches in fixture mode and displays the exact nil/idle/zero initial state without network or secret material.
 
@@ -99,7 +99,6 @@ Scripts/verify-bigint-floor.sh
 Scripts/test-s1-01-mutants.sh
 Scripts/verify-s1-01-factory.swift
 Scripts/verify-s1-01-values.swift
-Scripts/verify-s1-01-xunit.swift
 Scripts/run-maestro.sh
 Scripts/test-run-maestro.sh
 Scripts/scan-s1-01-artifacts.swift
@@ -134,7 +133,34 @@ let package = Package(
 )
 ```
 
-`Package.resolved` locks the default root build to BigInt `5.7.0` at `e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe`. The manifest intentionally retains the compatible range from `5.0.0`; `Scripts/verify-bigint-floor.sh` copies the package to `mktemp -d`, resolves `BigInt` specifically at `5.0.0`, requires revision `19f5e8a48be155e34abb98a2bcf4a343316f0343` in that copy's lockfile, and builds/tests the copy in Swift-5 strict-concurrency warnings-as-errors mode. It never rewrites the repository lock. Default CI separately requires the committed lock and resolved dependency graph to match `5.7.0`/`e07e00fa…`. Thus the default graph is reproducible and the declared floor is built rather than inferred from the current resolver result.
+`Package.resolved` locks the default root build to BigInt `5.7.0` at `e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe`. The manifest intentionally retains the compatible range from `5.0.0`; `Scripts/verify-bigint-floor.sh` copies the package to `mktemp -d`, resolves `BigInt` specifically at `5.0.0`, requires revision `19f5e8a48be155e34abb98a2bcf4a343316f0343` in that copy's lockfile, and builds/tests the copy through the iOS Simulator Xcode verifier with Swift-5 strict-concurrency settings. It never rewrites the repository lock. Default CI separately requires the committed lock and resolved dependency graph to match `5.7.0`/`e07e00fa…`. Thus the default graph is reproducible and the declared floor is built rather than inferred from the current resolver result.
+
+## Board-approved iOS-only package verifier (revision 12)
+
+The package declares exactly `platforms: [.iOS(.v13)]`; macOS is not a
+supported package platform. The hosted macOS runner supplies Xcode and an
+iOS Simulator only. `Scripts/verify-s1-01.sh` authenticates one available
+runtime through `THORCHAIN_SIMULATOR_UDID` and uses this narrow/full product
+gate shape, with `RESULT_BUNDLE_PATH` retained as an xcresult bundle:
+
+```bash
+: "${THORCHAIN_SIMULATOR_UDID:?exact simulator selection missing}"
+xcodebuild -scheme ThorChainKit \
+  -destination "platform=iOS Simulator,id=${THORCHAIN_SIMULATOR_UDID}" \
+  -derivedDataPath "$DERIVED_DATA_PATH" \
+  -resultBundlePath "$RESULT_BUNDLE_PATH" \
+  CODE_SIGNING_ALLOWED=NO test
+```
+
+The verifier uses xcresult for test discovery, PublicApi execution, strict
+concurrency, skip-canary, and mutant assertions, and extracts the symbol
+graph from the iOS-target build. `swift package dump-package` and dependency
+lock inspection remain static checks. Host `swift build` and `swift test`
+are not product acceptance commands. The standalone `xcrun swift` scanner and
+fixture helpers do not resolve `Package.swift`, compile a ThorChainKit target,
+or receive product-test credit. A missing simulator selection, literal UDID,
+destination without the selected id, or host SwiftPM product gate fails
+closed.
 
 `URLSession`, `Foundation`, `Combine`, and `CryptoKit` are system frameworks. S1-03 adds HsCryptoKit and the direct secp256k1 product for address derivation/point validation; HdWalletKit remains an existing host dependency. S1-05 adds GRDB together with persistence. This excludes speculative dependencies from the first slice.
 
@@ -457,8 +483,8 @@ ThorChainKit → WalletCore / MarketKit / RxSwift / UI
 12. Merge requires green required checks, `mergeStateStatus == CLEAN`, an empty conflict-marker scan, an existing referenced plan file, exact-head Paperclip CR/QA evidence, and a final reviewer pass after `## QA Evidence` is present in the PR body.
 13. S1-01's exact public-symbol and inert-factory audits are slice-versioned gates, not permanent whole-repository prohibitions. Each later slice owns an exact current-surface baseline plus cumulative prior-baseline subset compatibility, and replaces the factory capability gate only through the named transition in its own spec and CI script.
 14. The committed Gimle report is a sanitized projection: it contains project labels, commits, and repository-relative paths but no operator-local absolute root. The canonical machine-local state/report remains outside the product repository.
-15. Passing discovery is insufficient. The filtered XCTest run uses `--parallel --num-workers 1` because SwiftPM 6.2.4 emits XCTest xUnit only through that runner. `Scripts/verify-s1-01-xunit.swift` requires the xUnit report to contain exactly the 18 allowlisted cases with zero failures/errors and independently parses the captured runner transcript to require one terminal `passed` status for every allowlisted case and reject `skipped`, disabled, or failed status. A source gate rejects `XCTSkip`, `XCTExpectFailure`, conditional/availability disabling around the authoritative methods, and test-command `--skip`. A temporary `XCTSkip` canary proves the transcript/status gate fails even though SwiftPM's xUnit schema cannot represent skips.
-16. The BigInt semver range retains the declared `5.0.0` floor, the committed root lock fixes the default graph at `5.7.0`/`e07e00fa…`, and the isolated minimum-version gate resolves and builds/tests exact `5.0.0`/`19f5e8a4…` without mutating that lock.
+15. Passing discovery is insufficient. `Scripts/verify-s1-01.sh` runs the 18 allowlisted XCTest cases through the authenticated iOS Simulator Xcode command and requires the xcresult bundle to contain exactly those cases with zero failures, errors, or skips. A source gate rejects `XCTSkip`, `XCTExpectFailure`, conditional/availability disabling around the authoritative methods, and test-command `--skip`; a temporary `XCTSkip` canary must fail the xcresult/status gate.
+16. The BigInt semver range retains the declared `5.0.0` floor, the committed root lock fixes the default graph at `5.7.0`/`e07e00fa…`, and `Scripts/verify-bigint-floor.sh` resolves exact `5.0.0`/`19f5e8a4…` in a temporary copy, then verifies that copy through the same iOS Simulator Xcode/xcresult contract without mutating the repository lock.
 17. For `walletId == "wallet-01"` and mainnet, the exact bytes `wallet-01 || 0x00 || mainnet || 0x00 || thorchain-1` hash to internal namespace `e2df225b7a00d471b1b09ec2d3344df89a11e9cfe116c05f5290683480623015`. Separator removal or component reordering must fail the same method.
 18. Public value construction has its own positive normalized closure, independent of the Core factory closure. It enumerates every public initializer, stored/static construction root, transitive validation body, and default expression; Address/endpoint I/O/task plus Network/Denom/default-path canaries must fail it. S1-04/S1-05 cross isolation only with internal `Sendable` decimal-string records and reconstruct BigUInt-backed public snapshots on the facade dispatcher.
 
@@ -495,15 +521,15 @@ Manifest topology, source-import allowlist, generated public symbol graph, exact
 - assert `xcodebuild -version` is exactly Xcode `26.3` / build `17C529`, assert `xcrun swift --version` contains Apple Swift `6.2.4`, and require CI to select that developer directory before any build;
 - compare source imports to the system/BigInt allowlist;
 - reject UIKit imports/types in `Sources/ThorChainKit` and `iOS Example/Sources`, reject SwiftUI in `Sources/ThorChainKit`, and require the Example's SwiftUI `App` lifecycle plus iOS 14-or-later deployment target;
-- run `swift package dump-symbol-graph`, canonicalize public declarations, and compare them with `Tests/ThorChainKitTests/Fixtures/S1-01-public-symbols.txt`;
-- run `swift test list` and compare the discovered `PublicApiTests` names/count with `Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt`;
-- run `swift test --enable-xctest --disable-swift-testing --parallel --num-workers 1 --filter ThorChainKitTests.PublicApiTests --xunit-output "$tmp/public-api.xml" 2>&1 | tee "$tmp/public-api.log"` under `set -o pipefail` and require the Swift process itself to exit zero, then invoke non-executable `Scripts/verify-s1-01-xunit.swift` through `xcrun swift`; require exactly the 18 allowlisted names in xUnit with zero failures/errors and exactly one terminal `passed` transcript status per name. Reject any skipped/disabled/failed terminal status, `XCTSkip`, `XCTExpectFailure`, conditional/availability disabling, or test-command `--skip`; a temporary-copy `XCTSkip` mutation must fail the transcript/status gate even though SwiftPM xUnit omits skip state;
+- extract the iOS-target symbol graph from the authenticated Xcode build and compare it with `Tests/ThorChainKitTests/Fixtures/S1-01-public-symbols.txt`;
+- inspect the xcresult test identifiers and compare the discovered `PublicApiTests` names/count with `Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt`;
+- run the authenticated iOS Simulator Xcode test command with the `PublicApiTests` selector and require its xcresult to contain exactly the 18 allowlisted names with zero failures, errors, or skips. Reject `XCTSkip`, `XCTExpectFailure`, conditional/availability disabling, and test-command `--skip`; a temporary-copy `XCTSkip` mutation must fail the xcresult/status gate;
 - invoke non-executable `Scripts/verify-s1-01-factory.swift` through `xcrun swift` to compare the exact factory/dependency/Kit normalized declarations, imports, identifier/member references, and call shapes plus the exact `Network.persistenceKey` declaration/body with `Fixtures/S1-01-factory-syntax.txt`; positively allow only the named dispatcher-specific key operations and run every listed equivalent-capability, alias, wrapper, out-of-path helper, and transitive-getter I/O mutant, requiring the same positive allowlist gate to reject it;
 - invoke non-executable `Scripts/verify-s1-01-values.swift` through `xcrun swift` to compare every enumerated initializer, static/stored construction body, transitive validation body, and default expression with `Fixtures/S1-01-value-syntax.txt`; require all seven Address/endpoint/Network/Denom/default-path temporary-copy canaries to fail that same positive gate;
 - run executable `Scripts/test-s1-01-mutants.sh`; require one baseline pass, exactly one guarded transform per temporary copy, and direct nonrecursive mutant failures for method 16's deferred-async reentry and method 18's separator/order changes;
-- require the committed BigInt `5.7.0`/`e07e00fa…` lock and default dependency graph, then run executable `Scripts/verify-bigint-floor.sh` to resolve/build/test exact `5.0.0`/`19f5e8a4…` in a temporary copy without changing the repository lock;
+- require the committed BigInt `5.7.0`/`e07e00fa…` lock and default dependency graph, then run executable `Scripts/verify-bigint-floor.sh` to resolve and verify exact `5.0.0`/`19f5e8a4…` in a temporary copy through iOS Simulator Xcode/xcresult without changing the repository lock;
 - require Git mode `100755`, `test -x`, and a valid shell shebang for every directly invoked shell script (`verify-s1-01.sh`, `verify-bigint-floor.sh`, `test-s1-01-mutants.sh`, `run-maestro.sh`, and `test-run-maestro.sh`); non-executable Swift helpers are invoked explicitly through `xcrun swift`;
-- run `swift build -Xswiftc -swift-version -Xswiftc 5 -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors` as its own named subgate;
+- run the authenticated iOS Simulator Xcode build/test with Swift-5 strict-concurrency and warnings-as-errors settings as its own named xcresult subgate;
 - create a `mktemp -d` Swift-tools-5.10 package with `platforms: [.iOS(.v13)]` that depends on the local root, uses only public `import ThorChainKit`, constructs the public value/factory surface, and build it with `xcodebuild -scheme ThorChainKitConsumer -destination 'generic/platform=iOS Simulator' IPHONEOS_DEPLOYMENT_TARGET=13.0 SWIFT_VERSION=5 SWIFT_STRICT_CONCURRENCY=complete SWIFT_TREAT_WARNINGS_AS_ERRORS=YES CODE_SIGNING_ALLOWED=NO build`.
 - run a named `verify-s1-01-example-workspace` subgate before the Example build; parse `iOS Example.xcworkspace/contents.xcworkspacedata` and require exactly `container:iOS Example.xcodeproj` plus `group:..` with no missing or extra package/project link.
 
@@ -546,33 +572,29 @@ Any push after reviewer, QA, CI, or final-body evidence invalidates the affected
 ```text
 set -o pipefail
 xcodebuild -version && xcrun swift --version
-swift package resolve
-swift build
-swift build -Xswiftc -swift-version -Xswiftc 5 -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
-swift test --enable-xctest --disable-swift-testing --parallel --num-workers 1 --filter ThorChainKitTests.PublicApiTests --xunit-output <temporary>/public-api.xml 2>&1 | tee <temporary>/public-api.log
-xcrun swift Scripts/verify-s1-01-xunit.swift <temporary>/public-api.xml <temporary>/public-api.log Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt
 xcrun swift Scripts/verify-s1-01-values.swift Tests/ThorChainKitTests/Fixtures/S1-01-value-syntax.txt
 Scripts/verify-bigint-floor.sh
 Scripts/test-s1-01-mutants.sh
-swift test
 Scripts/verify-s1-01.sh
-THORCHAIN_SIMULATOR_UDID=<exact-udid> xcodebuild -workspace 'iOS Example/iOS Example.xcworkspace' -scheme 'iOS Example' -destination 'platform=iOS Simulator,id=<exact-udid>' CODE_SIGNING_ALLOWED=NO build
-THORCHAIN_SIMULATOR_UDID=<exact-udid> Scripts/run-maestro.sh
+xcodebuild -scheme ThorChainKit -destination "platform=iOS Simulator,id=<selected-udid>" -derivedDataPath <temporary>/derived-data -resultBundlePath <temporary>/s1-01.xcresult CODE_SIGNING_ALLOWED=NO test
+xcodebuild -scheme ThorChainKit -destination "platform=iOS Simulator,id=<selected-udid>" -only-testing:ThorChainKitTests/PublicApiTests -derivedDataPath <temporary>/derived-data -resultBundlePath <temporary>/public-api.xcresult CODE_SIGNING_ALLOWED=NO test
+THORCHAIN_SIMULATOR_UDID=<selected-udid> xcodebuild -workspace 'iOS Example/iOS Example.xcworkspace' -scheme 'iOS Example' -destination 'platform=iOS Simulator,id=<selected-udid>' CODE_SIGNING_ALLOWED=NO build
+THORCHAIN_SIMULATOR_UDID=<selected-udid> Scripts/run-maestro.sh
 ```
 
-`Scripts/verify-s1-01.sh` includes the temporary public-only Swift-tools-5.10/iOS-13 consumer build. No host `swift build` result substitutes for the iOS `xcodebuild` gate.
+`Scripts/verify-s1-01.sh` includes the temporary public-only Swift-tools-5.10/iOS-13 consumer build. Static manifest/dependency inspection and standalone scanner compilation are not product package gates; no host SwiftPM result substitutes for the iOS Simulator Xcode/xcresult gate.
 
 ## Acceptance Criteria
 
 - The package builds independently and contains one `ThorChainKit` library product.
-- `ThorChainKitTests` exists and all 18 authoritative behavioral methods are discovered and executed exactly once with zero skips, disabled cases, failures, or errors; the `XCTSkip` canary fails the independent transcript/status gate even though SwiftPM's xUnit schema cannot encode skips.
+- `ThorChainKitTests` exists and all 18 authoritative behavioral methods are discovered and executed exactly once with zero skips, disabled cases, failures, or errors in the authenticated iOS Simulator xcresult; the `XCTSkip` canary fails the independent xcresult/status gate.
 - Public symbols and signatures exactly match the committed S1-01 symbol baseline. S1-02…S1-05 each own a slice-versioned exact current-surface baseline plus cumulative prior-baseline subset compatibility; additions are recorded only in the current baseline, while any prior removal or signature mutation fails.
 - Network, endpoint, denom, and Address construction enforce every pinned boundary and invariant; valid canonical `thor`, `sthor`, and `cthor` addresses produce the exact internal 20-byte payload; the public factory rejects whitespace-only wallet IDs and derives its sole network from `address.network`; the fixed namespace input produces `e2df225b7a00d471b1b09ec2d3344df89a11e9cfe116c05f5290683480623015` and separator/order mutants fail.
 - The exact positive public-value construction closure passes for every enumerated initializer, stored/static root, transitive body, and default expression; all seven Address/endpoint/Network/Denom/default-path canaries fail before the external consumer build.
 - The exact positive factory syntax/callee allowlist, including the exact transitive `Network.persistenceKey` getter and dispatcher-specific key operations, passes; the factory does not start network/sync or create a network/request, task, operation/global queue, timer, dispatch-source, file, storage/database, wrapper, alias, or unaudited-helper capability.
 - Initial getters and mandatory replaying publishers are exactly nil/idle/zero/no-account, without a fabricated account/balance or zero-as-height shortcut.
 - There is no seed/private key, MarketKit, RxSwift, UIKit, SwiftUI, or WalletCore in the public API; Combine is the public state-publication framework.
-- Parsed manifest topology, committed BigInt `5.7.0` default lock, isolated exact-`5.0.0` floor build/test, pinned Xcode/Swift identity, Swift-5 strict-concurrency warnings-as-errors, import allowlist, public symbol graph, exact test discovery, and temporary public-only iOS-13 consumer gates are green.
+- Parsed manifest topology, committed BigInt `5.7.0` default lock, isolated exact-`5.0.0` floor iOS Simulator build/test, pinned Xcode/Swift identity, Swift-5 strict-concurrency warnings-as-errors, import allowlist, public symbol graph, exact xcresult test discovery, and temporary public-only iOS-13 consumer gates are green.
 - The named Example workspace subgate proves exact `container:iOS Example.xcodeproj` plus `group:..`; the UIKit-free SwiftUI app then launches from the shared workspace/scheme, uses the local package root, and observes kit state through Combine.
 - The sole exact-UDID Maestro runner uses immutable archive/action pins plus compatible Maestro/Temurin identities and repo-root-absolute output paths, reports one test with zero failures/errors/skips, and recursively fails closed while scanning the separate JUnit plus all raw/Vision-OCR artifacts; argv/path canaries prove one device and one artifact root end-to-end.
 - The committed S1-01 public-symbol baseline exists and is the input to the separately enforced S1-02…S1-05 compatibility invariant.

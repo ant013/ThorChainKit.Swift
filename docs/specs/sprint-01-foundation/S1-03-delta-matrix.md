@@ -1,9 +1,9 @@
 # S1-03 — Analog Delta Matrix and Test Plan
 
 This document is the review-bound delta matrix for
-`S1-03-derivation-address-codec.md`. It is revision 6 after discovery 2/2
+`S1-03-derivation-address-codec.md`. It is revision 7 after discovery 2/2
 REVISE; implementation remains blocked until closure review and explicit
-approval.
+approval. Revision 7 binds the Board-approved iOS-only package correction.
 
 ## Assumptions and scope
 
@@ -20,6 +20,49 @@ approval.
   to the later host-owned S1-06 integration; this slice proves the kit has no
   such ownership or capability.
 
+## Board-approved platform and verifier delta
+
+`Package.swift` declares exactly `platforms: [.iOS(.v13)]`. The macOS hosted
+runner supplies Xcode and an iOS Simulator only; macOS is not a package
+platform or product acceptance target. Narrow and full package tests use the
+same authenticated simulator command and emit an xcresult bundle:
+
+```bash
+: "${THORCHAIN_SIMULATOR_UDID:?exact simulator selection missing}"
+xcodebuild -scheme ThorChainKit \
+  -destination "platform=iOS Simulator,id=${THORCHAIN_SIMULATOR_UDID}" \
+  -derivedDataPath "$DERIVED_DATA_PATH" \
+  -resultBundlePath "$RESULT_BUNDLE_PATH" \
+  CODE_SIGNING_ALLOWED=NO test
+```
+
+Narrow runs add `-only-testing:ThorChainKitTests/DerivationTests` or
+`-only-testing:ThorChainKitTests/AddressCodecTests`; the full run is the
+package regression gate. Static manifest/dependency inspection remains
+allowed, but no host `swift build` or `swift test` result receives product
+acceptance credit.
+
+The bounded current-tree census closes every inherited package-gate path:
+
+| Path | Former host operation | Required evidence |
+|---|---|---|
+| `.github/workflows/ci.yml`, `Scripts/verify-s1-02-ci-policy.sh` | build, strict build, test block and literal policy expectation | authenticated selected-simulator `xcodebuild` block |
+| `Scripts/verify-s1-03.sh` | derivation, codec, and full `swift test` | narrow selector and full simulator xcresult runs |
+| `Scripts/verify-s1-01.sh` | host build/symbolgraph, discovery, xUnit, strict build, skip canary | iOS-target symbolgraph plus simulator/xcresult discovery, execution, strict-concurrency, and skip assertions |
+| `Scripts/verify-s1-02.sh` | host discovery, build/symbolgraph, strict build, filtered tests | simulator Xcode/xcresult equivalents and iOS public-consumer build |
+| `Scripts/test-s1-01-mutants.sh` | base/mutant `swift test --package-path` | the same simulator helper and xcresult mutant failures |
+| `Scripts/verify-bigint-floor.sh` | copied-package host strict build/test | copied-package simulator Xcode build/test with lock-hash assertion |
+
+The remaining `xcrun swift` invocations in `Scripts/run-maestro.sh`,
+`Scripts/test-run-maestro.sh`, `Scripts/verify-s1-01-factory.swift`, and
+`Scripts/verify-s1-02-live-evidence.swift` are standalone scanner/evidence
+tools. They do not resolve `Package.swift`, compile a ThorChainKit target, or
+claim product test credit, so they remain explicitly allowed host tooling.
+CI selects an available pinned runtime and exports
+`THORCHAIN_SIMULATOR_UDID`; committed files contain no operator-local UDID,
+and missing selection, a literal UDID, a destination without the selected id,
+or any remaining host SwiftPM package gate fails closed.
+
 ## Slice A — host derivation contract and public-key validation
 
 | Field | Decision |
@@ -31,7 +74,7 @@ approval.
 | Rejected differences | No mnemonic/seed/private-key parameter, wallet object, signing helper, extended-public-key policy, curve auto-detection, or alternate path fallback. |
 | Failure modes | Reject wrong length/prefix, invalid curve point, and unavailable parser context with typed errors; never hash malformed input or continue with an empty value. `DerivationPath.defaultAccount` is a non-trapping exact value; host path parsing failures remain S1-06 scope. |
 | Tests before code | Exact path/coin assertions and host-adapter call shape; independent compressed-key vector with bound values; wrong length/prefix; invalid curve point; injected parser-context failure; no-trap and typed-error assertions; repeated-call/public-state retention check; public-symbol baseline. |
-| Verification | `swift test --filter DerivationTests`, full `swift test`, exact expected-base/head/clean-worktree verifier, dependency/source/platform/secret verifier, strict-concurrency/public-consumer checks, and provenance audit. Host derivation is verified only in its later S1-06 integration slice, with the S1-03 test binding the exact raw path and adapter call shape. |
+| Verification | Simulator `xcodebuild` with the DerivationTests selector and full xcresult run, exact expected-base/head/clean-worktree verifier, dependency/source/platform/secret verifier, strict-concurrency/public-consumer checks, and provenance audit. Host derivation is verified only in its later S1-06 integration slice, with the S1-03 test binding the exact raw path and adapter call shape. |
 
 ## Slice B — HASH160 and network-bound classic Bech32 codec
 
@@ -44,7 +87,7 @@ approval.
 | Rejected differences | No second decoder, unchecked initializer, Bech32m, SegWit witness version/program handling, arbitrary HRP, public payload storage, or silent canonicalization of invalid input. |
 | Failure modes | Reject invalid payload lengths before bit conversion, invalid padding, checksum/case/HRP mismatch, and all unsupported network combinations with existing typed `AddressError`. Include a valid `tthor` wrong-HRP negative oracle; no mocknet address is added to the public `Network` set. |
 | Tests before code | Encode/decode round trip for all supported networks; isolated SHA256/HASH160 KATs; exact independent public vectors; uppercase canonicalization; all S1-01 negative cases through `AddressCodec`; BIP173 valid/invalid vectors; direct padding and malformed-length tests; arbitrary UTF-8/property tests; public-symbol subset test. |
-| Verification | `swift test --filter AddressCodecTests`, full `swift test`, exact expected-base/head/clean-worktree verifier, dependency/source/platform/secret verifier, Xcode target/navigation check, real-call-path Maestro mutant checks, deterministic fuzz replay, provenance audit, and `THORCHAIN_SIMULATOR_UDID=<exact-udid> Scripts/run-maestro.sh s1-03` for the Example only. |
+| Verification | Simulator `xcodebuild` with the AddressCodecTests selector and full xcresult run, exact expected-base/head/clean-worktree verifier, dependency/source/platform/secret verifier, Xcode target/navigation check, real-call-path Maestro mutant checks, deterministic fuzz replay, provenance audit, and `THORCHAIN_SIMULATOR_UDID=<selected-runtime> Scripts/run-maestro.sh s1-03` for the Example only. |
 
 ## Frozen blocker closure map — discovery 2/2, closure 4/5 pending
 
@@ -63,6 +106,6 @@ approval.
 | `VOP-03` | `S1-03-dependency-revisions.txt` has an immutable inherited-baseline section plus an exact four-row S1-03 closure. The verifier compares the expected-base lockfile baseline and the complete current direct/transitive pin union by package identity, URL, version, and revision, while also enforcing the literal closure rows; no version-only, movable-HEAD, missing, extra, or coordinated fixture/lockfile drift is accepted. |
 | All IDs | Any mismatch is a closure finding on the exact changed head, not a new discovery cycle or blocker-list expansion. |
 
-Revision 6 is documentation-only and preserves the accepted protocol choices.
+Revision 7 is documentation-only and preserves the accepted protocol choices.
 Any implementation PR must populate the declared fixture/provenance artifacts
 with exact values and fail closed if a schema field is absent.

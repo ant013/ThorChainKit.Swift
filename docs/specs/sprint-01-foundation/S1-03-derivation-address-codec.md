@@ -1,6 +1,6 @@
 # S1-03 — Account Derivation and Address Codec
 
-**Status:** revision 6 after closure-3 adversarial REVISE; frozen blocker allowlist is being closed by documentation only. Implementation remains blocked pending closure review and approval.
+**Status:** revision 7, Board-approved iOS-only platform correction. Discovery 2/2 is frozen; closure 4/5 was accepted before this revision and is not reset. Implementation is blocked pending revision-bound adversarial review.
 **Risk:** high/cryptographic boundary.
 **Observable outcome:** an independent seed/public-key vector produces the expected THORChain address; checksum, payload length, mixed case, and wrong-network HRP are rejected before any network/signing call.
 
@@ -50,6 +50,71 @@ Out of scope:
 - validator/operator/module addresses;
 - ed25519 account support.
 
+## Board-approved platform and verification correction
+
+The package is iOS-only: `Package.swift` must declare exactly
+`platforms: [.iOS(.v13)]`. The macOS hosted runner is only the environment
+that supplies Xcode and an iOS Simulator; macOS is not a supported package
+platform and must be removed from the inherited S1-01 package-topology
+acceptance surface. The iOS 13 library floor and iOS 14+ SwiftUI Example floor
+are unchanged.
+
+Product package compilation and tests must run through the proven simulator
+command, never host SwiftPM acceptance commands:
+
+```bash
+: "${THORCHAIN_SIMULATOR_UDID:?exact simulator selection missing}"
+xcodebuild -scheme ThorChainKit \
+  -destination "platform=iOS Simulator,id=${THORCHAIN_SIMULATOR_UDID}" \
+  -derivedDataPath "$DERIVED_DATA_PATH" \
+  CODE_SIGNING_ALLOWED=NO test
+```
+
+The narrow derivation and codec gates add the corresponding
+`-only-testing:ThorChainKitTests/DerivationTests` and
+`-only-testing:ThorChainKitTests/AddressCodecTests` selectors; the full command
+is the package regression gate. `swift package dump-package` and dependency
+resolution inspection remain static checks, but `swift build` and `swift test`
+are not product acceptance commands. The inherited S1-01/S1-02 policy and
+S1-03 verifier must enforce this command boundary.
+
+The exact-head operator proof reached the iOS package and exposed one direct
+implementation defect: `CosmosAccountAddressDeriver` is declared both at
+`Sources/ThorChainKit/Crypto/AccountAddressFactory.swift:3` and
+`Sources/ThorChainKit/Crypto/CosmosAccountAddressDeriver.swift:17`. The
+approved ownership is one declaration in `CosmosAccountAddressDeriver.swift`;
+`AccountAddressFactory.swift` owns only factory/composition code. The verifier
+must fail closed if this ownership split is duplicated.
+
+### Inherited host-gate closure
+
+The iOS-only correction must account for every package acceptance path in the
+current tree, not only the headline CI and S1-03 commands:
+
+| Path | Existing product-gate surface | Revision-7 contract |
+|---|---|---|
+| `.github/workflows/ci.yml` and `Scripts/verify-s1-02-ci-policy.sh` | Host `swift build`, strict `swift build`, and `swift test` | Exact selected-simulator `xcodebuild` package test block; policy matcher requires the same block |
+| `Scripts/verify-s1-03.sh` | Two filtered host tests plus full host test | Simulator `xcodebuild` with `-only-testing` selectors plus full test |
+| `Scripts/verify-s1-01.sh` | Host symbolgraph build/extraction, host test discovery, PublicApi xUnit execution, strict build, and skip canary | iOS Simulator/Xcode build and symbolgraph extraction; xcresult-based discovery, execution, strict-concurrency, and skip-canary assertions |
+| `Scripts/verify-s1-02.sh` | Host test discovery, symbolgraph build/extraction, strict build, and three filtered tests | iOS Simulator/Xcode/xcresult equivalents, with the existing iOS public-consumer check retained |
+| `Scripts/test-s1-01-mutants.sh` | Base and mutant `swift test --package-path` calls | The same exact simulator Xcode helper for base and mutant packages; mutant failure is read from xcresult |
+| `Scripts/verify-bigint-floor.sh` | Host strict build/test of a copied package | iOS Simulator Xcode build/test of the copy, with the resolved lock hash check retained |
+
+The remaining `xcrun swift` calls in `Scripts/run-maestro.sh`,
+`Scripts/test-run-maestro.sh`, `Scripts/verify-s1-01-factory.swift`, and
+`Scripts/verify-s1-02-live-evidence.swift` are standalone host scanner/evidence
+tools. They do not resolve `Package.swift`, compile a ThorChainKit target, or
+receive product test credit, so they are explicitly retained and must be
+covered by a non-package-tooling assertion rather than converted to a package
+test.
+
+CI must select an available pinned iOS runtime, export
+`THORCHAIN_SIMULATOR_UDID`, and pass
+`platform=iOS Simulator,id=${THORCHAIN_SIMULATOR_UDID}` to every package gate.
+The committed workflow and verifiers must contain no operator-local UDID and
+must fail closed for a missing selection, literal UDID, destination without the
+selected id, or any remaining host SwiftPM package-gate command.
+
 ## Files
 
 ```text
@@ -69,6 +134,11 @@ iOS Example/Sources/ThorChainExampleApp.swift
 .maestro/S1-03-analog-manifest.txt
 Scripts/verify-s1-03.sh
 Scripts/test-s1-03-mutants.sh
+Scripts/verify-s1-01.sh
+Scripts/verify-s1-02.sh
+Scripts/test-s1-01-mutants.sh
+Scripts/verify-bigint-floor.sh
+docs/specs/sprint-01-foundation/S1-01-package-public-api.md
 Tests/ThorChainKitTests/Fixtures/S1-03-public-symbols.txt
 Tests/ThorChainKitTests/Fixtures/S1-03-tests.txt
 Tests/ThorChainKitTests/Fixtures/S1-03-dependency-revisions.txt
@@ -154,9 +224,11 @@ there is no `AddressCodec.isValid` surface that erases the inherited error.
 
 Mnemonic/seed and HdWalletKit remain in the WalletCore account layer; `Kit.instance` receives an already constructed `Address`. ThorChainKit adds HsCryptoKit `1.3.2` for HASH160 primitives and a direct dependency on the `secp256k1` product from `secp256k1.swift` `0.10.0`. The direct dependency is mandatory: a Swift module cannot be imported as an accidental transitive dependency of HsCryptoKit. HdWalletKit does not become a kit dependency. This makes the read-only kit suitable for future watch-only support without changing the sync layer.
 
-S1-03 changes `Package.swift`:
+S1-03 changes `Package.swift` and removes its macOS platform declaration:
 
 ```swift
+platforms: [.iOS(.v13)]
+
 .package(
     url: "https://github.com/horizontalsystems/HsCryptoKit.Swift.git",
     exact: "1.3.2"
@@ -406,8 +478,9 @@ little-endian bytes. The first 20 bytes of the resulting 24-byte buffer are
 the payload; the final four bytes are discarded. Thus the corpus consumes
 exactly `3 * 1024 = 3072` SplitMix64 outputs, with no case reseeding,
 endianness choice, or variable truncation. The test must replay the same
-sequence with `swift test --filter
-AddressCodecTests.testDeterministicFuzzReplay`. The verifier requires the
+sequence with the iOS Simulator package command and
+`-only-testing:ThorChainKitTests/AddressCodecTests/testDeterministicFuzzReplay`.
+The verifier requires the
 four fields exactly once, a seed in the unsigned 64-bit range, and
 `count == 1024`; any alternate generator, output count, byte order, or
 payload packing fails.
@@ -476,9 +549,12 @@ following two steps appear exactly once, with no additional job or flow:
   run: |
     set -euo pipefail
     Scripts/verify-s1-02-ci-policy.sh steady-state --ref "$(git rev-parse HEAD)"
-    swift build
-    swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
-    swift test
+    : "${THORCHAIN_SIMULATOR_UDID:?exact simulator selection missing}"
+    DERIVED_DATA_PATH="${RUNNER_TEMP:-/tmp}/thorchain-s1-03-derived-data"
+    xcodebuild -scheme ThorChainKit \
+      -destination "platform=iOS Simulator,id=${THORCHAIN_SIMULATOR_UDID}" \
+      -derivedDataPath "$DERIVED_DATA_PATH" \
+      CODE_SIGNING_ALLOWED=NO test
     Scripts/verify-s1-02.sh
     Scripts/verify-s1-03.sh --expected-base 7fd9663442a0e6dcd9c01c4ab04d35f3abd96fc4 --expected-head "$EXPECTED_HEAD_SHA"
     Scripts/test-s1-03-mutants.sh

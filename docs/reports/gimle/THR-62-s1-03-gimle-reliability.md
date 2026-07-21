@@ -109,3 +109,53 @@ review the revised design. The design package is limited to:
 The external checkpoint contains the detailed event, bug, analog, decision,
 and artifact records. It is not a repository path and must not be added to a
 commit.
+
+## Revision 7 — Board-approved platform correction
+
+The Board approved removal of the false macOS package-platform contract while
+preserving the iOS 13 library floor and iOS 14+ SwiftUI Example floor. The
+operator independently proved the replacement verification substrate on exact
+head `f85b1e8eaa054bbf9644c270b355397771d7dae6` with:
+
+```text
+xcodebuild -scheme ThorChainKit -destination 'platform=iOS Simulator,id=<exact-udid>' -derivedDataPath <temporary-derived-data> CODE_SIGNING_ALLOWED=NO test
+```
+
+The dependency closure resolved and compiled for `arm64-apple-ios13.0-simulator`;
+the command failed only because `CosmosAccountAddressDeriver` was declared in
+both `AccountAddressFactory.swift:3` and `CosmosAccountAddressDeriver.swift:17`.
+This is an implementation defect for the Engineer, not a platform blocker.
+
+Revision-7 design delta: `Package.swift` is iOS-only; S1-01 package topology,
+S1-02 CI policy, and S1-03 verification must use the exact iOS Simulator
+`xcodebuild` narrow/full package gates. Host `swift build`/`swift test` are no
+longer product acceptance commands. The external Gimle checkpoint remains
+outside the repository; no repository-local `audit/` checkpoint is permitted.
+Gimle trust remains **RED** because the target mapping is still unavailable;
+current-tree facts are independently verified with codebase-memory, Serena,
+targeted `rg`, and Git.
+
+The corrected design package also binds the real
+`docs/specs/sprint-01-foundation/S1-03-delta-matrix.md`, updates the checked-in
+`S1-01-package-public-api.md` platform/verifier contract, and replaces the
+earlier S1-01 xUnit/transcript and host BigInt obligations in
+`test-plan.md` with iOS Simulator/xcresult evidence. These are documentation
+changes only; implementation remains unauthorized pending independent review.
+
+### Host-gate census
+
+The bounded current-tree census found package-gate operations in
+`.github/workflows/ci.yml`, `Scripts/verify-s1-02-ci-policy.sh`,
+`Scripts/verify-s1-03.sh`, `Scripts/verify-s1-01.sh`,
+`Scripts/verify-s1-02.sh`, `Scripts/test-s1-01-mutants.sh`, and
+`Scripts/verify-bigint-floor.sh`. Revision 7 now requires simulator
+Xcode/xcresult or iOS-consumer replacements for every one of those paths,
+including symbolgraph extraction, test discovery, PublicApi xUnit execution,
+strict-concurrency builds, skip canaries, mutant runs, and copied-package
+BigInt-floor checks.
+
+The `xcrun swift` calls in `Scripts/run-maestro.sh`,
+`Scripts/test-run-maestro.sh`, `Scripts/verify-s1-01-factory.swift`, and
+`Scripts/verify-s1-02-live-evidence.swift` were verified as standalone scanner
+or evidence tooling. They do not resolve `Package.swift` or receive product
+test credit and are explicitly retained as non-product host tooling.

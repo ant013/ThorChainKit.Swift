@@ -88,8 +88,8 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 - Tracked inputs and generated logs/JUnit/screenshots pass a secret and namespace scan before publication. OCR recursively enumerates only regular PNG files component-contained beneath both a canonical artifact root and the canonical repository root; it rejects a symlink in either root or any traversed component, sibling-prefix/path escapes, and any read/decode/OCR error, then asserts enumerated count equals processed count. Temporary-copy canaries cover `artifacts-escape`, a symlinked output root, an inner symlink, safe-first/secret-second images, and malformed PNGs; positive canaries never enter the working tree.
 - The exact S1-01 factory/no-op path is compared with a positive normalized declaration/import/identifier/member/call-shape fixture that also pins the exact transitive `Network.persistenceKey` declaration/body. It permits only the required values, inert lifecycle, `Kit`, one dedicated serial queue, subjects, and the exact retained `DispatchSpecificKey<UInt8>` set/get operations; every additional helper/import/callee/member/alias/wrapper fails. Temporary-copy canaries cover `URLSession.shared`, `URLRequest`, `Data(contentsOf:)`, `FileManager.default`, `FileHandle(forUpdatingAtPath:)`, `UserDefaults.standard`, `sqlite3_open`, `Task {}`, `OperationQueue`, `DispatchQueue.global().async`, `Timer.scheduledTimer`, `DispatchSource.makeTimerSource`, an alias, an in-path wrapper, an out-of-path helper, and `Data(contentsOf:)` inserted into `Network.persistenceKey`.
 - A second S1-01 positive normalized fixture covers every executable public-value root: `Network.mainnet/stagenet/chainnet`, endpoint-family/policy/configuration initializers, `EndpointPolicy.default`, `Denom.init/rune`, `Address.init`, all transitive validators, Bech32/bit conversion, and every endpoint default expression. An import, identifier/member reference, stored/static initializer body, default expression, call shape, wrapper, or helper outside that closure fails. Seven one-change temporary-copy canaries cover Address I/O/task, endpoint I/O/task, Network static initialization, Denom static initialization, and an out-of-closure default-argument helper; every canary must fail the same positive value gate before the public-only consumer build.
-- S1-01 runs the 18 allowlisted XCTest cases with `--parallel --num-workers 1 --xunit-output` under pipefail, requires the Swift process itself to exit zero, and captures the runner transcript. The xUnit parser requires exactly 18 cases and zero failures/errors; the independent transcript parser requires exactly one terminal `passed` status for every allowlisted case and rejects skipped/disabled/failed status. Source/command gates reject `XCTSkip`, `XCTExpectFailure`, conditional/availability disabling, and `--skip`; a temporary `XCTSkip` canary must fail the transcript/status gate even though SwiftPM xUnit cannot encode skips. Method 18 binds `wallet-01\0mainnet\0thorchain-1` to `e2df225b7a00d471b1b09ec2d3344df89a11e9cfe116c05f5290683480623015`, and the outer mutant harness must fail separator/order source changes.
-- S1-01 commits the default BigInt resolution at `5.7.0`/`e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe` while preserving the manifest range from `5.0.0`. A temporary-copy minimum-version gate resolves exact `5.0.0`/`19f5e8a48be155e34abb98a2bcf4a343316f0343` and builds/tests it with strict-concurrency warnings as errors without changing the repository lock.
+- S1-01 runs the 18 allowlisted XCTest cases through the authenticated iOS Simulator Xcode command and requires the xcresult bundle to contain exactly those cases with zero failures, errors, or skips. Source/command gates reject `XCTSkip`, `XCTExpectFailure`, conditional/availability disabling, and `--skip`; a temporary `XCTSkip` canary must fail the xcresult/status gate. Method 18 binds `wallet-01\0mainnet\0thorchain-1` to `e2df225b7a00d471b1b09ec2d3344df89a11e9cfe116c05f5290683480623015`, and the outer mutant harness must fail separator/order source changes.
+- S1-01 commits the default BigInt resolution at `5.7.0`/`e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe` while preserving the manifest range from `5.0.0`. A temporary-copy minimum-version gate resolves exact `5.0.0`/`19f5e8a48be155e34abb98a2bcf4a343316f0343` and verifies it through the iOS Simulator Xcode/xcresult command with strict-concurrency warnings as errors, without changing the repository lock.
 - Public surface, factory, and value-construction audits are slice-versioned: S1-01 is exact only at S1-01; each S1-02…S1-05 script compares its exact current baseline and cumulatively preserves every earlier declaration as an unchanged subset. S1-02/S1-03 repeat the positive inert factory baseline. S1-04 preserves that exact positive production baseline; its SPI construction fixture starts only at `Core/TestingKitFactory.swift` and pins the exact enumerated `TestingHttpTransportAdapter`, `EndpointPool`, `RequestBuilder`, `LiveThorNodeClient`, `ReadOperationCoordinator`, `KitDependencies`, `Kit`, `TestingKitInstance`, and `Network.persistenceKey` initializer/getter bodies. A separate SPI read fixture pins one `TestingKitInstance.readAccount` → `AccountReading.read` → `TestingAccountReadProjection` path and rejects Kit publication, a second read, or an out-of-closure helper. S1-05 replaces the construction partitions with the approved positive production read/storage/lifecycle composition allowlist while retaining no-auto-start/no-request/no-task construction.
 - S1-04's fixture `AccountReadViewModel` must obtain `TestingKitInstance`, execute exactly one `readAccount()`, and provide its balance/existence/height/family projection to `AccountReadView` while `instance.kit` remains at the immutable S1-01 nil/idle/zero/no-account snapshot; fixture request counts and the SPI read syntax gate prevent static-label or unreachable-transport acceptance.
 - S1-04's reader actor returns only internal `Sendable` canonical-decimal transport records whose amounts are at most 256 bits; exact `2^256 - 1` passes and `2^256` fails. S1-05 storage accepts/returns only an internal `Sendable` `StorageRecord`, and `LifecycleGate` requires its address and chain ID to exactly match the active Address before reconstructing bounded `BigUInt` plus the frozen public `AccountState` inside the S1-01 facade-dispatcher turn. Different-address, tampered-chain, and cached-`2^256` tests must fail before publication. `Scripts/test-s1-04-s1-05-isolation.sh` compiles the actual sources under Swift-5 complete concurrency warnings-as-errors at the exact BigInt `5.0.0` floor, then separately mutates the actual reader result and storage boundary to `AccountState`; both non-`Sendable` mutants must fail compilation. `@unchecked Sendable` and text-only substitutes are forbidden.
@@ -99,7 +99,7 @@ This plan maps the acceptance criteria of the seven specs to specific test layer
 
 ## S1-02 endpoint-policy gate
 
-Revision 16 adds the following local-first obligations before implementation may be considered complete. They run routinely on the operator MacBook; GitHub-hosted macOS runs them only once through the manual final exact-PR-head gate.
+Revision 19 adds the following local-first obligations before implementation may be considered complete. They run through an exact selected iOS Simulator; GitHub-hosted macOS is only the Xcode execution environment and does not imply macOS package support. The manual final exact-PR-head gate remains the sole hosted product run.
 
 | Behavior | Deterministic evidence |
 |---|---|
@@ -118,15 +118,38 @@ Revision 16 adds the following local-first obligations before implementation may
 | Live separation | Exact schema-v1 keys/types/literals/arithmetic, source/path/head binding, duplicate/unknown-key rejection, and distinct fixture/live roots prevent fixture substitution. The validator recomputes the greatest-Comet-height/configuration-order winner; lower-height selection and later-equal-height-tie mutants must fail. |
 | Hosted CI bootstrap/budget | Bootstrap mode compares pre-bootstrap `main` with a two-path CI-policy PR, proving its merge refs have no `pull_request` trigger and its merged commit has no `push` trigger. Exact `event=pull_request&head_sha=<merge-ref-sha>&per_page=1` and `event=push&head_sha=<merge-commit-sha>&per_page=1` API evidence must return HTTP 200 and `total_count == 0`. Steady-state mode proves `workflow_dispatch` only and binds `github.workflow_sha`, `github.sha`, same-repository PR `headRefOid`, `expected_head_sha`, checkout SHA, and run `head_sha` to one product head. A local stale-default-workflow mutant must fail before product verification. The bootstrap PR is recorded separately; Reviewer/QA cite local product outputs and the one final hosted product run. |
 
+### Inherited host-gate accounting
+
+The iOS-only correction covers every package acceptance path found by the
+bounded current-tree census:
+
+| Path | Existing host SwiftPM/product operation | Required iOS-safe evidence |
+|---|---|---|
+| `.github/workflows/ci.yml` and `Scripts/verify-s1-02-ci-policy.sh` | Host build, strict build, and test block | Exact selected-simulator `xcodebuild` block; policy matcher compares it literally |
+| `Scripts/verify-s1-03.sh` | Derivation, codec, and full `swift test` | Simulator `xcodebuild` with both `-only-testing` selectors and the full test |
+| `Scripts/verify-s1-01.sh` | Host build/symbolgraph, test discovery, PublicApi xUnit, strict build, skip canary | iOS Simulator/Xcode build and iOS-target symbolgraph; xcresult discovery, execution, strict-concurrency, and skip-canary assertions |
+| `Scripts/verify-s1-02.sh` | Host test discovery, build/symbolgraph, strict build, and three filtered tests | Simulator Xcode/xcresult equivalents; retain the existing iOS public-consumer xcodebuild check |
+| `Scripts/test-s1-01-mutants.sh` | Base and mutant `swift test --package-path` calls | Same exact simulator Xcode helper for every base/mutant result, with xcresult failure assertions |
+| `Scripts/verify-bigint-floor.sh` | Host strict build/test of copied package | iOS Simulator Xcode build/test of the copy, retaining the lock-hash assertion |
+
+The remaining `xcrun swift` invocations in `Scripts/run-maestro.sh`,
+`Scripts/test-run-maestro.sh`, `Scripts/verify-s1-01-factory.swift`, and
+`Scripts/verify-s1-02-live-evidence.swift` are standalone scanner/evidence
+tooling. They do not resolve `Package.swift`, compile a ThorChainKit target,
+or receive product test credit; they remain explicitly allowed host tooling.
+
+CI selects an available pinned runtime, exports `THORCHAIN_SIMULATOR_UDID`, and
+passes `platform=iOS Simulator,id=${THORCHAIN_SIMULATOR_UDID}` to every package
+gate. No committed workflow or verifier may contain an operator-local UDID;
+missing selection, a literal UDID, a destination without the selected id, or a
+remaining host SwiftPM package gate is a hard failure.
+
 The narrow-to-broad command order is:
 
 ```bash
-swift build
-swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
-swift test --filter LiveNodeProbeTests
-swift test --filter EndpointPoolTests
-swift test --filter EndpointDiagnosticsTests
-swift test
+: "${THORCHAIN_SIMULATOR_UDID:?exact simulator selection missing}"
+DERIVED_DATA_PATH="${RUNNER_TEMP:-/tmp}/thorchain-s1-derived-data"
+xcodebuild -scheme ThorChainKit -destination "platform=iOS Simulator,id=${THORCHAIN_SIMULATOR_UDID}" -derivedDataPath "$DERIVED_DATA_PATH" CODE_SIGNING_ALLOWED=NO test
 Scripts/verify-s1-02.sh
 Scripts/verify-s1-02-ci-policy.sh steady-state --ref HEAD
 Scripts/test-run-maestro.sh
@@ -141,10 +164,10 @@ The steady-state verifier locally mutates the event context so the bootstrap/def
 
 ## Verification order per slice
 
-1. `swift build` / compile of changed target.
+1. Exact iOS Simulator `xcodebuild` package compile/test of the changed target.
 2. Narrow new test class.
 3. Full ThorChainKit test target.
-4. Parsed package topology, import allowlist, generated symbol graph, exact test discovery, strict-concurrency build, temporary public-only iOS 13 consumer, and the fail-closed no-UIKit/no-core-SwiftUI platform scan with an iOS 14-or-later SwiftUI Example target.
+4. Parsed iOS-only package topology, import allowlist, generated symbol graph, exact test discovery, simulator strict-concurrency build, temporary public-only iOS 13 consumer, and the fail-closed no-UIKit/no-core-SwiftUI platform scan with an iOS 14-or-later SwiftUI Example target.
 5. WalletCore narrow tests for S1-06/S1-07.
 6. WalletCore/App build.
 7. Maestro deterministic Example flow for the slice.
@@ -179,7 +202,7 @@ The mnemonic/private key must not appear in the evidence. Use a public fixture m
 - Mainnet identity and balance reads have been completed against at least two endpoint providers, or only one approved provider is documented as available.
 - App create/import/relaunch paths have been completed on a physical device or release-equivalent simulator where the process was actually terminated.
 - All deterministic Example Maestro flows are green; live flows are either green or explicitly unrun with a reason.
-- Repository-owned library and Example source pass the platform boundary: no UIKit in either, no SwiftUI in the library, a SwiftUI `App` lifecycle in the Example, library iOS 13 preserved, and Example iOS 14 or later.
+- Repository-owned library and Example source pass the platform boundary: no UIKit in either, no SwiftUI in the library, a SwiftUI `App` lifecycle in the Example, package platforms exactly iOS 13, library iOS 13 preserved, and Example iOS 14 or later.
 - After an offline relaunch, the wallet/address/cache are preserved, and state truthfully shows failure/stale.
 - Unstoppable contains no `.maestro`, acceptance transport, or test launch-argument branches.
 - All high/critical adversarial findings are closed.

@@ -1,8 +1,9 @@
 # THR-62 — S1-03 Derivation and Address Codec Plan
 
-Status: discovery 2/2 is frozen after REVISE; revision 6 addresses the frozen
-allowlist finding from closure 3/5; closure review 4/5 is required before
-approval.
+Status: discovery 2/2 is frozen; closure 4/5 was accepted before the
+Board-approved platform correction. Revision 7 binds that correction without
+resetting either review budget. Implementation remains blocked until the
+revision-bound adversarial review accepts the updated verification contract.
 
 ## Goal and acceptance
 
@@ -17,6 +18,68 @@ Done means the S1-03 acceptance criteria in THR-62 are covered by tests and
 verification, including independent public vectors, typed fail-closed errors,
 negative/fuzz/round-trip coverage, exact public-symbol preservation for S1-01
 and S1-02, SwiftUI-only Example presentation, and the bounded Maestro flow.
+
+## Board-approved platform correction
+
+- `Package.swift` declares exactly `.iOS(.v13)`; macOS is not a supported
+  package platform. The macOS hosted runner remains an execution environment
+  for simulator and Xcode tooling, not a product-platform acceptance surface.
+- The inherited S1-01 package-topology verifier must expect the exact iOS-only
+  platform list and reject a macOS entry. Its iOS 13 floor and the iOS 14+
+  SwiftUI Example floor remain unchanged.
+- Host SwiftPM compilation/test gates are removed from the S1-01/S1-02/S1-03
+  product verification path. Narrow and full package tests use the proven
+  exact-head command shape:
+
+  ```bash
+  : "${THORCHAIN_SIMULATOR_UDID:?exact simulator selection missing}"
+  xcodebuild -scheme ThorChainKit \
+    -destination "platform=iOS Simulator,id=${THORCHAIN_SIMULATOR_UDID}" \
+    -derivedDataPath "$DERIVED_DATA_PATH" \
+    CODE_SIGNING_ALLOWED=NO test
+  ```
+
+- Narrow tests use the same command with
+  `-only-testing:ThorChainKitTests/DerivationTests` or
+  `-only-testing:ThorChainKitTests/AddressCodecTests`; the full command is the
+  package regression gate. Static manifest inspection may remain, but
+  `swift build` and `swift test` must not be used as product acceptance gates.
+- The exact-head operator proof reached the package and failed only on the
+  duplicate `CosmosAccountAddressDeriver` declaration at
+  `AccountAddressFactory.swift:3` and `CosmosAccountAddressDeriver.swift:17`.
+  The engineer must retain one declaration in the approved file responsibility
+  and add a verifier/mutant check that rejects duplicate ownership.
+
+### Exhaustive inherited host-gate accounting
+
+The correction covers every current package-gate call found by the bounded
+`rg`/Serena census:
+
+| Current path | Current host operation | Required replacement or disposition |
+|---|---|---|
+| `.github/workflows/ci.yml` | `swift build`, strict `swift build`, `swift test` | Exact selected-simulator `xcodebuild -scheme ThorChainKit ... test`; no literal UDID |
+| `Scripts/verify-s1-02-ci-policy.sh` | Expected CI block repeats those three commands | Match the simulator `xcodebuild` block exactly, including authenticated simulator selection |
+| `Scripts/verify-s1-03.sh` | Derivation, codec, and full `swift test` | Same command with the two `-only-testing` selectors, then full simulator test |
+| `Scripts/verify-s1-01.sh` | Host build for symbolgraph, `swift test list`, PublicApi xUnit test, strict build, skip canary | Build/test through simulator Xcode/xcresult; extract the symbol graph for the iOS build; replace host test discovery and xUnit parsing with xcresult assertions |
+| `Scripts/verify-s1-02.sh` | Host test discovery, symbolgraph build/extraction, strict build, three filtered tests | Simulator Xcode/xcresult discovery, iOS-target symbolgraph extraction, strict simulator build, and filtered simulator tests |
+| `Scripts/test-s1-01-mutants.sh` | Direct and mutant `swift test --package-path` calls | Run each base/mutant package through the same exact simulator Xcode helper and assert xcresult failure |
+| `Scripts/verify-bigint-floor.sh` | Host strict build/test of a copied package | Copy remains allowed for the fixture, but compile/test uses the exact iOS Simulator Xcode command and verifies the same resolved lock |
+| `docs/specs/sprint-01-foundation/S1-01-package-public-api.md` | Checked-in iOS/macOS platform and host SwiftPM verifier contract | Update the S1-01 contract to iOS 13 only, bind `verify-s1-01.sh` to simulator/xcresult evidence, and remove host package commands from product acceptance |
+
+`Scripts/run-maestro.sh`, `Scripts/test-run-maestro.sh`,
+`Scripts/verify-s1-01-factory.swift`, and
+`Scripts/verify-s1-02-live-evidence.swift` use `xcrun swift` only to compile
+standalone scanner/evidence tooling. They do not import the package, resolve
+`Package.swift`, build a ThorChainKit target, or claim product test credit;
+they remain host tooling and are explicitly excluded from the package-gate
+replacement.
+
+The simulator contract is deterministic and host-independent: CI selects an
+available pinned runtime, exports `THORCHAIN_SIMULATOR_UDID`, and every
+package-gate command uses `platform=iOS Simulator,id=${THORCHAIN_SIMULATOR_UDID}`.
+No committed file may contain an operator-local UDID. The verifier must reject
+missing selection, a literal UDID, a destination that omits the selected id,
+or a host SwiftPM package-gate command.
 
 ## Steps
 
@@ -40,6 +103,8 @@ and S1-02, SwiftUI-only Example presentation, and the bounded Maestro flow.
   until an exact-head CodeReviewer ACCEPT.
 
 Affected paths: `docs/specs/sprint-01-foundation/S1-03-derivation-address-codec.md`,
+`docs/specs/sprint-01-foundation/S1-03-delta-matrix.md`,
+`docs/specs/sprint-01-foundation/S1-01-package-public-api.md`,
 `docs/superpowers/plans/2026-07-21-THR-62-s1-03-derivation-address-codec.md`,
 and `docs/reports/gimle/`. The Gimle checkpoint is external to this
 repository, is never committed, and is not an affected repository path.
@@ -84,6 +149,13 @@ Dependency: Step 1 explicit approval.
   record immutable source/tool/command/input/digest metadata.
 - Add derivation/codec negative, property/fuzz, round-trip, and public-symbol
   contract tests.
+- Update `Scripts/verify-s1-01.sh` and the inherited S1-01 contract to remove
+  macOS package acceptance; update `Scripts/verify-s1-02-ci-policy.sh`,
+  `Scripts/verify-s1-03.sh`, and `.github/workflows/ci.yml` to use the exact
+  iOS Simulator `xcodebuild` narrow/full package gates above.
+- Remove the duplicate `CosmosAccountAddressDeriver` declaration; the type is
+  owned by `CosmosAccountAddressDeriver.swift`, while
+  `AccountAddressFactory.swift` owns only the factory/composition boundary.
 - Add SwiftUI + Combine Example presentation and `02-address-codec.yaml`
   using stable accessibility IDs and complete address assertions.
 - Extend the exact verifier and runner/CI policy together so the flow is
@@ -95,8 +167,12 @@ Dependency: Step 1 explicit approval.
   changed path set also includes `iOS Example/Sources/ThorChainExampleApp.swift`,
   `iOS Example/iOS Example.xcodeproj/project.pbxproj`, `.maestro/config.yaml`,
   `Scripts/run-maestro.sh`, `Scripts/test-run-maestro.sh`,
-  `Scripts/test-s1-03-mutants.sh`, `Scripts/verify-s1-03.sh`,
+`Scripts/test-s1-03-mutants.sh`, `Scripts/verify-s1-03.sh`,
   `Scripts/verify-s1-02-ci-policy.sh`, and `.github/workflows/ci.yml`.
+- The inherited gate correction also changes `Scripts/verify-s1-01.sh`,
+  `Scripts/verify-s1-02.sh`, `Scripts/test-s1-01-mutants.sh`, and
+  `Scripts/verify-bigint-floor.sh`; standalone Maestro/scanner helpers remain
+  explicitly non-product host tooling as documented in the spec.
 - Require the dependency fixture to contain the immutable S1-01 baseline plus
   the exact HsCryptoKit, HsExtensions, secp256k1, and swift-crypto resolved
   closure rows; require three SplitMix64 outputs per case, modulo-2⁶⁴ state
@@ -112,12 +188,15 @@ Affected paths: `Tests/ThorChainKitTests/DerivationTests.swift`,
 `iOS Example/Sources/Presentation/AddressViewModel.swift`,
 `iOS Example/Sources/Views/AddressView.swift`,
 `.maestro/flows/02-address-codec.yaml`, the root Example App and Xcode project
-membership, the exact slice verifier, the named mutant harness, and the
+membership, the exact slice verifier, the named mutant harness, the inherited
+S1-01/S1-02 verifier scripts, `Scripts/verify-bigint-floor.sh`, and the
 cumulative runner/manifest/CI policy files listed above.
 
 Acceptance: no mnemonic/private material or host-local paths are committed;
 the Example imports no UIKit; the flow checks full expected address,
-canonical uppercase normalization, checksum/mixed-case, and wrong-HRP cases.
+canonical uppercase normalization, checksum/mixed-case, and wrong-HRP cases;
+the package topology is iOS-only; the narrow/full package gates run through
+the exact selected iOS Simulator; and duplicate type ownership fails closed.
 
 Dependency: Step 2 implementation shape and Step 1 approval.
 
