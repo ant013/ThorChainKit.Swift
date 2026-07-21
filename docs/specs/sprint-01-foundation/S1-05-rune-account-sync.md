@@ -1,6 +1,6 @@
 # S1-05 — RUNE account sync lifecycle
 
-**Status:** synchronized to S1-01 revision 11 after revision-10 adversarial REVISE; implementation blocked pending fresh review and approval.
+**Status:** design revision 2 after discovery 1/2 REVISE; synchronized to S1-01 revision 12; implementation blocked pending fresh review and explicit user approval.
 **Risk:** high/concurrency, persistence, stale-state semantics.
 **Observable outcome:** `Kit.start/refresh/stop` create one managed sync lifecycle; account/balances/height are published as a single snapshot, cached state survives reconstruction, and a cancelled/old generation cannot overwrite the new state.
 
@@ -32,6 +32,8 @@ Excluded:
 ## Files
 
 ```text
+Package.swift
+Package.resolved
 Sources/ThorChainKit/Sync/AccountSyncer.swift
 Sources/ThorChainKit/Sync/AccountSyncing.swift
 Sources/ThorChainKit/Sync/SyncSchedule.swift
@@ -52,8 +54,11 @@ Tests/ThorChainKitTests/AccountStateStorageTests.swift
 Tests/ThorChainKitTests/KitLifecycleTests.swift
 Scripts/test-s1-05-lifecycle-invariants.sh
 Scripts/test-s1-04-s1-05-isolation.sh
+Scripts/test-s1-05-dependency-floor.sh
+Scripts/verify-s1-05.sh
 iOS Example/Sources/Presentation/LifecycleViewModel.swift
 iOS Example/Sources/Views/LifecycleView.swift
+iOS Example/Sources/Core/ExampleRuntime.swift
 .maestro/flows/04-lifecycle-restart.yaml
 ```
 
@@ -71,7 +76,48 @@ AccountSyncer ─▶ ReadOperationCoordinator ─▶ EndpointPool + ThorNodeClie
       └──────── atomic save ───▶ AccountStateStorage
 ```
 
-`AccountSyncer` is the sole owner of the loop/current request/generation. `AccountStateManager` does not start network operations and does not accept partial values.
+`AccountSyncer` is the sole owner of the loop/current request and refresh
+coalescing. `AccountStateManager` does not start network operations and does
+not accept partial values.
+
+### Generation ownership and bridge handshake
+
+The facade dispatcher, through `LifecycleGate`, is the sole logical owner of
+the active `SyncGeneration?`. `AccountSyncer` owns only the loop, current read,
+coalescing flag, and cancellation; it receives an immutable generation token
+and never creates, increments, or compares a second lifecycle generation.
+`sync_control.generation` is the durable compare-and-swap authority and is
+advanced by the gate's short GRDB control transaction. It is not an additional
+in-memory owner. Every effective `start` and `stop` advances that row; a
+running `refresh` does not.
+
+The ordering for an effective command is fixed:
+
+1. The S1-01 dispatcher linearizes the command and the gate closes or opens
+   the active publication token. For `start`, the gate first obtains the next
+   durable generation and installs it only after that transaction succeeds. For
+   `stop`, the gate closes the token before attempting the durable increment.
+2. The gate invokes the bridge with the already-linearized command and token
+   (or a stop-cancellation command with no token when the durable stop
+   increment failed).
+   The bridge appends to one FIFO task tail and returns a completion barrier;
+   it never synchronously waits for the actor or calls back into the facade
+   dispatcher.
+3. An off-dispatcher public call waits on its returned barrier only after the
+   dispatcher turn has returned. A dispatcher-context reentrant call appends,
+   returns immediately, and is completed by S1-01's active-turn post-drain.
+   This is the only enqueue-and-return exception and prevents self-deadlock.
+
+`stop` always cancels and awaits the actor-owned task before its off-dispatcher
+barrier is signalled. The gate remains closed until a later successful start.
+If the durable increment throws, the nonthrowing public facade fails closed:
+it does not open/reuse a token, it still cancels and drains the old actor task,
+it publishes `.notSynced(.storageUnavailable, cached: previous)` only after
+that drain, and it returns only after the barrier. Thus a storage outage does
+not claim durable invalidation or expose a successful stopped state, while no
+old generation can publish or write after `stop` returns. A failed start stays
+stopped, publishes the same sanitized storage error, and forwards no actor
+command.
 
 `LifecycleCommandBridge` becomes the concrete S1-05 collaborator behind S1-01's synchronized owner and facade dispatcher. It receives only already-linearized, monotonically sequenced effective commands. It neither stores `desiredRunning`, filters idempotent start/stop/refresh calls, nor assigns a second public-command sequence. Its task tail preserves the accepted command order while handing asynchronous actor work across the synchronous facade boundary; `start/stop/start` never create independent unordered `Task {}` instances. `AccountSyncer`'s loop/task presence is runtime ownership state, not a defensive idempotence filter: `start` while already running, or `stop`/`refresh` while stopped, is an internal invariant failure with a stable diagnostic marker. `Scripts/test-s1-05-lifecycle-invariants.sh` runs those three impossible actor-command sequences in isolated subprocesses and requires each to terminate nonzero with its exact marker. Every refresh reaching the bridge was already accepted while running; multiple valid running refresh commands may still coalesce network work without dropping or reordering lifecycle commands.
 
@@ -104,15 +150,22 @@ protocol AccountStateStorage: Sendable {
 }
 ```
 
+`load(key:)` performs one `DatabasePool.read` transaction and fetches
+`sync_control`, `account_state`, and all `balances` rows through that same
+SQLite read snapshot. It returns either one complete record or `nil`; it never
+assembles the account and balances from separate reads. `saveIfCurrent` and
+`advanceGeneration` each use the same GRDB writer pool, so the writer lock
+orders a save versus stop's invalidating increment.
+
 ### Isolation transfer contract
 
 `AccountSyncer` receives only S1-04's `AccountReadTransport`, whose balances contain canonical decimal strings, and converts it to `StorageRecord`. `StorageRecord` is an internal `Sendable` value containing the exact validated address string, exact expected network chain ID, and only other `String`, integer, Boolean, `Date`, and arrays of the internal `Sendable` decimal balance record; it never stores `BigUInt`, `AccountState`, or `SyncState`. `AccountStateStorage.load/saveIfCurrent` cross async boundaries only with this record.
 
-After a generation-valid save or cache load, `LifecycleGate.acceptIfCurrent(generation:record:)` carries that `Sendable` record to the S1-01 facade dispatcher. Before any cache or fresh record can become public, the gate requires `record.address == activeAddress.raw` and `record.networkChainId == activeAddress.network.expectedChainId`. Inside that dispatcher turn it also validates each canonical decimal string and its exact 256-bit Cosmos bound, constructs `BigUInt` values and the frozen public `AccountState`, then passes the result directly to `AccountStateManager` before publisher delivery. A different-address row under the same wallet/network key, a tampered chain ID, an amount of `2^256`, or other invalid persisted data is a storage failure and is neither published nor coerced to zero. Cache identity failure maps to `.storageUnavailable`, publishes no cached snapshot, and does not prevent the running lifecycle from attempting a fresh read whose valid record may atomically replace the row. The BigUInt-backed value never leaves the dispatcher through an actor/async/storage boundary. `@unchecked Sendable` is forbidden.
+After a generation-valid save or cache load, `LifecycleGate.acceptIfCurrent(generation:record:)` carries that `Sendable` record to the S1-01 facade dispatcher. `StorageRecord.validated(from:)` performs the canonical decimal, `2^256 - 1`, account-existence, accepted-height, timestamp, provider-ID, address, and chain-ID validation before `saveIfCurrent` is called. Storage repeats the record validation and rejects it without mutation as defense in depth. Before any cache or fresh record can become public, the gate requires `record.address == activeAddress.raw` and `record.networkChainId == activeAddress.network.expectedChainId`. Inside that dispatcher turn it constructs `BigUInt` values and the frozen public `AccountState`, then passes the result directly to `AccountStateManager` before publisher delivery. A different-address row under the same wallet/network key, a tampered chain ID, an amount of `2^256`, malformed fresh input, or other invalid persisted data is a storage failure and is neither published nor coerced to zero. Cache identity failure maps to `.storageUnavailable`, publishes no cached snapshot, and does not prevent the running lifecycle from attempting a fresh read whose valid record may atomically replace the row. The BigUInt-backed value never leaves the dispatcher through an actor/async/storage boundary. `@unchecked Sendable` is forbidden.
 
-Public `Kit.start/stop/refresh` preserve synchronous completion for effective calls made outside the facade dispatcher. The S1-01 owner filters no-ops and establishes command order before invoking the bridge. `start/stop` synchronously invoke the short GRDB control transaction `advanceGeneration`, update the in-memory gate, and then append the actor command to the preceding command task. Stopped refresh never reaches the bridge; an accepted running refresh is appended/coalesced in established order. Dispatcher-context reentry uses the explicitly documented enqueue-and-return exception so subscriber delivery cannot wait on itself.
+Public `Kit.start/stop/refresh` preserve synchronous completion for effective calls made outside the facade dispatcher. The S1-01 owner filters no-ops and establishes command order before invoking the bridge. The gate performs the generation transaction and token admission described above, then the bridge appends the actor command to the preceding command task. Stopped refresh never reaches the bridge; an accepted running refresh is appended/coalesced in established order. Dispatcher-context reentry uses the explicitly documented enqueue-and-return exception so subscriber delivery cannot wait on itself.
 
-`stop()` may briefly block on the local GRDB writer, but after it returns, the old generation cannot commit/publish. Actor `stop()` cancels and awaits the owned task before the next FIFO `start()`.
+`stop()` may briefly block on the local GRDB writer, but after it returns, the old generation cannot commit/publish. Actor `stop()` cancels and awaits the owned task before the next FIFO `start()`; the gate's pre-close plus actor drain also makes the failure path safe when the control transaction is unavailable.
 
 ## State model
 
@@ -131,7 +184,7 @@ generation = FIFO bridge generation
 publish .syncing(previous)
 readTransport = ReadOperationCoordinator.read(address)
 check cancellation + generation
-construct Sendable StorageRecord from complete readTransport
+construct and validate Sendable StorageRecord from complete readTransport
 committed = storage.saveIfCurrent(record, expectedGeneration: generation)
 guard committed
 LifecycleGate.acceptIfCurrent(generation, record)
@@ -139,7 +192,7 @@ LifecycleGate.acceptIfCurrent(generation, record)
 
 If the account is nil but balances are non-empty, this is an invariant violation: do not publish a contradictory snapshot. An empty/no account is valid `exists=false`, zero RUNE, and nil number/sequence.
 
-`acceptedHeight` is the exact Cosmos REST height from the complete coordinator result: the account request and all balance pages were pinned to it and returned the same `x-cosmos-block-height`. Comet height remains diagnostic only.
+`acceptedHeight` is the exact Cosmos REST height from the complete coordinator result: the account request and all balance pages were pinned to it and returned the same `x-cosmos-block-height`. Comet height remains diagnostic only. The accepted snapshot stores this one value in `AccountState.acceptedHeight`; the same value updates `Kit.lastBlockHeight` and `lastBlockHeightPublisher` in the same facade-dispatcher turn as the account, balances, `runeBalance`, and sync state. A publisher callback therefore observes the complete new getter snapshot, never a mixed height.
 
 ## Lifecycle state machine
 
@@ -161,12 +214,16 @@ If the account is nil but balances are non-empty, this is an invariant violation
 ### `stop()`
 
 - actor receipt while stopped is an internal invariant failure because S1-01 never forwards repeated stop;
-- synchronously close in-memory gate and advance persistent generation in control transaction;
-- cancel loop task, current request and pending sleep;
-- await owned-task completion within the actor path;
+- synchronously close in-memory gate and attempt the persistent generation increment in the control transaction;
+- cancel loop task, current request and pending sleep, then await the actor-owned task before the off-dispatcher barrier completes;
 - clear `refreshRequested`;
 - do not delete persisted/cached state;
 - late completion old generation is ignored before save/publication.
+
+If the control transaction fails, the closed gate and actor drain remain in
+force; the facade publishes only the sanitized storage-unavailable state after
+the drain and never reports durable invalidation as successful. A later start
+must successfully advance the durable row before opening a new token.
 
 ### Restart
 
@@ -216,7 +273,21 @@ balances
   PRIMARY KEY(storage_key, denom)
 ```
 
-Within one GRDB write transaction, `saveIfCurrent` first compares `sync_control.generation`; on mismatch, it returns `false` without changing account/balances. On match, it replaces the account and the entire balance set. If the save transaction acquires the writer first, `stop()` waits for it, then increments the generation and only then returns; if stop wins, the CAS save fails. Therefore, a write after stop has returned is impossible. BigUInt is stored as a canonical decimal string bounded to 256 bits. Stored address and `network_chain_id` are integrity fields that must exactly match the active Address before publication; they are not informational metadata. Migration `v1` is idempotent.
+Within one GRDB write transaction, `saveIfCurrent` first validates the record, then compares `sync_control.generation`; on mismatch, it returns `false` without changing account/balances. On match, it replaces the account and the entire balance set. If the save transaction acquires the writer first, `stop()` waits for it, then increments the generation and only then returns; if stop wins, the CAS save fails. Therefore, a write after stop has returned is impossible. BigUInt is stored as a canonical decimal string bounded to 256 bits. Stored address and `network_chain_id` are integrity fields that must exactly match the active Address before publication; they are not informational metadata. Migration `v1` is idempotent.
+
+### Dependency and iOS-13 gate
+
+S1-05 owns the first product dependency addition for GRDB. The implementation
+must add `Package.swift` and `Package.resolved` to the approved change, use
+`https://github.com/groue/GRDB.swift.git` with the Horizontal Systems-compatible
+6.x requirement and lock GRDB at `6.27.0` (`639fa9168d36931b36a79e60dc06b7d23852f1f4`),
+and add the `GRDB` product only to the library target that owns the storage.
+`Scripts/test-s1-05-dependency-floor.sh` copies the package to a temporary
+directory, resolves the committed manifest without rewriting the repository
+lock, asserts the exact locked GRDB version/revision, and builds the library
+with `IPHONEOS_DEPLOYMENT_TARGET=13.0` for a generic iOS Simulator. Any
+resolution or iOS-13 incompatibility is a failed gate and returns this design
+for review; the deployment floor is never raised silently.
 
 Storage failure policy: the network result is not published as durably `.synced` when saving is mandatory. `.notSynced(.storageUnavailable, cached: previous)` is required; this prevents a UI success state that would disappear on relaunch.
 
@@ -224,6 +295,11 @@ Storage failure policy: the network result is not published as durably `.synced`
 
 - `AccountStateManager.accept(_:)` is called only inside `LifecycleGate.acceptIfCurrent`'s facade-dispatcher turn, after that turn reconstructs one complete `AccountState` from a validated `StorageRecord`.
 - Synchronous getters and Combine subjects are updated on the shared S1-01 facade dispatcher.
+- One `StateSnapshot` update carries `AccountState`, `runeBalance`,
+  `lastBlockHeight == accountState.acceptedHeight`, and the sync-state/error
+  value. The manager mutates all getters first and only then sends the related
+  publishers in the pinned order; no individual balance or height update is
+  observable between those operations.
 - Order: internal snapshot set → publishers send. A consumer invoked by a publisher already sees the new getter value.
 - An ordinary external `stop()` guarantees that no later publication turn sends after it returns. A dispatcher-context reentrant stop returns after enqueue so the current turn can unwind; its queued bridge completion is the barrier, and no later turn may overtake it.
 - A repeated identical snapshot may not be published; the height/fetchedAt change policy must be pinned by a test.
@@ -288,6 +364,76 @@ Storage failure policy: the network result is not published as durably `.synced`
 - accountExists not inferred from balance error;
 - deinit/stop releases owned task (leak sentinel).
 
+### Exact verification protocols
+
+The implementation test names are stable acceptance selectors, not prose
+labels. `Scripts/verify-s1-05.sh` runs the following exact focused selectors
+against the current implementation head, writes
+`artifacts/s1-05/Test.xcresult`, and fails if any selector is missing:
+
+```text
+AccountSyncerTests.testRefreshUsesOneCompleteReadAndPublishesOneSnapshot
+AccountSyncerTests.testStopRacingSaveEstablishesGenerationAndPublicationBarrier
+AccountSyncerTests.testStopControlFailureFailsClosedAndDrainsOldGeneration
+AccountSyncerTests.testReentrantStopDoesNotWaitOnFacadeDispatcher
+AccountStateStorageTests.testLoadUsesOneConsistentReadSnapshot
+AccountStateStorageTests.testInvalidFreshRecordIsRejectedBeforeSave
+AccountStateStorageTests.testStorageSaveFailurePublishesStorageUnavailableWithoutSynced
+KitLifecycleTests.testLastBlockHeightMatchesAcceptedHeightBeforePublisherDelivery
+KitLifecycleTests.testRuneBalanceUsesExactRuneProjection
+```
+
+The script first asserts `git rev-parse HEAD` equals `S105_EXPECTED_HEAD`,
+asserts the base is
+`d35770a0430eee921fa1fe91b2f8812a8c0535ff`, and asserts the changed paths are
+within the approved file list. It runs
+`xcodebuild test -scheme ThorChainKit -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' -resultBundlePath artifacts/s1-05/Test.xcresult`
+plus the focused selectors above, then reads the xcresult summary and requires
+every selector to pass. The script never treats a missing result bundle or a
+different commit as evidence.
+
+`Scripts/test-s1-05-lifecycle-invariants.sh` is a bounded subprocess protocol:
+the baseline build must pass; each of exactly three commands (`duplicate-start`,
+`stopped-refresh`, `duplicate-stop`) is run in a fresh temporary copy with a
+20-second timeout; each must exit nonzero, write exactly one stable marker
+(`S105_INVARIANT_DUPLICATE_START`, `S105_INVARIANT_STOPPED_REFRESH`, or
+`S105_INVARIANT_DUPLICATE_STOP`) to stderr, and produce no success marker. A
+missing marker, zero exit, timeout, or extra command is failure.
+
+`Scripts/test-s1-04-s1-05-isolation.sh` runs the real package baseline with
+`swift test -Xswiftc -swift-version -Xswiftc 5 -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors`,
+then creates two independent temporary copies. Mutant A changes the unique
+`AccountReading.read`/coordinator result boundary from `AccountReadTransport`
+to frozen `AccountState`; mutant B changes the unique storage `load` and
+`saveIfCurrent` record boundary from `StorageRecord` to `AccountState`. Each
+transform requires an exact anchor count of one per declared replacement and
+must fail compilation with a non-`Sendable` isolation diagnostic. Text grep,
+an unmodified baseline, or a transform that touches any other declaration does
+not satisfy the gate. The same script invokes the temporary GRDB 6.27.0/iOS-13
+resolution floor and records its output.
+
+The Example fixture seam is explicit: `ExampleRuntime.makeFixtureKit()` builds
+the real `Kit` composition with `ExampleAccountReadTransport`, the production
+`AccountSyncer`, a deterministic `ExampleClock`, and a fixture GRDB database
+in the app's Application Support directory. The transport has a visible
+request counter, an actor-controlled pending gate, and an offline switch; it
+never opens a URL session. The fixture database is retained across app
+relaunch and contains no wallet secret. `LifecycleViewModel` observes the
+real Kit publishers and never performs a read or owns lifecycle state.
+
+Maestro flow `04-lifecycle-restart.yaml` uses only accessibility-visible state
+transitions and the fixture's request counter. It proves start/start
+coalescing, stop during pending read, cached/stale relaunch, offline relaunch,
+and recovery. A bounded simulator runner records JSONL with schema
+`{"slice":"S1-05","head":"<sha>","mode":"fixture","events":[...],"final":{"syncState":"...","acceptedHeight":<int|null>,"lastBlockHeight":<int|null>,"rune":"<decimal>","requestCount":<int>},"passed":true}`;
+missing fields, a mismatched head, or a bypassing fixture read is failure.
+
+The live gate is opt-in only: `Scripts/verify-s1-05.sh --live` requires the
+operator to provide a public THORNode endpoint through the process environment,
+never a committed credential. It emits the same bounded JSON schema with
+`mode:"live"`, endpoint family, chain ID, and sanitized accepted height/result;
+the mandatory fixture gate remains the only offline acceptance evidence.
+
 ### Example/Maestro acceptance
 
 `LifecycleViewModel` observes the kit's Combine publishers and provides `LifecycleView` with only explicit `Start`, `Stop`, and `Refresh` controls plus read-only state/counter diagnostics. It does not duplicate lifecycle admission or snapshot ownership. The Example remains SwiftUI-only and imports no UIKit. Flow `04-lifecycle-restart.yaml`:
@@ -323,3 +469,22 @@ Before acceptance, S1-05 adds `Tests/ThorChainKitTests/Fixtures/S1-05-public-sym
 
 1. Default foreground polling interval — 60 seconds, bounded failure backoff — 300 seconds.
 2. The production factory uses mandatory durable GRDB storage: a save failure is not published as `.synced`. In-memory storage is available only through internal/test injection.
+
+## Discovery-1 blocker closure map
+
+| ID | Resolution in revision 2 | Acceptance evidence |
+|---|---|---|
+| `S105-ARCH-001` | Gate owns the logical token; actor owns tasks; `sync_control` is the durable CAS authority; start/stop ordering is enumerated. | Generation-race, stop/restart, and stale-save tests. |
+| `S105-ARCH-002` | Package/lock files are in scope, GRDB is pinned to 6.27.0, and the temporary iOS-13 resolver/build gate is named. | `Scripts/test-s1-05-dependency-floor.sh` and exact lock assertions. |
+| `S105-ARCH-003` | One `StateSnapshot` updates account, RUNE, sync state, and `lastBlockHeight == acceptedHeight` before any publisher. | `KitLifecycleTests.testLastBlockHeightMatchesAcceptedHeightBeforePublisherDelivery`. |
+| `S105-SEC-001` | `load` reads control/account/all balances in one GRDB read transaction. | Concurrent load/write old-or-new completeness test. |
+| `S105-SEC-002` | Stop closes admission and drains even if durable increment throws; facade maps failure to sanitized storage-unavailable state. | `testStopControlFailureFailsClosedAndDrainsOldGeneration`. |
+| `S105-ARCH-004` | Bridge returns a barrier without waiting/callback; external callers wait after dispatcher exit; reentrant calls enqueue and return. | `testReentrantStopDoesNotWaitOnFacadeDispatcher` and FIFO post-drain trace. |
+| `S105-ARCH-005` | Fresh record validation precedes save, with storage-side defense in depth. | `testInvalidFreshRecordIsRejectedBeforeSave`. |
+| `S105-VOP-001` | Example uses the real Kit with fixture transport, deterministic clock, retained fixture GRDB, and visible controls/counters. | JSONL fixture evidence plus Maestro flow. |
+| `S105-VOP-002` | Isolation baseline, exact transforms, compiler flags, and diagnostics are fixed. | Isolation script output and two mutant failures. |
+| `S105-VOP-003` | Three fresh subprocess commands, exact markers, timeout, and exit protocol are fixed. | Invariant script output. |
+| `S105-VOP-004` | Stable focused selectors, base/head assertions, xcresult path, simulator destination, and changed-file allowlist are fixed. | `Scripts/verify-s1-05.sh` output. |
+| `S105-VOP-005` | Fixture and opt-in live JSONL schemas, inputs, retained storage, and fail-closed missing-evidence behavior are fixed. | Fixture mandatory; live only when explicitly enabled. |
+| `S105-VOP-006` | Save failure maps to `.notSynced(.storageUnavailable, cached:)` without `.synced` publication. | `AccountStateStorageTests.testStorageSaveFailurePublishesStorageUnavailableWithoutSynced`. |
+| `S105-ARCH-006` | Header and all plan references now bind S1-01 revision 12. | Exact `rg`/Git check against canonical S1-01. |
