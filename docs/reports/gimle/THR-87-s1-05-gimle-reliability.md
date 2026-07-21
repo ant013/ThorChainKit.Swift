@@ -3,11 +3,11 @@
 ## Review binding
 
 - Repository: `/Users/ant013/Data/AI/thorchain`
-- Reviewed design head: `bb67d0f2572dcf7ed50c3e6d59f772de777497b2`
+- Reviewed design head: `0694dbc399c1087349e0dd2cd137d699b8e829b3`
 - Base: `d35770a0430eee921fa1fe91b2f8812a8c0535ff`
 - Spec: `docs/specs/sprint-01-foundation/S1-05-rune-account-sync.md`
 - Plan: `docs/superpowers/plans/2026-07-21-THR-87-s1-05-rune-account-sync.md`
-- Review phase: discovery 1/2, closure 0/5
+- Review phase: discovery 2/2 frozen, closure 0/5
 
 ## Gimle trust
 
@@ -21,6 +21,23 @@ ThorChainKit; its kit analog mappings have unknown freshness and cannot bind
 this review to the target head. No Gimle result was accepted as load-bearing
 evidence. The Palace runtime reported `neo4j=reachable`, but its source
 checkout and SHA identify the Palace service rather than this repository.
+
+## Authoritative Gimle recheck — revision 3
+
+The recheck was performed against the pushed design head above on
+2026-07-21. Palace health reported `neo4j=reachable`, runtime
+`native-dev@0e9cf57c00ff970f584256126b500166580e7a72`, clean service state, and
+no project-integrity warnings. The registered project inventory contained 18
+projects but no ThorChainKit namespace. A direct lookup of
+`Users-ant013-Data-AI-thorchain` returned `unknown_project`; the bounded audit
+call rejected the same value as an invalid Gimle slug. These results are
+recorded in the reworked checkpoint as events `E-0008` through `E-0012` and
+bug revision `GIM-THR87-TARGET-MAPPING@3`.
+
+This is a confirmed Gimle mapping/coverage gap, not target-tree evidence.
+Current-tree codebase-memory, Serena, and targeted `rg`/Git reads remain the
+authoritative fallback. Gimle trust therefore remains RED, and no Gimle-only
+claim is accepted as load-bearing.
 
 ## Stable discovery findings
 
@@ -45,7 +62,18 @@ canonical S1-01 document at this head is revision 12. This is a direct binding
 inconsistency that must be corrected before approval; it is included in the
 Paperclip review handoff as `S105-ARCH-006`.
 
-## Non-blocking backlog
+## Closure status after discovery 2/2
+
+Discovery is frozen at 2/2. The first six high findings and the revision-2
+review IDs are resolved in the current spec/plan. Revision 3 explicitly closes
+`S105-ARCH-007` by binding the internal barrier-returning `KitLifecycle`,
+post-dispatcher `Kit.submit` wait, and no-token `cancelStop()` path to
+`Core/KitDependencies.swift`, `Core/Kit.swift`, and a combined successful-stop/
+control-failure contract test. It closes `S105-ARCH-008` by defining
+`LifecycleGate.publishFailureIfCurrent(SyncFailure)` with generation, address,
+chain-ID, cached-state, and publisher-ordering checks. No product code changed.
+
+## Historical non-blocking backlog from discovery 1
 
 - `S105-ARCH-007` medium: clarify that Tron partial-save/partial-publication
   behavior is rejected analog evidence, not inherited lifecycle behavior.
@@ -60,6 +88,7 @@ Paperclip review handoff as `S105-ARCH-006`.
 
 ## Decision
 
-**REVISE.** The high findings are concrete failures of the current design's
-safety or exact verification contract. No implementation, product code, or
-external-system state was changed.
+**FRESH ADVERSARIAL ACCEPT REQUIRED.** The revised design is pushed and the
+Gimle state/report has been reworked and rehashed. Implementation remains
+blocked until `ThorChainCodeReviewer` posts a fresh adversarial ACCEPT for
+head `0694dbc` and the user then approves the exact resulting plan revision.
