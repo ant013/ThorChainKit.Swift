@@ -3,6 +3,40 @@ import XCTest
 @testable import ThorChainKit
 
 final class ReadOperationCoordinatorS1_04Tests: XCTestCase {
+    func testCancellationDuringSuccessLinearizationDoesNotReturnSuccess() async throws {
+        let first = try family(id: "first")
+        let configuration = try EndpointConfiguration(
+            families: [first],
+            policy: try EndpointPolicy(maximumAttempts: 1, maximumBalancePageCount: 4)
+        )
+        let client = ScriptedReadClient()
+        await client.setOutcome(for: "first", outcome: .success)
+        let pool = EndpointPool(
+            network: .mainnet,
+            configuration: configuration,
+            probe: HealthyS1_04Probe()
+        )
+        let cancellation = CoordinatorCancellationBox()
+        let coordinator = ReadOperationCoordinator(
+            pool: pool,
+            client: client,
+            configuration: configuration,
+            wallClock: CancellingAccountReadWallClock(cancellation: cancellation)
+        )
+        let testAddress = try address()
+        let operation = Task {
+            try await coordinator.read(address: testAddress)
+        }
+        cancellation.set { operation.cancel() }
+
+        do {
+            _ = try await operation.value
+            XCTFail("Expected cancellation to win over success")
+        } catch is CancellationError {
+            // expected
+        }
+    }
+
     func testRetryRepeatsTheCompleteOperationOnTheNextFamily() async throws {
         let first = try family(id: "first")
         let second = try family(id: "second")
@@ -45,6 +79,33 @@ final class ReadOperationCoordinatorS1_04Tests: XCTestCase {
 
     private func address() throws -> Address {
         try Address("thor166aczv0jatlnyzz8zsczdzk9xxxgppfpu530jl", network: .mainnet)
+    }
+}
+
+private final class CoordinatorCancellationBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelOperation: (@Sendable () -> Void)?
+
+    func set(_ cancelOperation: @escaping @Sendable () -> Void) {
+        lock.lock()
+        self.cancelOperation = cancelOperation
+        lock.unlock()
+    }
+
+    func cancel() {
+        lock.lock()
+        let cancelOperation = self.cancelOperation
+        lock.unlock()
+        cancelOperation?()
+    }
+}
+
+private struct CancellingAccountReadWallClock: AccountReadWallClock {
+    let cancellation: CoordinatorCancellationBox
+
+    var now: Date {
+        cancellation.cancel()
+        return Date()
     }
 }
 

@@ -41,6 +41,7 @@ struct ReadOperationCoordinator: AccountReading {
         for attempt in 1...attempts {
             try Task.checkCancellation()
             let lease = try await pool.lease(excludingFamilyIds: excluded)
+            try Task.checkCancellation()
             excluded.insert(lease.family.id)
 
             let outcome = await runAttempt(
@@ -58,12 +59,15 @@ struct ReadOperationCoordinator: AccountReading {
                 guard await pool.isCurrent(lease) else {
                     throw ThorNodeReadError.staleLease
                 }
+                try Task.checkCancellation()
+                let observedAt = wallClock.now
+                try Task.checkCancellation()
                 return try AccountReadTransport(
                     acceptedHeight: lease.cosmosReadHeight,
                     account: account,
                     balances: balances,
                     familyId: lease.family.id,
-                    observedAt: wallClock.now
+                    observedAt: observedAt
                 )
             case let .failure(failure):
                 if case .cancelled = failure { throw CancellationError() }
@@ -99,6 +103,7 @@ struct ReadOperationCoordinator: AccountReading {
     ) async -> AttemptOutcome {
         await withTaskGroup(of: ChildOutcome.self) { group in
             group.addTask {
+                guard !Task.isCancelled else { return .account(.failure(.cancelled)) }
                 do {
                     return .account(.success(try await client.account(address: address, using: lease)))
                 } catch {
@@ -106,6 +111,7 @@ struct ReadOperationCoordinator: AccountReading {
                 }
             }
             group.addTask {
+                guard !Task.isCancelled else { return .balances(.failure(.cancelled)) }
                 do {
                     return .balances(.success(try await client.balances(address: address, using: lease)))
                 } catch {

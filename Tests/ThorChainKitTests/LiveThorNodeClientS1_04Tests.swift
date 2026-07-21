@@ -3,6 +3,33 @@ import XCTest
 @testable import ThorChainKit
 
 final class LiveThorNodeClientS1_04Tests: XCTestCase {
+    func testCancellationBeforeSendDoesNotStartTransport() async throws {
+        let gate = S1_04StartGate()
+        let transport = S1_04HTTPTransport(responses: [
+            .json(#"{"account":{"@type":"/cosmos.auth.v1beta1.BaseAccount","address":"thor1x","pub_key":null,"account_number":"1","sequence":"1"}}"#, height: "12345678")
+        ])
+        let testAddress = address()
+        let testLease = try endpointLease()
+        let operation = Task {
+            await gate.wait()
+            return try await LiveThorNodeClient(transport: transport).account(
+                address: testAddress,
+                using: testLease
+            )
+        }
+        operation.cancel()
+        await gate.open()
+
+        do {
+            _ = try await operation.value
+            XCTFail("Expected cancellation")
+        } catch is CancellationError {
+            // expected
+        }
+        let requests = await transport.requests
+        XCTAssertTrue(requests.isEmpty)
+    }
+
     func testAccountRequestPreservesBasePathAndRequiresExactHeightAndBaseAccount() async throws {
         let transport = S1_04HTTPTransport(responses: [
             .json(
@@ -213,6 +240,24 @@ final class LiveThorNodeClientS1_04Tests: XCTestCase {
             cometReferenceHeight: height + 1,
             poolGeneration: 0
         )
+    }
+}
+
+private actor S1_04StartGate {
+    private var isOpen = false
+    private var waiter: CheckedContinuation<Void, Never>?
+
+    func wait() async {
+        if isOpen { return }
+        await withCheckedContinuation { continuation in
+            waiter = continuation
+        }
+    }
+
+    func open() {
+        isOpen = true
+        waiter?.resume()
+        waiter = nil
     }
 }
 

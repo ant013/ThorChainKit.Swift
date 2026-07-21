@@ -119,6 +119,7 @@ struct LiveThorNodeClient: ThorNodeReading {
     }
 
     private func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        try Task.checkCancellation()
         do {
             return try await transport.data(for: request)
         } catch is CancellationError {

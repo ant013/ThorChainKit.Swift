@@ -79,6 +79,7 @@ allowlist="$repository_root/Tests/ThorChainKitLiveTests/Fixtures/S1-04-live-test
 [[ ! -e "$output_dir" ]] || fail "live evidence output already exists"
 mkdir -p "$output_dir"
 
+THORCHAIN_RUN_LIVE=1 \
 THORCHAIN_S1_04_EVIDENCE_PATH="$evidence" \
 xcodebuild \
     -scheme ThorChainKit \
