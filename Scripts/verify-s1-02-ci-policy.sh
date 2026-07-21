@@ -162,6 +162,7 @@ FORBIDDEN = (
     (re.compile(r"(?i)(?:^|\s)Scripts/"), "repository script execution"),
     (re.compile(r"(?i)\b(?:curl|wget|brew\s+install)\b"), "tool download"),
     (re.compile(r"(?i)\bfixture\b|\bsecret[- ]scan\w*\b"), "acceptance or scan execution"),
+    (re.compile(r"(?i)\b(?:fastlane|testflight|notarytool|altool)\b"), "deployment behavior"),
 )
 
 
@@ -284,6 +285,10 @@ def run_policy_canaries():
             changed_once(EXPECTED_WORKFLOW, "    timeout-minutes: 10\n", ""),
         ),
         (
+            "missing read-only permission",
+            changed_once(EXPECTED_WORKFLOW, "  contents: read\n", ""),
+        ),
+        (
             "mutable checkout",
             changed_once(
                 EXPECTED_WORKFLOW,
@@ -324,6 +329,22 @@ def run_policy_canaries():
             changed_once(EXPECTED_WORKFLOW, "            build\n", "            test\n"),
         ),
         (
+            "only-testing selection",
+            changed_once(
+                EXPECTED_WORKFLOW,
+                "            build\n",
+                "            -only-testing:ThorChainKitTests\n            build\n",
+            ),
+        ),
+        (
+            "xcresult bundle",
+            changed_once(
+                EXPECTED_WORKFLOW,
+                "            build\n",
+                "            -resultBundlePath output.xcresult\n            build\n",
+            ),
+        ),
+        (
             "repository verifier",
             changed_once(
                 EXPECTED_WORKFLOW,
@@ -337,6 +358,78 @@ def run_policy_canaries():
                 EXPECTED_WORKFLOW,
                 "          xcodebuild \\\n",
                 "          xcrun simctl list devices\n          xcodebuild \\\n",
+            ),
+        ),
+        (
+            "mutant execution",
+            changed_once(
+                EXPECTED_WORKFLOW,
+                "          xcodebuild \\\n",
+                "          mutant run\n          xcodebuild \\\n",
+            ),
+        ),
+        (
+            "fixture execution",
+            changed_once(
+                EXPECTED_WORKFLOW,
+                "          xcodebuild \\\n",
+                "          fixture verify\n          xcodebuild \\\n",
+            ),
+        ),
+        (
+            "Maestro execution",
+            changed_once(
+                EXPECTED_WORKFLOW,
+                "          xcodebuild \\\n",
+                "          maestro test .maestro\n          xcodebuild \\\n",
+            ),
+        ),
+        (
+            "ripgrep execution",
+            changed_once(
+                EXPECTED_WORKFLOW,
+                "          xcodebuild \\\n",
+                "          ripgrep --version\n          xcodebuild \\\n",
+            ),
+        ),
+        (
+            "simulator UDID selection",
+            changed_once(
+                EXPECTED_WORKFLOW,
+                "          xcodebuild \\\n",
+                "          echo UDID\n          xcodebuild \\\n",
+            ),
+        ),
+        (
+            "simulator runtime selection",
+            changed_once(
+                EXPECTED_WORKFLOW,
+                "          xcodebuild \\\n",
+                "          echo runtime\n          xcodebuild \\\n",
+            ),
+        ),
+        (
+            "simulator model selection",
+            changed_once(
+                EXPECTED_WORKFLOW,
+                "          xcodebuild \\\n",
+                "          echo 'iPhone 17 Pro'\n          xcodebuild \\\n",
+            ),
+        ),
+        (
+            "scan execution",
+            changed_once(
+                EXPECTED_WORKFLOW,
+                "          xcodebuild \\\n",
+                "          secret-scan\n          xcodebuild \\\n",
+            ),
+        ),
+        (
+            "deployment behavior",
+            changed_once(
+                EXPECTED_WORKFLOW,
+                "          xcodebuild \\\n",
+                "          fastlane pilot upload\n          xcodebuild \\\n",
             ),
         ),
         (
