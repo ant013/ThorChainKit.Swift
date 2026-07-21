@@ -208,7 +208,6 @@ if [[ "$fixtures_only" == false ]]; then
             -derivedDataPath "$derived_data" \
             -resultBundlePath "$result_bundle" \
             SWIFT_SUPPRESS_WARNINGS=NO \
-            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
             "${selection[@]}" \
             CODE_SIGNING_ALLOWED=NO test
         Scripts/verify-xcresult.sh "verify-s1-03-$label" "$result_bundle" "$allowlist"

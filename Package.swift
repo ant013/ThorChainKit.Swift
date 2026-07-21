@@ -28,12 +28,14 @@ let package = Package(
                     package: "HsCryptoKit.Swift"
                 ),
                 .product(name: "secp256k1", package: "secp256k1.swift"),
-            ]
+            ],
+            swiftSettings: [.unsafeFlags(["-warnings-as-errors"])]
         ),
         .testTarget(
             name: "ThorChainKitTests",
             dependencies: ["ThorChainKit"],
-            exclude: ["Fixtures"]
+            exclude: ["Fixtures"],
+            swiftSettings: [.unsafeFlags(["-warnings-as-errors"])]
         ),
     ]
 )

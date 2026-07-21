@@ -29,7 +29,6 @@ run_test() {
         -derivedDataPath "$temporary_root/$label-derived-data" \
         -resultBundlePath "$result_bundle" \
         SWIFT_SUPPRESS_WARNINGS=NO \
-        SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
         "-only-testing:$selector" \
         CODE_SIGNING_ALLOWED=NO test); then
         [[ "$expect_failure" == true ]] \
