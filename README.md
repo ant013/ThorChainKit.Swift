@@ -1,9 +1,9 @@
 # ThorChainKit.Swift
 
 `ThorChainKit` is a standalone Swift package for native THORChain support in
-Unstoppable Wallet iOS. The repository is currently a documentation-only seed:
-implementation starts with the approved Sprint 1 slices and follows the
-repository gates in [`AGENTS.md`](AGENTS.md).
+Unstoppable Wallet iOS. Sprint 1 slices S1-01 through S1-03 are implemented;
+S1-04 is the next active slice. Repository work follows the review and local
+verification gates in [`AGENTS.md`](AGENTS.md).
 
 ## Project map
 
@@ -19,9 +19,11 @@ repository gates in [`AGENTS.md`](AGENTS.md).
 
 ## Current boundary
 
-The seed intentionally contains no `Package.swift`, `Sources/`, `Tests/`,
-`iOS Example/`, or `.maestro/`. Those areas are introduced by their approved
-roadmap slices. Maestro acceptance is scoped only to the kit's future
+The repository now contains the iOS 13 Swift package, tests, and the iOS 14+
+SwiftUI `iOS Example` delivered by S1-01 through S1-03. All product tests,
+mutants, Maestro, simulator, and live-network acceptance run on the shared
+MacBook. GitHub Actions is manual build-only policy and remains disabled until
+separately activated by the operator. Maestro is scoped only to the kit's
 `iOS Example`; it is never applied to Unstoppable Wallet.
 
 Native RUNE read, send, history, THOR actions, assets, and provider reliability
