@@ -599,7 +599,7 @@ import sys
 path = Path(sys.argv[1])
 source = path.read_text()
 old = "    func testNetworkConstants() throws {\n"
-new = old + '        throw XCTSkip("S1-01 canary")\n'
+new = old + '        try XCTSkipIf(true, "S1-01 canary")\n'
 assert source.count(old) == 1
 path.write_text(source.replace(old, new))
 PY
