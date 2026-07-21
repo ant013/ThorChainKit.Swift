@@ -612,16 +612,29 @@ private final class LifecycleSpy: KitLifecycle {
     var events = [Event]()
     var onEvent: ((Event) -> Void)?
 
-    func start(sequence: UInt64) {
+    func start(sequence: UInt64) -> LifecycleCommandBarrier {
         record(.start(sequence))
+        return completedBarrier()
     }
 
-    func stop(sequence: UInt64) {
+    func stop(sequence: UInt64) -> LifecycleCommandBarrier {
         record(.stop(sequence))
+        return completedBarrier()
     }
 
-    func refresh(sequence: UInt64) {
+    func cancelStop() -> LifecycleCommandBarrier {
+        return completedBarrier()
+    }
+
+    func refresh(sequence: UInt64) -> LifecycleCommandBarrier {
         record(.refresh(sequence))
+        return completedBarrier()
+    }
+
+    private func completedBarrier() -> LifecycleCommandBarrier {
+        let barrier = LifecycleCommandBarrier()
+        barrier.signal()
+        return barrier
     }
 
     private func record(_ event: Event) {

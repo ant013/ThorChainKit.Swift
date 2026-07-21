@@ -7,11 +7,9 @@ public final class Kit {
     public let network: Network
 
     private let dependencies: KitDependencies
-    private let facadeDispatcher = DispatchQueue(label: "io.horizontalsystems.thorchain-kit.facade")
+    private let facadeDispatcher: DispatchQueue
     private let dispatcherKey = DispatchSpecificKey<UInt8>()
-    private let lastBlockHeightSubject = CurrentValueSubject<Int64?, Never>(nil)
-    private let syncStateSubject = CurrentValueSubject<SyncState, Never>(.idle(cached: false))
-    private let accountStateSubject = CurrentValueSubject<AccountState?, Never>(nil)
+    private let publishing: StatePublishing
     private var desiredRunning = false
     private var nextLifecycleSequence: UInt64 = 0
     private var pendingLifecycleCommands = [PendingLifecycleCommand]()
@@ -20,99 +18,64 @@ public final class Kit {
     init(
         address: Address,
         dependencies: KitDependencies,
-        persistenceNamespace: String
+        persistenceNamespace: String,
+        facadeDispatcher: DispatchQueue = DispatchQueue(label: "io.horizontalsystems.thorchain-kit.facade"),
+        publishing: StatePublishing = StatePublishing()
     ) {
         self.address = address
         network = address.network
         self.dependencies = dependencies
         self.persistenceNamespace = persistenceNamespace
+        self.facadeDispatcher = facadeDispatcher
+        self.publishing = publishing
         facadeDispatcher.setSpecific(key: dispatcherKey, value: 1)
     }
 
-    public var lastBlockHeight: Int64? {
-        withOwnedState { lastBlockHeightSubject.value }
-    }
-
-    public var syncState: SyncState {
-        withOwnedState { syncStateSubject.value }
-    }
-
-    public var accountState: AccountState? {
-        withOwnedState { accountStateSubject.value }
-    }
-
-    public var runeBalance: BigUInt {
-        accountState?.balances[.rune] ?? 0
-    }
-
-    public var accountExists: Bool {
-        accountState?.exists ?? false
-    }
+    public var lastBlockHeight: Int64? { withOwnedState { publishing.snapshot.lastBlockHeight } }
+    public var syncState: SyncState { withOwnedState { publishing.snapshot.syncState } }
+    public var accountState: AccountState? { withOwnedState { publishing.snapshot.accountState } }
+    public var runeBalance: BigUInt { withOwnedState { publishing.snapshot.runeBalance } }
+    public var accountExists: Bool { withOwnedState { publishing.snapshot.accountState?.exists ?? false } }
 
     public var lastBlockHeightPublisher: AnyPublisher<Int64?, Never> {
-        withOwnedState {
-            lastBlockHeightSubject
-                .receive(on: facadeDispatcher)
-                .eraseToAnyPublisher()
-        }
+        withOwnedState { publishing.lastBlockHeightSubject.eraseToAnyPublisher() }
     }
 
     public var syncStatePublisher: AnyPublisher<SyncState, Never> {
-        withOwnedState {
-            syncStateSubject
-                .receive(on: facadeDispatcher)
-                .eraseToAnyPublisher()
-        }
+        withOwnedState { publishing.syncStateSubject.eraseToAnyPublisher() }
     }
 
     public var accountStatePublisher: AnyPublisher<AccountState?, Never> {
-        withOwnedState {
-            accountStateSubject
-                .receive(on: facadeDispatcher)
-                .eraseToAnyPublisher()
-        }
+        withOwnedState { publishing.accountStateSubject.eraseToAnyPublisher() }
     }
 
-    public func start() {
-        submit(.start)
-    }
-
-    public func stop() {
-        submit(.stop)
-    }
-
-    public func refresh() {
-        submit(.refresh)
-    }
+    public func start() { submit(.start) }
+    public func stop() { submit(.stop) }
+    public func refresh() { submit(.refresh) }
 
     private var isOnFacadeDispatcher: Bool {
         DispatchQueue.getSpecific(key: dispatcherKey) == 1
     }
 
     private func withOwnedState<T>(_ body: () -> T) -> T {
-        if isOnFacadeDispatcher {
-            return body()
-        }
-        return facadeDispatcher.sync(execute: body)
+        isOnFacadeDispatcher ? body() : facadeDispatcher.sync(execute: body)
     }
 
     private func submit(_ kind: LifecycleCommandKind) {
         if isOnFacadeDispatcher {
             let shouldDrain = pendingLifecycleCommands.isEmpty
             enqueueLifecycleCommand(kind)
-            if shouldDrain && !pendingLifecycleCommands.isEmpty {
-                drainPendingLifecycleCommands()
-            }
+            if shouldDrain { _ = drainPendingLifecycleCommands() }
             return
         }
 
+        var barrier: LifecycleCommandBarrier?
         facadeDispatcher.sync {
             let shouldDrain = pendingLifecycleCommands.isEmpty
             enqueueLifecycleCommand(kind)
-            if shouldDrain && !pendingLifecycleCommands.isEmpty {
-                drainPendingLifecycleCommands()
-            }
+            if shouldDrain { barrier = drainPendingLifecycleCommands() }
         }
+        barrier?.wait()
     }
 
     private func enqueueLifecycleCommand(_ kind: LifecycleCommandKind) {
@@ -128,23 +91,25 @@ public final class Kit {
         }
 
         nextLifecycleSequence += 1
-        pendingLifecycleCommands.append(
-            PendingLifecycleCommand(sequence: nextLifecycleSequence, kind: kind)
-        )
+        pendingLifecycleCommands.append(PendingLifecycleCommand(
+            sequence: nextLifecycleSequence,
+            kind: kind
+        ))
     }
 
-    private func drainPendingLifecycleCommands() {
+    private func drainPendingLifecycleCommands() -> LifecycleCommandBarrier? {
+        var firstBarrier: LifecycleCommandBarrier?
         while let command = pendingLifecycleCommands.first {
+            let barrier: LifecycleCommandBarrier
             switch command.kind {
-            case .start:
-                dependencies.lifecycle.start(sequence: command.sequence)
-            case .stop:
-                dependencies.lifecycle.stop(sequence: command.sequence)
-            case .refresh:
-                dependencies.lifecycle.refresh(sequence: command.sequence)
+            case .start: barrier = dependencies.lifecycle.start(sequence: command.sequence)
+            case .stop: barrier = dependencies.lifecycle.stop(sequence: command.sequence)
+            case .refresh: barrier = dependencies.lifecycle.refresh(sequence: command.sequence)
             }
+            if firstBarrier == nil { firstBarrier = barrier }
             pendingLifecycleCommands.removeFirst()
         }
+        return firstBarrier
     }
 }
 

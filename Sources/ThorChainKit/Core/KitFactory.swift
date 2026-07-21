@@ -18,10 +18,55 @@ public extension Kit {
             .map { String(format: "%02x", $0) }
             .joined()
 
+        let facadeDispatcher = DispatchQueue(label: "io.horizontalsystems.thorchain-kit.facade")
+        let publishing = StatePublishing()
+        let storage = try GrdbAccountStateStorage(path: try databasePath(namespace: namespace))
+        let probe = LiveNodeProbe(configuration: endpoints)
+        let pool = EndpointPool(network: address.network, configuration: endpoints, probe: probe)
+        let reader = ReadOperationCoordinator(
+            pool: pool,
+            client: LiveThorNodeClient(
+                requestTimeout: endpoints.requestTimeout,
+                clientId: endpoints.clientId,
+                maximumBalancePageCount: endpoints.policy.maximumBalancePageCount
+            ),
+            configuration: endpoints
+        )
+        let key = StorageKey(persistenceNamespace: namespace)
+        let gate = LifecycleGate(
+            dispatcher: facadeDispatcher,
+            address: address,
+            key: key,
+            storage: storage,
+            publishing: publishing
+        )
+        let syncer = AccountSyncer(
+            address: address,
+            storageKey: key,
+            reader: reader,
+            storage: storage,
+            gate: gate
+        )
+        let bridge = LifecycleCommandBridge(syncer: syncer, gate: gate)
         return Kit(
             address: address,
-            dependencies: KitDependencies(lifecycle: NoOpLifecycle()),
-            persistenceNamespace: namespace
+            dependencies: KitDependencies(
+                lifecycle: bridge
+            ),
+            persistenceNamespace: namespace,
+            facadeDispatcher: facadeDispatcher,
+            publishing: publishing
         )
+    }
+
+    private static func databasePath(namespace: String) throws -> String {
+        let directory = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        ).appendingPathComponent("ThorChainKit", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory.appendingPathComponent("account-\(namespace).sqlite").path
     }
 }

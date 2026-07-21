@@ -17,6 +17,10 @@ let package = Package(
             url: "https://github.com/GigaBitcoin/secp256k1.swift.git",
             exact: "0.10.0"
         ),
+        .package(
+            url: "https://github.com/groue/GRDB.swift.git",
+            exact: "6.27.0"
+        ),
     ],
     targets: [
         .target(
@@ -28,6 +32,7 @@ let package = Package(
                     package: "HsCryptoKit.Swift"
                 ),
                 .product(name: "secp256k1", package: "secp256k1.swift"),
+                .product(name: "GRDB", package: "GRDB.swift"),
             ],
             swiftSettings: [.unsafeFlags(["-warnings-as-errors"])]
         ),
