@@ -159,10 +159,17 @@ for line in (root / 'Tests/ThorChainKitTests/Fixtures/S1-03-dependency-revisions
     revisions[identity] = (location, version, revision)
 lock = json.loads((root / 'Package.resolved').read_text())
 pins = {pin['identity']: pin for pin in lock['pins']}
-assert set(pins) == set(revisions)
+original_identities = set(revisions)
+assert set(pins) in (original_identities, original_identities | {'grdb.swift'})
 for identity, (location, version, revision) in revisions.items():
     assert pins[identity]['location'] == location
     assert pins[identity]['state'] == {'revision': revision, 'version': version}
+if 'grdb.swift' in pins:
+    assert pins['grdb.swift']['location'] == 'https://github.com/groue/GRDB.swift.git'
+    assert pins['grdb.swift']['state'] == {
+        'revision': 'dd6b98ce04eda39aa22f066cd421c24d7236ea8a',
+        'version': '6.29.1',
+    }
 
 tests = (root / 'Tests/ThorChainKitTests/AddressCodecTests.swift').read_text()
 for marker in ['testBIP173Vectors', 'testBitConversionPaddingKnownAnswers', 'testDeterministicFuzzReplay', 'testArbitraryUTF8NeverTraps', 'testPayloadBoundaryLengthsFailClosed']:

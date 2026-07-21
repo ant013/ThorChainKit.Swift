@@ -43,6 +43,7 @@ allowed=(
     Scripts/test-s1-05-dependency-floor.sh
     Scripts/test-s1-05-lifecycle-invariants.sh
     Scripts/verify-bigint-floor.sh
+    Scripts/verify-s1-03.sh
     Scripts/verify-s1-05.sh
     Tests/ThorChainKitTests/AccountStateStorageTests.swift
     Tests/ThorChainKitTests/AccountSyncerTests.swift
