@@ -349,12 +349,14 @@ Within one GRDB write transaction, `saveIfCurrent` first validates the record, t
 S1-05 owns the first product dependency addition for GRDB. The implementation
 must add `Package.swift` and `Package.resolved` to the approved change, use
 `https://github.com/groue/GRDB.swift.git` with the Horizontal Systems-compatible
-6.x requirement and lock GRDB at `6.27.0` (`639fa9168d36931b36a79e60dc06b7d23852f1f4`),
+6.x requirement and lock GRDB at `6.29.1` (`dd6b98ce04eda39aa22f066cd421c24d7236ea8a`),
 and add the `GRDB` product only to the library target that owns the storage.
 `Scripts/test-s1-05-dependency-floor.sh` copies the package to a temporary
 directory, resolves the committed manifest without rewriting the repository
-lock, asserts the exact locked GRDB version/revision, and builds the library
-with `IPHONEOS_DEPLOYMENT_TARGET=13.0` for a generic iOS Simulator. Any
+lock, asserts the exact locked GRDB version/revision, and runs one clean
+`xcodebuild -scheme ThorChainKit -destination 'generic/platform=iOS'` build
+from that copy with fresh DerivedData and package directories at the iOS-13
+deployment floor. Any
 resolution or iOS-13 incompatibility is a failed gate and returns this design
 for review; the deployment floor is never raised silently.
 
@@ -483,7 +485,7 @@ to frozen `AccountState`; mutant B changes the unique storage `load` and
 transform requires an exact anchor count of one per declared replacement and
 must fail compilation with a non-`Sendable` isolation diagnostic. Text grep,
 an unmodified baseline, or a transform that touches any other declaration does
-not satisfy the gate. The same script invokes the temporary GRDB 6.27.0/iOS-13
+not satisfy the gate. The same script invokes the temporary GRDB 6.29.1/iOS-13
 resolution floor and records its output.
 
 The Example fixture seam is explicit: `ExampleRuntime.makeFixtureKit()` builds
@@ -551,7 +553,7 @@ Before acceptance, S1-05 adds `Tests/ThorChainKitTests/Fixtures/S1-05-public-sym
 | ID | Resolution in revision 2 | Acceptance evidence |
 |---|---|---|
 | `S105-ARCH-001` | Gate owns the logical token; actor owns tasks; `sync_control` is the durable CAS authority; start/stop ordering is enumerated. | Generation-race, stop/restart, and stale-save tests. |
-| `S105-ARCH-002` | Package/lock files are in scope, GRDB is pinned to 6.27.0, and the temporary iOS-13 resolver/build gate is named. | `Scripts/test-s1-05-dependency-floor.sh` and exact lock assertions. |
+| `S105-ARCH-002` | Package/lock files are in scope, GRDB is pinned to 6.29.1, and the temporary iOS-13 resolver/build gate is named. | `Scripts/test-s1-05-dependency-floor.sh` and exact lock assertions. |
 | `S105-ARCH-003` | One `StateSnapshot` updates account, RUNE, sync state, and `lastBlockHeight == acceptedHeight` before any publisher. | `KitLifecycleTests.testLastBlockHeightMatchesAcceptedHeightBeforePublisherDelivery`. |
 | `S105-SEC-001` | `load` reads control/account/all balances in one GRDB read transaction. | Concurrent load/write old-or-new completeness test. |
 | `S105-SEC-002` | Stop closes admission and drains even if durable increment throws; facade maps failure to sanitized storage-unavailable state. | `testStopControlFailureFailsClosedAndDrainsOldGeneration`. |

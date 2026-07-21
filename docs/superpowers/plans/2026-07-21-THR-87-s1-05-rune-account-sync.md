@@ -80,8 +80,10 @@ are validated before save and storage repeats validation without mutation. The
 storage key accepts only the S1-01 namespace, stores canonical decimal strings
 bounded to 256 bits, rejects address/chain identity mismatches before
 publication, preserves stale denoms atomically, and has an idempotent v1
-migration. The manifest/lock pin GRDB 6.27.0 and the dependency-floor script
-proves resolution and iOS 13 compilation. No `BigUInt`-backed value crosses an
+migration. The manifest/lock pin GRDB 6.29.1 at revision
+`dd6b98ce04eda39aa22f066cd421c24d7236ea8a`, and the dependency-floor script
+proves clean resolution and generic iOS compilation at the iOS-13 floor. No
+`BigUInt`-backed value crosses an
 async or storage boundary.
 
 ### 3. Implement the actor-owned lifecycle and publication gate

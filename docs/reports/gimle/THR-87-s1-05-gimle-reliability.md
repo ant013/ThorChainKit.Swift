@@ -73,6 +73,25 @@ control-failure contract test. It closes `S105-ARCH-008` by defining
 `LifecycleGate.publishFailureIfCurrent(SyncFailure)` with generation, address,
 chain-ID, cached-state, and publisher-ordering checks. No product code changed.
 
+## Dependency-floor correction after implementation checkpoint
+
+The previously approved GRDB `6.27.0` pin was not reproducibly green under
+Xcode 26. The minimum fixed compatible 6.x pin is now `6.29.1` at revision
+`dd6b98ce04eda39aa22f066cd421c24d7236ea8a`.
+
+- Source: a fresh temporary ThorChainKit copy, with the manifest and lock both
+  reporting GRDB `6.29.1`.
+- Command: `xcodebuild -scheme ThorChainKit -destination
+  'generic/platform=iOS'` with fresh DerivedData, SourcePackages, and package
+  cache directories.
+- Result: `** BUILD SUCCEEDED **`; Xcode resolved GRDB `6.29.1` and compiled
+  the library for `arm64-apple-ios13.0`.
+- No repository dependency cache or external checkout was edited.
+
+This clean result is the dependency-floor acceptance evidence for the revised
+spec and plan; Gimle trust remains RED because the ThorChainKit project mapping
+is unavailable and current-tree fallback remains authoritative.
+
 ## Historical non-blocking backlog from discovery 1
 
 - `S105-ARCH-007` medium: clarify that Tron partial-save/partial-publication
