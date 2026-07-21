@@ -29,6 +29,8 @@ same authenticated simulator command and emit an xcresult bundle:
 
 ```bash
 : "${THORCHAIN_SIMULATOR_UDID:?exact simulator selection missing}"
+: "${DERIVED_DATA_PATH:?derived-data path missing}"
+: "${RESULT_BUNDLE_PATH:?xcresult path missing}"
 xcodebuild -scheme ThorChainKit \
   -destination "platform=iOS Simulator,id=${THORCHAIN_SIMULATOR_UDID}" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
@@ -41,6 +43,16 @@ Narrow runs add `-only-testing:ThorChainKitTests/DerivationTests` or
 package regression gate. Static manifest/dependency inspection remains
 allowed, but no host `swift build` or `swift test` result receives product
 acceptance credit.
+
+The named parser contract is `xcrun xcresulttool get test-results summary`
+and `xcrun xcresulttool get test-results tests`, both with `--path
+"$RESULT_BUNDLE_PATH" --compact`, consumed by the repository verifiers. They
+must assert the selected test names and count, `totalTestCount`,
+`passedTests`, `failedTests`, `skippedTests`, summary `result`, and every
+test-node `result == Passed`; mutant runs use the same parser and require the
+guarded result to be `Failed`. Missing or malformed JSON, an empty node list,
+an unexpected name, failure/error/skip, or a parser/tool exit failure is a
+hard verification failure.
 
 The bounded current-tree census closes every inherited package-gate path:
 

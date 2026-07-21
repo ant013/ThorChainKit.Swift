@@ -64,9 +64,12 @@ command, never host SwiftPM acceptance commands:
 
 ```bash
 : "${THORCHAIN_SIMULATOR_UDID:?exact simulator selection missing}"
+: "${DERIVED_DATA_PATH:?derived-data path missing}"
+: "${RESULT_BUNDLE_PATH:?xcresult path missing}"
 xcodebuild -scheme ThorChainKit \
   -destination "platform=iOS Simulator,id=${THORCHAIN_SIMULATOR_UDID}" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
+  -resultBundlePath "$RESULT_BUNDLE_PATH" \
   CODE_SIGNING_ALLOWED=NO test
 ```
 
@@ -77,6 +80,19 @@ is the package regression gate. `swift package dump-package` and dependency
 resolution inspection remain static checks, but `swift build` and `swift test`
 are not product acceptance commands. The inherited S1-01/S1-02 policy and
 S1-03 verifier must enforce this command boundary.
+
+Each narrow/full result is inspected by `xcrun xcresulttool get test-results
+summary --path "$RESULT_BUNDLE_PATH" --compact` and
+`xcrun xcresulttool get test-results tests --path "$RESULT_BUNDLE_PATH"
+--compact`. The repository verifiers `Scripts/verify-s1-01.sh`,
+`Scripts/verify-s1-02.sh`, and `Scripts/verify-s1-03.sh` parse those JSON
+documents and fail closed unless the selected test names and count match the
+allowlist, `totalTestCount`/`passedTests` match, `failedTests` and
+`skippedTests` are zero, every test node has result `Passed`, and the summary
+result is `Passed`. `Scripts/test-s1-01-mutants.sh` uses the same parser for
+each base/mutant result and requires the guarded mutant result to be
+`Failed`, so a missing, empty, skipped, or partially parsed xcresult never
+receives test credit.
 
 The exact-head operator proof reached the iOS package and exposed one direct
 implementation defect: `CosmosAccountAddressDeriver` is declared both at
@@ -551,9 +567,11 @@ following two steps appear exactly once, with no additional job or flow:
     Scripts/verify-s1-02-ci-policy.sh steady-state --ref "$(git rev-parse HEAD)"
     : "${THORCHAIN_SIMULATOR_UDID:?exact simulator selection missing}"
     DERIVED_DATA_PATH="${RUNNER_TEMP:-/tmp}/thorchain-s1-03-derived-data"
+    RESULT_BUNDLE_PATH="${RUNNER_TEMP:-/tmp}/thorchain-s1-03.xcresult"
     xcodebuild -scheme ThorChainKit \
       -destination "platform=iOS Simulator,id=${THORCHAIN_SIMULATOR_UDID}" \
       -derivedDataPath "$DERIVED_DATA_PATH" \
+      -resultBundlePath "$RESULT_BUNDLE_PATH" \
       CODE_SIGNING_ALLOWED=NO test
     Scripts/verify-s1-02.sh
     Scripts/verify-s1-03.sh --expected-base 7fd9663442a0e6dcd9c01c4ab04d35f3abd96fc4 --expected-head "$EXPECTED_HEAD_SHA"

@@ -149,12 +149,24 @@ The narrow-to-broad command order is:
 ```bash
 : "${THORCHAIN_SIMULATOR_UDID:?exact simulator selection missing}"
 DERIVED_DATA_PATH="${RUNNER_TEMP:-/tmp}/thorchain-s1-derived-data"
-xcodebuild -scheme ThorChainKit -destination "platform=iOS Simulator,id=${THORCHAIN_SIMULATOR_UDID}" -derivedDataPath "$DERIVED_DATA_PATH" CODE_SIGNING_ALLOWED=NO test
+RESULT_BUNDLE_PATH="${RUNNER_TEMP:-/tmp}/thorchain-s1.xcresult"
+xcodebuild -scheme ThorChainKit -destination "platform=iOS Simulator,id=${THORCHAIN_SIMULATOR_UDID}" -derivedDataPath "$DERIVED_DATA_PATH" -resultBundlePath "$RESULT_BUNDLE_PATH" CODE_SIGNING_ALLOWED=NO test
 Scripts/verify-s1-02.sh
 Scripts/verify-s1-02-ci-policy.sh steady-state --ref HEAD
 Scripts/test-run-maestro.sh
 THORCHAIN_SIMULATOR_UDID=<exact> Scripts/run-maestro.sh s1-02
 ```
+
+Every package result uses the same `-resultBundlePath` helper contract.
+`Scripts/verify-s1-01.sh`, `Scripts/verify-s1-02.sh`, and
+`Scripts/verify-s1-03.sh` invoke `xcrun xcresulttool get test-results summary
+--path "$RESULT_BUNDLE_PATH" --compact` and `xcrun xcresulttool get
+test-results tests --path "$RESULT_BUNDLE_PATH" --compact`. Their repository
+parsers assert selected names/count, `totalTestCount`, `passedTests`,
+`failedTests`, `skippedTests`, summary `result == Passed`, and every test-node
+`result == Passed`; `Scripts/test-s1-01-mutants.sh` requires the guarded
+mutant result to be `Failed`. Missing, malformed, empty, unexpected, failed,
+errored, or skipped results fail closed.
 
 The opt-in live command in the S1-02 spec runs locally only after deterministic gates pass. It validates two families and all three identity sources against the exact implementation head. Absence is `UNRUN`, an attempted unavailable/invalid run is nonzero failure, and its sanitized JSON cannot be replaced by fixture evidence.
 

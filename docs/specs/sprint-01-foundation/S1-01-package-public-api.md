@@ -145,6 +145,8 @@ gate shape, with `RESULT_BUNDLE_PATH` retained as an xcresult bundle:
 
 ```bash
 : "${THORCHAIN_SIMULATOR_UDID:?exact simulator selection missing}"
+: "${DERIVED_DATA_PATH:?derived-data path missing}"
+: "${RESULT_BUNDLE_PATH:?xcresult path missing}"
 xcodebuild -scheme ThorChainKit \
   -destination "platform=iOS Simulator,id=${THORCHAIN_SIMULATOR_UDID}" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
@@ -152,15 +154,19 @@ xcodebuild -scheme ThorChainKit \
   CODE_SIGNING_ALLOWED=NO test
 ```
 
-The verifier uses xcresult for test discovery, PublicApi execution, strict
-concurrency, skip-canary, and mutant assertions, and extracts the symbol
-graph from the iOS-target build. `swift package dump-package` and dependency
-lock inspection remain static checks. Host `swift build` and `swift test`
-are not product acceptance commands. The standalone `xcrun swift` scanner and
-fixture helpers do not resolve `Package.swift`, compile a ThorChainKit target,
-or receive product-test credit. A missing simulator selection, literal UDID,
-destination without the selected id, or host SwiftPM product gate fails
-closed.
+The verifier uses `xcrun xcresulttool get test-results summary --path
+"$RESULT_BUNDLE_PATH" --compact` and `xcrun xcresulttool get test-results
+tests --path "$RESULT_BUNDLE_PATH" --compact` for test discovery, PublicApi
+execution, strict concurrency, skip-canary, and mutant assertions. The named
+repository verifiers assert selected test names/count, `totalTestCount`,
+`passedTests`, `failedTests`, `skippedTests`, summary `result`, and every
+test-node `result == Passed`; mutant verification requires the guarded result
+to be `Failed`. `swift package dump-package` and dependency lock inspection
+remain static checks. Host `swift build` and `swift test` are not product
+acceptance commands. The standalone `xcrun swift` scanner and fixture helpers
+do not resolve `Package.swift`, compile a ThorChainKit target, or receive
+product-test credit. A missing simulator selection, literal UDID, destination
+without the selected id, or host SwiftPM product gate fails closed.
 
 `URLSession`, `Foundation`, `Combine`, and `CryptoKit` are system frameworks. S1-03 adds HsCryptoKit and the direct secp256k1 product for address derivation/point validation; HdWalletKit remains an existing host dependency. S1-05 adds GRDB together with persistence. This excludes speculative dependencies from the first slice.
 

@@ -159,3 +159,13 @@ The `xcrun swift` calls in `Scripts/run-maestro.sh`,
 `Scripts/verify-s1-02-live-evidence.swift` were verified as standalone scanner
 or evidence tooling. They do not resolve `Package.swift` or receive product
 test credit and are explicitly retained as non-product host tooling.
+
+The final platform correction uses one canonical package helper contract:
+authenticated `THORCHAIN_SIMULATOR_UDID`, `DERIVED_DATA_PATH`, and
+`RESULT_BUNDLE_PATH`, followed by `xcodebuild ... -resultBundlePath
+"$RESULT_BUNDLE_PATH" ... test`. `xcrun xcresulttool get test-results summary
+--path "$RESULT_BUNDLE_PATH" --compact` and `xcrun xcresulttool get
+test-results tests --path "$RESULT_BUNDLE_PATH" --compact` are parsed by the named
+S1-01/S1-02/S1-03 verifiers for selected names/count, total/passed/failed/
+skipped counts, summary `Passed`, and every test-node `Passed` result;
+mutant verification requires the guarded result to be `Failed`.

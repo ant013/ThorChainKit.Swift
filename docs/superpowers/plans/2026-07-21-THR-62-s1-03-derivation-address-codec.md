@@ -33,9 +33,12 @@ and S1-02, SwiftUI-only Example presentation, and the bounded Maestro flow.
 
   ```bash
   : "${THORCHAIN_SIMULATOR_UDID:?exact simulator selection missing}"
+  : "${DERIVED_DATA_PATH:?derived-data path missing}"
+  : "${RESULT_BUNDLE_PATH:?xcresult path missing}"
   xcodebuild -scheme ThorChainKit \
     -destination "platform=iOS Simulator,id=${THORCHAIN_SIMULATOR_UDID}" \
     -derivedDataPath "$DERIVED_DATA_PATH" \
+    -resultBundlePath "$RESULT_BUNDLE_PATH" \
     CODE_SIGNING_ALLOWED=NO test
   ```
 
@@ -49,6 +52,16 @@ and S1-02, SwiftUI-only Example presentation, and the bounded Maestro flow.
   `AccountAddressFactory.swift:3` and `CosmosAccountAddressDeriver.swift:17`.
   The engineer must retain one declaration in the approved file responsibility
   and add a verifier/mutant check that rejects duplicate ownership.
+
+- Every narrow/full package result is parsed by both `xcrun xcresulttool get
+  test-results summary --path "$RESULT_BUNDLE_PATH" --compact` and `xcrun
+  xcresulttool get test-results tests --path "$RESULT_BUNDLE_PATH" --compact`
+  through the named repository verifiers. They assert selected test names and
+  count, `totalTestCount`, `passedTests`, `failedTests`, `skippedTests`,
+  summary `result`, and every test-node `result == Passed`; mutant runs use
+  the same parser and require the guarded result to be `Failed`. Missing,
+  malformed, empty, unexpected, failed, errored, or skipped results fail
+  closed.
 
 ### Exhaustive inherited host-gate accounting
 
