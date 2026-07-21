@@ -15,21 +15,28 @@ final class GrdbAccountStateStorage: AccountStateStorage {
     }
 
     func load(key: StorageKey) async throws -> StorageRecord? {
-        try await pool.read { db in
+        try await pool.read { db -> StorageRecord? in
+            guard try Row.fetchOne(
+                db,
+                sql: "SELECT generation FROM sync_control WHERE storage_key = ?",
+                arguments: [key.rawValue]
+            ) != nil else {
+                return nil
+            }
             guard let state = try Row.fetchOne(db, sql: "SELECT * FROM account_state WHERE storage_key = ?", arguments: [key.rawValue]) else {
                 return nil
             }
             let rows = try Row.fetchAll(db, sql: "SELECT denom, amount_decimal_string FROM balances WHERE storage_key = ? ORDER BY denom", arguments: [key.rawValue])
             let balances = rows.map { StoredBalance(denom: $0["denom"], amountDecimalString: $0["amount_decimal_string"]) }
-            let accountNumber: Int64? = state["account_number"]
-            let sequence: Int64? = state["sequence"]
+            let accountNumber = try Self.optionalUInt64(state["account_number"])
+            let sequence = try Self.optionalUInt64(state["sequence"])
             return try StorageRecord(
                 storageKey: key,
                 address: state["address"],
                 networkChainId: state["network_chain_id"],
                 accountExists: state["account_exists"],
-                accountNumber: Self.optionalUInt64(accountNumber),
-                sequence: Self.optionalUInt64(sequence),
+                accountNumber: accountNumber,
+                sequence: sequence,
                 acceptedHeight: state["accepted_height"],
                 fetchedAt: state["fetched_at"],
                 providerFamilyId: state["provider_family_id"],
@@ -51,12 +58,13 @@ final class GrdbAccountStateStorage: AccountStateStorage {
     }
 
     func saveIfCurrent(_ record: StorageRecord, key: StorageKey, expectedGeneration: UInt64) async throws -> Bool {
+        try record.validate()
         guard record.storageKey == key else { throw StorageRecordError.invalid }
         var committed = false
         try pool.writeInTransaction { db in
             let current: Int64? = try Row.fetchOne(db, sql: "SELECT generation FROM sync_control WHERE storage_key = ?", arguments: [key.rawValue])?["generation"]
             guard current == Int64(exactly: expectedGeneration) else { return .rollback }
-            try db.execute(sql: "INSERT OR REPLACE INTO account_state (storage_key, network_chain_id, address, account_exists, account_number, sequence, accepted_height, fetched_at, provider_family_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", arguments: [key.rawValue, record.networkChainId, record.address, record.accountExists, record.accountNumber.map(Int64.init), record.sequence.map(Int64.init), record.acceptedHeight, record.fetchedAt, record.providerFamilyId])
+            try db.execute(sql: "INSERT OR REPLACE INTO account_state (storage_key, network_chain_id, address, account_exists, account_number, sequence, accepted_height, fetched_at, provider_family_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", arguments: [key.rawValue, record.networkChainId, record.address, record.accountExists, record.accountNumber.map(String.init), record.sequence.map(String.init), record.acceptedHeight, record.fetchedAt, record.providerFamilyId])
             try db.execute(sql: "DELETE FROM balances WHERE storage_key = ?", arguments: [key.rawValue])
             for balance in record.balances {
                 try db.execute(sql: "INSERT INTO balances (storage_key, denom, amount_decimal_string) VALUES (?, ?, ?)", arguments: [key.rawValue, balance.denom, balance.amountDecimalString])
@@ -75,7 +83,20 @@ final class GrdbAccountStateStorage: AccountStateStorage {
         }
     }
 
-    private static func optionalUInt64(_ value: Int64?) -> UInt64? {
-        value.flatMap { $0 >= 0 ? UInt64($0) : nil }
+    private static func optionalUInt64(_ value: DatabaseValue) throws -> UInt64? {
+        switch value.storage {
+        case .null:
+            return nil
+        case let .int64(value):
+            guard value >= 0 else { throw StorageRecordError.invalid }
+            return UInt64(value)
+        case let .string(value):
+            guard let result = UInt64(value), String(result) == value else {
+                throw StorageRecordError.invalid
+            }
+            return result
+        default:
+            throw StorageRecordError.invalid
+        }
     }
 }

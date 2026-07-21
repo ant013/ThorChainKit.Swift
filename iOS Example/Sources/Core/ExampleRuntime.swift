@@ -34,6 +34,7 @@ struct ExampleRuntime {
     let kit: Kit
     let network: Network
     let endpointConfiguration: EndpointConfiguration
+    private let fixtureTransport: ExampleAccountReadTransport
 
     init() throws {
         network = .mainnet
@@ -44,11 +45,64 @@ struct ExampleRuntime {
             cometBftURL: Configuration.cometBftURL
         )
         endpointConfiguration = try EndpointConfiguration(families: [family])
-        kit = try Kit.instance(
+        let transport = ExampleAccountReadTransport(
+            offline: UserDefaults.standard.bool(forKey: Configuration.fixtureOfflineKey),
+            pending: UserDefaults.standard.bool(forKey: Configuration.fixturePendingKey)
+        )
+        fixtureTransport = transport
+        kit = try Kit.fixture(
             address: address,
             walletId: Configuration.fixtureIdentifier,
-            endpoints: endpointConfiguration
+            endpoints: endpointConfiguration,
+            transport: transport,
+            databasePath: try Self.fixtureDatabasePath(),
+            observedAt: Date(timeIntervalSince1970: 1)
         )
+    }
+
+    func fixtureRequestCount() async -> Int { await fixtureTransport.requestCount }
+    func writeFixtureEvidence(
+        syncState: String,
+        acceptedHeight: Int64?,
+        lastBlockHeight: Int64?,
+        rune: String,
+        requestCount: Int
+    ) {
+        let evidence: [String: Any] = [
+            "syncState": syncState,
+            "acceptedHeight": acceptedHeight,
+            "lastBlockHeight": lastBlockHeight,
+            "rune": rune,
+            "requestCount": requestCount
+        ]
+        guard JSONSerialization.isValidJSONObject(evidence),
+              let data = try? JSONSerialization.data(withJSONObject: evidence)
+        else { return }
+        do {
+            let directory = try FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            ).appendingPathComponent("ThorChainKitExample", isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try data.write(to: directory.appendingPathComponent("lifecycle-evidence.json"), options: .atomic)
+        } catch {
+            return
+        }
+    }
+    func setFixtureOffline(_ value: Bool) async {
+        UserDefaults.standard.set(value, forKey: Configuration.fixtureOfflineKey)
+        await fixtureTransport.setOffline(value)
+    }
+    func fixturePending() async -> Bool { await fixtureTransport.isPending }
+    func setFixturePending(_ value: Bool) async {
+        UserDefaults.standard.set(value, forKey: Configuration.fixturePendingKey)
+        await fixtureTransport.setPending(value)
+    }
+    func releaseFixturePending() async {
+        UserDefaults.standard.removeObject(forKey: Configuration.fixturePendingKey)
+        await fixtureTransport.releasePending()
     }
 
     func endpointSnapshot(
@@ -84,7 +138,7 @@ struct ExampleRuntime {
         let projection = try await TestingAccountReadSession(
             address: address,
             configuration: configuration,
-            transport: ExampleAccountReadTransport()
+            transport: ExampleAccountReadTransport(offline: false, pending: false)
         ).read()
         return AccountReadFixtureResult(
             mode: "FIXTURE",
@@ -97,6 +151,17 @@ struct ExampleRuntime {
 
     private static func origin(_ value: TestingEndpointPolicySnapshot.Origin) -> String {
         "\(value.scheme)://\(value.host)\(value.port.map { ":\($0)" } ?? "")"
+    }
+
+    private static func fixtureDatabasePath() throws -> String {
+        let directory = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        ).appendingPathComponent("ThorChainKitExample", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory.appendingPathComponent("fixture-account.sqlite").path
     }
 }
 
@@ -111,8 +176,44 @@ private extension EndpointScenario {
     }
 }
 
-private actor ExampleAccountReadTransport: TestingHTTPTransport {
+actor ExampleAccountReadTransport: TestingHTTPTransport {
+    private(set) var requestCount = 0
+    private var offline = false
+    private var pending = false
+    private var pendingContinuations = [CheckedContinuation<Void, Never>]()
+
+    init(offline: Bool, pending: Bool) {
+        self.offline = offline
+        self.pending = pending
+        requestCount = UserDefaults.standard.integer(forKey: Configuration.fixtureRequestCountKey)
+    }
+
+    func setOffline(_ value: Bool) { offline = value }
+    var isPending: Bool { pending }
+    func setPending(_ value: Bool) {
+        pending = value
+        if !value { releasePending() }
+    }
+    func releasePending() {
+        pending = false
+        let continuations = pendingContinuations
+        pendingContinuations.removeAll()
+        continuations.forEach { $0.resume() }
+    }
+
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        requestCount += 1
+        UserDefaults.standard.set(requestCount, forKey: Configuration.fixtureRequestCountKey)
+        if pending {
+            await withTaskCancellationHandler(operation: {
+                await withCheckedContinuation { continuation in
+                    pendingContinuations.append(continuation)
+                }
+            }, onCancel: {
+                Task { await self.releasePending() }
+            })
+        }
+        guard !offline else { throw URLError(.notConnectedToInternet) }
         let path = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.path
         let body: String
         if path.hasSuffix("node_info") {
@@ -124,7 +225,7 @@ private actor ExampleAccountReadTransport: TestingHTTPTransport {
         } else if path.contains("/accounts/") {
             body = #"{"account":{"@type":"/cosmos.auth.v1beta1.BaseAccount","account_number":"1","sequence":"2"}}"#
         } else {
-            body = #"{"balances":[{"denom":"rune","amount":"340282366920938463463374607431768211456"}],"pagination":{"next_key":null}}"#
+            body = #"{"balances":[{"denom":"rune","amount":"7"}],"pagination":{"next_key":null}}"#
         }
         let headers = path.contains("/accounts/") || path.contains("/balances/")
             ? ["Grpc-Metadata-X-Cosmos-Block-Height": "12345678"]

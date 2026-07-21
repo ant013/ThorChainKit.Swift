@@ -19,7 +19,13 @@ simulator_udid=${THORCHAIN_SIMULATOR_UDID:-}
 
 default_lock_hash=$(shasum -a 256 "$repository_root/Package.resolved" | awk '{print $1}')
 mkdir -p "$package_copy"
-rsync -a --exclude .build --exclude .git "$repository_root/" "$package_copy/"
+cp "$repository_root/Package.swift" "$repository_root/Package.resolved" "$package_copy/"
+mkdir -p "$package_copy/Sources" "$package_copy/Tests"
+mkdir -p "$package_copy/Sources/ThorChainKit"
+mkdir -p "$package_copy/Tests/ThorChainKitTests" "$package_copy/Tests/ThorChainKitLiveTests"
+rsync -a "$repository_root/Sources/ThorChainKit/" "$package_copy/Sources/ThorChainKit/" >/dev/null
+rsync -a "$repository_root/Tests/ThorChainKitTests/" "$package_copy/Tests/ThorChainKitTests/" >/dev/null
+rsync -a "$repository_root/Tests/ThorChainKitLiveTests/" "$package_copy/Tests/ThorChainKitLiveTests/" >/dev/null
 
 python3 - "$package_copy/Package.swift" <<'PY'
 import pathlib
@@ -57,6 +63,11 @@ expected["bigint"] = (
     "5.0.0",
     "19f5e8a48be155e34abb98a2bcf4a343316f0343",
 )
+expected["grdb.swift"] = (
+    "https://github.com/groue/GRDB.swift.git",
+    "6.29.1",
+    "dd6b98ce04eda39aa22f066cd421c24d7236ea8a",
+)
 
 pins = {pin["identity"]: pin for pin in lock["pins"]}
 assert set(pins) == set(expected)
@@ -77,26 +88,46 @@ assert set(observed) == set(expected)
 for identity, (location, version, _) in expected.items():
     assert observed[identity] == (location, version)
 assert {node["identity"] for node in graph["dependencies"]} == {
-    "bigint", "hscryptokit.swift", "secp256k1.swift",
+    "bigint", "hscryptokit.swift", "secp256k1.swift", "grdb.swift",
 }
 PY
 
 derived_data="$temporary_root/derived-data"
 result_bundle="$temporary_root/bigint-floor.xcresult"
+xcodebuild_args=(
+    -scheme ThorChainKit
+    -destination "platform=iOS Simulator,id=${simulator_udid}"
+    -derivedDataPath "$derived_data"
+    -resultBundlePath "$result_bundle"
+    SWIFT_VERSION=5
+    SWIFT_STRICT_CONCURRENCY=complete
+    SWIFT_SUPPRESS_WARNINGS=NO
+    CODE_SIGNING_ALLOWED=NO
+    test
+)
+
+while IFS= read -r selector; do
+    xcodebuild_args+=("-only-testing:ThorChainKitTests/$selector")
+done < <(
+    cat \
+        "$repository_root/Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt" \
+        "$repository_root/Tests/ThorChainKitTests/Fixtures/S1-02-tests.txt" \
+        "$repository_root/Tests/ThorChainKitTests/Fixtures/S1-03-tests.txt" \
+        "$repository_root/Tests/ThorChainKitTests/Fixtures/S1-04-tests.txt" \
+        "$repository_root/Tests/ThorChainKitTests/Fixtures/S1-05-tests.txt"
+)
 (cd "$package_copy" && xcodebuild \
-    -scheme ThorChainKit \
-    -destination "platform=iOS Simulator,id=${simulator_udid}" \
-    -derivedDataPath "$derived_data" \
-    -resultBundlePath "$result_bundle" \
-    -only-testing:ThorChainKitTests \
-    SWIFT_VERSION=5 \
-    SWIFT_STRICT_CONCURRENCY=complete \
-    SWIFT_SUPPRESS_WARNINGS=NO \
-    CODE_SIGNING_ALLOWED=NO test)
+    "${xcodebuild_args[@]}")
 cat "$repository_root/Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt" \
     "$repository_root/Tests/ThorChainKitTests/Fixtures/S1-02-tests.txt" \
     "$repository_root/Tests/ThorChainKitTests/Fixtures/S1-03-tests.txt" \
+    "$repository_root/Tests/ThorChainKitTests/Fixtures/S1-04-tests.txt" \
+    "$repository_root/Tests/ThorChainKitTests/Fixtures/S1-05-tests.txt" \
     | sort -u > "$temporary_root/full-tests.txt"
+[[ $(wc -l < "$temporary_root/full-tests.txt") -eq 80 ]] || {
+    echo "FAIL verify-bigint-floor: expected 80 deterministic tests" >&2
+    exit 1
+}
 "$repository_root/Scripts/verify-xcresult.sh" verify-bigint-floor \
     "$result_bundle" "$temporary_root/full-tests.txt"
 

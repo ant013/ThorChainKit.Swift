@@ -12,6 +12,7 @@ final class StatePublishing {
     )
 
     func apply(_ snapshot: StateSnapshot) {
+        guard self.snapshot != snapshot else { return }
         self.snapshot = snapshot
         lastBlockHeightSubject.send(snapshot.lastBlockHeight)
         syncStateSubject.send(snapshot.syncState)

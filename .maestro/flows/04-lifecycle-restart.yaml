@@ -1,0 +1,96 @@
+appId: org.horizontalsystems.thorchainkit.example
+---
+- launchApp
+- tapOn:
+    id: lifecycle-open
+- tapOn:
+    id: lifecycle-start
+- tapOn:
+    id: lifecycle-start
+- extendedWaitUntil:
+    visible: "synced"
+    timeout: 10000
+- assertVisible: "Requests: 5"
+- assertVisible: "RUNE: 7"
+- assertVisible: "Accepted Height: 12345678"
+- assertVisible: "Last Block Height: 12345678"
+- tapOn:
+    id: fixture-pending
+- extendedWaitUntil:
+    visible: "Pending: true"
+    timeout: 5000
+- tapOn:
+    id: lifecycle-refresh
+- tapOn:
+    id: lifecycle-stop
+- extendedWaitUntil:
+    visible: "idle(cached: true)"
+    timeout: 10000
+- assertVisible: "Requests: 7"
+- stopApp
+- launchApp
+- tapOn:
+    id: lifecycle-open
+- tapOn:
+    id: lifecycle-start
+- extendedWaitUntil:
+    visible: "syncing(previous: present)"
+    timeout: 10000
+- assertVisible: "Requests: 10"
+- assertVisible: "RUNE: 7"
+- scrollUntilVisible:
+    element:
+      id: fixture-accepted-height
+    direction: DOWN
+    timeout: 10000
+- extendedWaitUntil:
+    visible: "Accepted Height: 12345678"
+    timeout: 10000
+- assertVisible: "Last Block Height: 12345678"
+- tapOn:
+    id: fixture-release-pending
+- extendedWaitUntil:
+    visible: "synced"
+    timeout: 10000
+- assertVisible: "Requests: 10"
+- assertVisible: "RUNE: 7"
+- tapOn:
+    id: fixture-offline
+- extendedWaitUntil:
+    visible: "Offline: true"
+    timeout: 5000
+- tapOn:
+    id: lifecycle-stop
+- stopApp
+- launchApp
+- tapOn:
+    id: lifecycle-open
+- tapOn:
+    id: lifecycle-start
+- assertVisible: "syncing(previous: present)"
+- assertVisible: "notSynced"
+- assertVisible: "RUNE: 7"
+- scrollUntilVisible:
+    element:
+      id: fixture-accepted-height
+    direction: DOWN
+    timeout: 10000
+- extendedWaitUntil:
+    visible: "Accepted Height: 12345678"
+    timeout: 10000
+- assertVisible: "Last Block Height: 12345678"
+- assertVisible: "Requests: 18"
+- tapOn:
+    id: fixture-offline
+- extendedWaitUntil:
+    visible: "Offline: false"
+    timeout: 5000
+- tapOn:
+    id: lifecycle-refresh
+- extendedWaitUntil:
+    visible: "synced"
+    timeout: 10000
+- assertVisible: "Requests: 23"
+- assertVisible: "RUNE: 7"
+- assertVisible: "Accepted Height: 12345678"
+- assertVisible: "Last Block Height: 12345678"

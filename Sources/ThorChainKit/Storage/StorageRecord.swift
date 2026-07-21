@@ -47,7 +47,7 @@ struct StorageRecord: Equatable, Sendable {
         else { throw StorageRecordError.invalid }
 
         for balance in balances {
-            guard balance.denom == "rune" || !balance.denom.isEmpty,
+            guard (try? Denom(rawValue: balance.denom)) != nil,
                   let amount = BigUInt(balance.amountDecimalString, radix: 10),
                   amount < (BigUInt(1) << 256),
                   String(amount) == balance.amountDecimalString
@@ -95,6 +95,21 @@ struct StorageRecord: Equatable, Sendable {
             fetchedAt: fetchedAt,
             providerFamilyId: providerFamilyId,
             exists: accountExists
+        )
+    }
+
+    func validate() throws {
+        _ = try StorageRecord(
+            storageKey: storageKey,
+            address: address,
+            networkChainId: networkChainId,
+            accountExists: accountExists,
+            accountNumber: accountNumber,
+            sequence: sequence,
+            acceptedHeight: acceptedHeight,
+            fetchedAt: fetchedAt,
+            providerFamilyId: providerFamilyId,
+            balances: balances
         )
     }
 }

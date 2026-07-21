@@ -34,11 +34,20 @@ final class LifecycleCommandBridge: KitLifecycle {
 
     func stop(sequence: UInt64) -> LifecycleCommandBarrier {
         _ = sequence
+        tail?.cancel()
+        let cancellation = Task { [syncer] in await syncer.cancelRefresh() }
         switch gate.close() {
         case let .success(generation):
-            return enqueue { [syncer] in await syncer.stop(generation: generation) }
+            return enqueue { [syncer] in
+                await cancellation.value
+                await syncer.stop(generation: generation)
+            }
         case .failure:
-            return enqueue { [syncer] in await syncer.cancelStop() }
+            return enqueue { [syncer, gate] in
+                await cancellation.value
+                await syncer.cancelStop()
+                gate.publishStopFailureIfCurrent()
+            }
         }
     }
 
@@ -62,6 +71,10 @@ final class LifecycleCommandBridge: KitLifecycle {
         let previous = tail
         tail = Task {
             _ = await previous?.value
+            guard !Task.isCancelled else {
+                barrier.signal()
+                return
+            }
             await operation()
             barrier.signal()
         }

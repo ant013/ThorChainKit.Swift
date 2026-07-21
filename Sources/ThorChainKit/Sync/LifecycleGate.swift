@@ -6,8 +6,10 @@ import Foundation
     private let key: StorageKey
     private let storage: any AccountStateStorage
     private let publishing: StatePublishing
+    private let dispatcherKey = DispatchSpecificKey<UInt8>()
     private var generation: UInt64?
     private var closed = true
+    private var pendingStopFailureGeneration: UInt64?
 
     init(
         dispatcher: DispatchQueue,
@@ -21,42 +23,56 @@ import Foundation
         self.key = key
         self.storage = storage
         self.publishing = publishing
+        dispatcher.setSpecific(key: dispatcherKey, value: 1)
     }
 
     func start() -> UInt64? {
-        do {
-            let next = try storage.advanceGeneration(key: key)
-            generation = next
-            closed = false
-            return next
-        } catch {
-            publish(.notSynced(.storageUnavailable, cached: publishing.snapshot.accountState))
-            return nil
+        withDispatcher {
+            do {
+                let next = try storage.advanceGeneration(key: key)
+                generation = next
+                closed = false
+                return next
+            } catch {
+                publish(.notSynced(.storageUnavailable, cached: publishing.snapshot.accountState))
+                return nil
+            }
         }
     }
 
     func close() -> Result<UInt64, Error> {
-        closed = true
-        do {
-            let next = try storage.advanceGeneration(key: key)
-            generation = next
-            return .success(next)
-        } catch {
-            publish(.notSynced(.storageUnavailable, cached: publishing.snapshot.accountState))
-            return .failure(error)
+        withDispatcher {
+            guard let oldGeneration = generation else {
+                return .failure(StorageRecordError.invalid)
+            }
+            closed = true
+            pendingStopFailureGeneration = oldGeneration
+            do {
+                let next = try storage.advanceGeneration(key: key)
+                generation = next
+                pendingStopFailureGeneration = nil
+                publish(.idle(cached: publishing.snapshot.accountState != nil))
+                return .success(oldGeneration)
+            } catch {
+                return .failure(error)
+            }
         }
     }
 
     func publishSyncingIfCurrent(generation: UInt64) {
-        dispatcher.sync { [self] in
+        withDispatcher { [self] in
             guard !closed, self.generation == generation else { return }
             publish(.syncing(previous: publishing.snapshot.accountState))
         }
     }
 
     func acceptCachedIfCurrent(generation: UInt64, record: StorageRecord) {
-        dispatcher.sync { [self] in
-            guard isCurrent(generation, record: record) else { return }
+        withDispatcher { [self] in
+            guard !closed, self.generation == generation else { return }
+            guard isIdentityCurrent(record) else {
+                publish(.notSynced(.storageUnavailable, cached: nil))
+                return
+            }
             do {
                 let account = try record.accountState()
                 publishing.apply(StateSnapshot(
@@ -71,7 +87,7 @@ import Foundation
     }
 
     func acceptIfCurrent(generation: UInt64, record: StorageRecord) {
-        dispatcher.sync { [self] in
+        withDispatcher { [self] in
             guard isCurrent(generation, record: record) else { return }
             do {
                 let account = try record.accountState()
@@ -87,7 +103,7 @@ import Foundation
     }
 
     func publishFailureIfCurrent(_ failure: SyncFailure) {
-        dispatcher.sync { [self] in
+        withDispatcher { [self] in
             guard !closed,
                   self.generation == failure.generation,
                   failure.address == address.raw,
@@ -97,10 +113,33 @@ import Foundation
         }
     }
 
+    func publishStopFailureIfCurrent() {
+        withDispatcher { [self] in
+            guard let generation = pendingStopFailureGeneration,
+                  closed,
+                  self.generation == generation
+            else { return }
+            pendingStopFailureGeneration = nil
+            publish(.notSynced(.storageUnavailable, cached: publishing.snapshot.accountState))
+        }
+    }
+
+    private func withDispatcher<T>(_ body: () -> T) -> T {
+        if DispatchQueue.getSpecific(key: dispatcherKey) == 1 {
+            return body()
+        }
+        return dispatcher.sync(execute: body)
+    }
+
     private func isCurrent(_ generation: UInt64, record: StorageRecord) -> Bool {
         !closed
             && self.generation == generation
             && record.storageKey == key
+            && isIdentityCurrent(record)
+    }
+
+    private func isIdentityCurrent(_ record: StorageRecord) -> Bool {
+        record.storageKey == key
             && record.address == address.raw
             && record.networkChainId == address.network.expectedChainId
     }

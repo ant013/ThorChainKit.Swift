@@ -4,11 +4,13 @@ struct DiagnosticsView: View {
     @ObservedObject var model: DiagnosticsViewModel
     @StateObject private var endpoints: EndpointsViewModel
     @StateObject private var accountRead: AccountReadViewModel
+    @StateObject private var lifecycle: LifecycleViewModel
 
     init(model: DiagnosticsViewModel) {
         self.model = model
         _endpoints = StateObject(wrappedValue: EndpointsViewModel(runtime: model.runtime))
         _accountRead = StateObject(wrappedValue: AccountReadViewModel(runtime: model.runtime))
+        _lifecycle = StateObject(wrappedValue: LifecycleViewModel(runtime: model.runtime))
     }
 
     var body: some View {
@@ -48,6 +50,10 @@ struct DiagnosticsView: View {
                 NavigationLink(destination: AccountReadView(model: accountRead)) {
                     Text("Account Read")
                         .accessibilityIdentifier("account-read-open")
+                }
+                NavigationLink(destination: LifecycleView(model: lifecycle)) {
+                    Text("Lifecycle")
+                        .accessibilityIdentifier("lifecycle-open")
                 }
             }
         }
