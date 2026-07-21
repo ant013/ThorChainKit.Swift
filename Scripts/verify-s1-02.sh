@@ -28,6 +28,7 @@ run_simulator_tests() {
         -destination "platform=iOS Simulator,id=${simulator_udid}" \
         -derivedDataPath "$derived_data" \
         -resultBundlePath "$result_bundle" \
+        SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
         "${selection[@]}" \
         CODE_SIGNING_ALLOWED=NO test \
         || fail "$label" "simulator test command failed"
@@ -244,6 +245,7 @@ derived_data=$(mktemp -d)
 xcodebuild -scheme ThorChainKit \
     -destination "platform=iOS Simulator,id=${simulator_udid}" \
     -derivedDataPath "$derived_data" \
+    SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
     CODE_SIGNING_ALLOWED=NO build >/dev/null \
     || fail "S1-02 public symbols" "iOS Simulator package build failed"
 xcrun swift-symbolgraph-extract \
@@ -305,6 +307,7 @@ xcodebuild -scheme ThorChainKit \
     -derivedDataPath "$strict_data" \
     SWIFT_VERSION=5 \
     SWIFT_STRICT_CONCURRENCY=complete \
+    SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
     CODE_SIGNING_ALLOWED=NO build >/dev/null \
     || fail "S1-02 build" "strict-concurrency simulator build failed"
 echo "PASS verify-s1-02-build-and-tests"

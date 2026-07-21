@@ -12,6 +12,7 @@ copy_contract() {
     local destination=$1
     mkdir -p "$destination/Sources/ThorChainKit/Crypto" \
         "$destination/Sources/ThorChainKit/Address" \
+        "$destination/Sources/ThorChainKit/Models" \
         "$destination/Tests/ThorChainKitTests/Fixtures" \
         "$destination/iOS Example/Sources/Presentation" \
         "$destination/iOS Example/Sources/Views" \
@@ -19,8 +20,10 @@ copy_contract() {
         "$destination/.maestro/flows" \
         "$destination/Scripts"
     cp "$root/Scripts/verify-s1-03.sh" "$destination/Scripts/"
-    cp "$root/Tests/ThorChainKitTests/Fixtures/AddressVectors.json" "$destination/Tests/ThorChainKitTests/Fixtures/"
-    cp "$root/Tests/ThorChainKitTests/Fixtures/S1-03-fuzz-seed.txt" "$destination/Tests/ThorChainKitTests/Fixtures/"
+    cp "$root/Package.swift" "$root/Package.resolved" "$destination/"
+    cp "$root/Tests/ThorChainKitTests/Fixtures/AddressVectors.json" \
+        "$root/Tests/ThorChainKitTests/Fixtures/S1-03-"*.txt \
+        "$destination/Tests/ThorChainKitTests/Fixtures/"
     cp "$root/Tests/ThorChainKitTests/AddressCodecTests.swift" "$destination/Tests/ThorChainKitTests/"
     cp "$root/Tests/ThorChainKitTests/DerivationTests.swift" "$destination/Tests/ThorChainKitTests/"
     cp "$root/Sources/ThorChainKit/Crypto/DerivationPath.swift" "$destination/Sources/ThorChainKit/Crypto/"
@@ -29,6 +32,9 @@ copy_contract() {
     cp "$root/Sources/ThorChainKit/Crypto/CosmosAccountAddressDeriver.swift" "$destination/Sources/ThorChainKit/Crypto/"
     cp "$root/Sources/ThorChainKit/Crypto/Secp256k1PublicKeyValidator.swift" "$destination/Sources/ThorChainKit/Crypto/"
     cp "$root/Sources/ThorChainKit/Address/AddressCodec.swift" "$destination/Sources/ThorChainKit/Address/"
+    cp "$root/Sources/ThorChainKit/Address/BitConversion.swift" "$destination/Sources/ThorChainKit/Address/"
+    cp "$root/Sources/ThorChainKit/Address/Bech32Codec.swift" "$destination/Sources/ThorChainKit/Address/"
+    cp "$root/Sources/ThorChainKit/Models/Address.swift" "$destination/Sources/ThorChainKit/Models/"
     cp "$root/iOS Example/Sources/ThorChainExampleApp.swift" "$destination/iOS Example/Sources/"
     cp "$root/iOS Example/Sources/Presentation/AddressViewModel.swift" "$destination/iOS Example/Sources/Presentation/"
     cp "$root/iOS Example/Sources/Views/DiagnosticsView.swift" "$destination/iOS Example/Sources/Views/"

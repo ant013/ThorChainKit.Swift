@@ -119,8 +119,26 @@ source_paths = [
     root / 'Sources/ThorChainKit/Crypto/CosmosAccountAddressDeriver.swift',
     root / 'Sources/ThorChainKit/Crypto/Secp256k1PublicKeyValidator.swift',
     root / 'Sources/ThorChainKit/Address/AddressCodec.swift',
+    root / 'Sources/ThorChainKit/Address/BitConversion.swift',
+    root / 'Sources/ThorChainKit/Address/Bech32Codec.swift',
+    root / 'Sources/ThorChainKit/Models/Address.swift',
 ]
 source = '\n'.join(path.read_text() for path in source_paths)
+capability_lines = (root / 'Tests/ThorChainKitTests/Fixtures/S1-03-capability-closure.txt').read_text().splitlines()
+capabilities = dict(line.split('=', 1) for line in capability_lines if line and not line.startswith('#'))
+assert capabilities['root'] == 'AccountAddressFactory.address'
+assert capabilities['boundary'] == 'compressedPublicKey-only'
+required_markers = {
+    'Secp256k1PublicKeyValidator.validate': 'validate(',
+    'AccountAddressHasher.hash160': 'hash160(',
+    'AddressCodec.encode': 'func encode(payload:',
+    'Address.init': 'init(_ raw:',
+    'BitConversion.convert': 'static func convert(',
+    'Bech32Codec.encode': 'static func encode(hrp:',
+}
+assert set(capabilities['allowed'].split(',')) == set(required_markers)
+assert all(marker in source for marker in required_markers.values())
+assert all(forbidden not in source for forbidden in capabilities['forbidden'].split(','))
 assert source.count('struct CosmosAccountAddressDeriver: AccountAddressDeriving, Sendable') == 1
 assert 'struct CosmosAccountAddressDeriver: AccountAddressDeriving, Sendable' in (root / 'Sources/ThorChainKit/Crypto/CosmosAccountAddressDeriver.swift').read_text()
 assert 'import HsCryptoKit' in source
@@ -133,11 +151,37 @@ package = (root / 'Package.swift').read_text()
 assert 'name: "HsCryptoKit"' in package and 'package: "HsCryptoKit.Swift"' in package
 assert 'condition: .when(platforms:' not in package[package.index('name: "HsCryptoKit"'):package.index('name: "secp256k1"')]
 
+revisions = {}
+for line in (root / 'Tests/ThorChainKitTests/Fixtures/S1-03-dependency-revisions.txt').read_text().splitlines():
+    if not line or line.startswith('#'):
+        continue
+    identity, location, version, revision = line.split('|')
+    revisions[identity] = (location, version, revision)
+lock = json.loads((root / 'Package.resolved').read_text())
+pins = {pin['identity']: pin for pin in lock['pins']}
+assert set(pins) == set(revisions)
+for identity, (location, version, revision) in revisions.items():
+    assert pins[identity]['location'] == location
+    assert pins[identity]['state'] == {'revision': revision, 'version': version}
+
 tests = (root / 'Tests/ThorChainKitTests/AddressCodecTests.swift').read_text()
 for marker in ['testBIP173Vectors', 'testBitConversionPaddingKnownAnswers', 'testDeterministicFuzzReplay', 'testArbitraryUTF8NeverTraps', 'testPayloadBoundaryLengthsFailClosed']:
     assert marker in tests
 derivation_tests = (root / 'Tests/ThorChainKitTests/DerivationTests.swift').read_text()
 assert '٠' in derivation_tests
+public_symbols = (root / 'Tests/ThorChainKitTests/Fixtures/S1-03-public-symbols.txt').read_text().splitlines()
+public_markers = {
+    'AccountAddressError': 'enum AccountAddressError',
+    'AccountAddressFactory.address(compressedPublicKey:network:)': 'public static func address(',
+    'AddressCodec': 'public struct AddressCodec',
+    'AddressCodec.decode(_:network:)': 'func decode(_ string:',
+    'AddressCodec.encode(payload:network:)': 'func encode(payload:',
+    'DerivationPath': 'struct DerivationPath',
+    'DerivationPath.defaultAccount': 'static let defaultAccount',
+    'DerivationPathError': 'enum DerivationPathError',
+}
+assert set(public_symbols) == set(public_markers)
+assert all(marker in source for marker in public_markers.values())
 discovery = (root / 'Tests/ThorChainKitTests/Fixtures/S1-03-tests.txt').read_text()
 for marker in [
     'AddressCodecTests/testBIP173Vectors',
@@ -163,6 +207,7 @@ if [[ "$fixtures_only" == false ]]; then
             -destination "platform=iOS Simulator,id=${simulator_udid}" \
             -derivedDataPath "$derived_data" \
             -resultBundlePath "$result_bundle" \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
             "${selection[@]}" \
             CODE_SIGNING_ALLOWED=NO test
         Scripts/verify-xcresult.sh "verify-s1-03-$label" "$result_bundle" "$allowlist"

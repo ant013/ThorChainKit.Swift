@@ -37,19 +37,47 @@ PY
 rm -f "$package_copy/Package.resolved"
 swift package --package-path "$package_copy" resolve
 
-python3 - "$package_copy/Package.resolved" <<'PY'
+python3 - "$package_copy/Package.resolved" "$package_copy" "$repository_root/Tests/ThorChainKitTests/Fixtures/S1-03-dependency-revisions.txt" <<'PY'
 import json
+import subprocess
 import sys
+from pathlib import Path
 
 with open(sys.argv[1], encoding="utf-8") as handle:
     lock = json.load(handle)
 
-pins = lock["pins"]
-pin = next(pin for pin in pins if pin["identity"] == "bigint")
-assert pin["identity"] == "bigint"
-assert pin["state"] == {
-    "revision": "19f5e8a48be155e34abb98a2bcf4a343316f0343",
-    "version": "5.0.0",
+expected = {}
+for line in Path(sys.argv[3]).read_text().splitlines():
+    if not line or line.startswith("#"):
+        continue
+    identity, location, version, revision = line.split("|")
+    expected[identity] = (location, version, revision)
+expected["bigint"] = (
+    expected["bigint"][0],
+    "5.0.0",
+    "19f5e8a48be155e34abb98a2bcf4a343316f0343",
+)
+
+pins = {pin["identity"]: pin for pin in lock["pins"]}
+assert set(pins) == set(expected)
+for identity, (location, version, revision) in expected.items():
+    assert pins[identity]["location"] == location
+    assert pins[identity]["state"] == {"revision": revision, "version": version}
+
+graph = json.loads(subprocess.check_output([
+    "swift", "package", "--package-path", sys.argv[2], "show-dependencies", "--format", "json",
+], text=True))
+observed = {}
+def visit(nodes):
+    for node in nodes:
+        observed[node["identity"]] = (node["url"], node["version"])
+        visit(node.get("dependencies", []))
+visit(graph["dependencies"])
+assert set(observed) == set(expected)
+for identity, (location, version, _) in expected.items():
+    assert observed[identity] == (location, version)
+assert {node["identity"] for node in graph["dependencies"]} == {
+    "bigint", "hscryptokit.swift", "secp256k1.swift",
 }
 PY
 
@@ -62,6 +90,7 @@ result_bundle="$temporary_root/bigint-floor.xcresult"
     -resultBundlePath "$result_bundle" \
     SWIFT_VERSION=5 \
     SWIFT_STRICT_CONCURRENCY=complete \
+    SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
     CODE_SIGNING_ALLOWED=NO test)
 cat "$repository_root/Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt" \
     "$repository_root/Tests/ThorChainKitTests/Fixtures/S1-02-tests.txt" \

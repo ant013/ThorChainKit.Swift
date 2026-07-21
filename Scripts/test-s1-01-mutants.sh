@@ -16,7 +16,11 @@ namespace_test="ThorChainKitTests.PublicApiTests/testPersistenceNamespaceIsDeter
 
 run_test() {
     local label=$1 package_path=$2 test_name=$3 expect_failure=${4:-false}
-    local selector="${test_name/./\/}"
+    local selector="${test_name%%.*}/${test_name#*.}"
+    [[ "$selector" != *'\\'* && "$selector" == */* ]] || {
+        echo "FAIL $label: invalid simulator test selector: $selector" >&2
+        exit 1
+    }
     local result_bundle="$temporary_root/$label.xcresult"
     local allowlist="$temporary_root/$label-tests.txt"
     printf '%s\n' "$test_name" > "$allowlist"
@@ -24,6 +28,7 @@ run_test() {
         -destination "platform=iOS Simulator,id=${simulator_udid}" \
         -derivedDataPath "$temporary_root/$label-derived-data" \
         -resultBundlePath "$result_bundle" \
+        SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
         "-only-testing:$selector" \
         CODE_SIGNING_ALLOWED=NO test); then
         [[ "$expect_failure" == true ]] \

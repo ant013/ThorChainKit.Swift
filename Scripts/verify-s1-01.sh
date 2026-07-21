@@ -26,6 +26,7 @@ run_simulator_tests() {
         -destination "platform=iOS Simulator,id=${simulator_udid}" \
         -derivedDataPath "$derived_data" \
         -resultBundlePath "$result_bundle" \
+        SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
         "${selection[@]}" \
         CODE_SIGNING_ALLOWED=NO test \
         || fail "verify-s1-01-$label" "simulator test command failed"
@@ -343,8 +344,11 @@ import re
 import sys
 
 source_root = Path(sys.argv[1])
-crypto_source = "\n".join(path.read_text() for path in (source_root / "Crypto").rglob("*.swift"))
-assert re.search(r"\b(seed|privateKey)\b|@unchecked\s+Sendable", crypto_source) is None
+source = "\n".join(path.read_text() for path in source_root.rglob("*.swift"))
+allowed_unchecked = "private final class CancellationLatch: @unchecked Sendable"
+assert source.count(allowed_unchecked) == 1
+source = source.replace(allowed_unchecked, "", 1)
+assert re.search(r"\b(seed|privateKey)\b|@unchecked\s+Sendable", source) is None
 PY
     echo "PASS verify-s1-01-source-closure"
     echo "PASS verify-s1-01-imports"
@@ -363,6 +367,7 @@ verify_public_symbols() {
     xcodebuild -scheme ThorChainKit \
         -destination "platform=iOS Simulator,id=${simulator_udid}" \
         -derivedDataPath "$derived_data" \
+        SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
         CODE_SIGNING_ALLOWED=NO build >/dev/null \
         || fail "verify-s1-01-public-symbols" "iOS Simulator package build failed"
     xcrun swift-symbolgraph-extract \
@@ -571,6 +576,7 @@ verify_strict_build() {
         -derivedDataPath "$derived_data" \
         SWIFT_VERSION=5 \
         SWIFT_STRICT_CONCURRENCY=complete \
+        SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
         CODE_SIGNING_ALLOWED=NO build >/dev/null \
         || fail "verify-s1-01-strict-build" "Swift 5 complete-concurrency simulator build failed"
     echo "PASS verify-s1-01-strict-build"
@@ -608,6 +614,7 @@ PY
         -derivedDataPath "$tmp/DerivedData" \
         -resultBundlePath "$result_bundle" \
         -only-testing:ThorChainKitTests/PublicApiTests \
+        SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
         CODE_SIGNING_ALLOWED=NO test > "$tmp/xcodebuild.log" 2>&1) \
         || true
     set -e
@@ -698,6 +705,7 @@ SWIFT
         SWIFT_VERSION=5 \
         SWIFT_STRICT_CONCURRENCY=complete \
         SWIFT_SUPPRESS_WARNINGS=NO \
+        SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
         CODE_SIGNING_ALLOWED=NO \
         build >/dev/null) \
         || fail "verify-s1-01-public-consumer" "public-only iOS 13 consumer failed"

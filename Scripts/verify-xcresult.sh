@@ -59,13 +59,18 @@ if set(observed_names) != set(expected):
 
 results = [node.get("result") for node in observed]
 if expect_failure == "reject":
-    if (
-        summary.get("result") == "Passed"
-        and summary.get("failedTests") == 0
-        and summary.get("skippedTests") == 0
-        and all(result == "Passed" for result in results)
-    ):
-        raise SystemExit("guarded mutation did not affect test credit")
+    required = {
+        "result": "Passed",
+        "totalTestCount": len(expected),
+        "passedTests": len(expected) - 1,
+        "failedTests": 0,
+        "skippedTests": 1,
+    }
+    for key, value in required.items():
+        if summary.get(key) != value:
+            raise SystemExit(f"rejected result {key} mismatch: expected {value}, observed {summary.get(key)!r}")
+    if results.count("Skipped") != 1 or any(result not in {"Passed", "Skipped"} for result in results):
+        raise SystemExit(f"rejected result nodes are not exactly one skipped allowlisted test: {results!r}")
 elif expect_failure == "true":
     if summary.get("result") != "Failed" or summary.get("failedTests") != 1:
         raise SystemExit("guarded failure did not produce one failed test")

@@ -158,12 +158,14 @@ jobs:
             -destination "platform=iOS Simulator,id=${THORCHAIN_SIMULATOR_UDID}" \
             -derivedDataPath "$DERIVED_DATA_PATH" \
             -resultBundlePath "$RESULT_BUNDLE_PATH" \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
             CODE_SIGNING_ALLOWED=NO test
           cat Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt \
             Tests/ThorChainKitTests/Fixtures/S1-02-tests.txt \
             Tests/ThorChainKitTests/Fixtures/S1-03-tests.txt \
             | sort -u > "$RUNNER_TEMP/full-tests.txt"
           Scripts/verify-xcresult.sh ci-full "$RESULT_BUNDLE_PATH" "$RUNNER_TEMP/full-tests.txt"
+          Scripts/verify-s1-01.sh
           Scripts/verify-s1-02.sh
           Scripts/verify-s1-03.sh --expected-base 7fd9663442a0e6dcd9c01c4ab04d35f3abd96fc4 --expected-head "$EXPECTED_HEAD_SHA"
           Scripts/test-s1-03-mutants.sh
