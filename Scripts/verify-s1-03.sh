@@ -5,6 +5,10 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd -P)
 cd "$root"
 
+simulator_udid=${THORCHAIN_SIMULATOR_UDID:-}
+[[ "$simulator_udid" =~ ^[0-9A-Fa-f-]{36}$ ]] \
+    || { echo "FAIL verify-s1-03: THORCHAIN_SIMULATOR_UDID must contain one UUID" >&2; exit 1; }
+
 fail() { echo "FAIL verify-s1-03: $1" >&2; exit 1; }
 
 expected_base=
@@ -117,6 +121,8 @@ source_paths = [
     root / 'Sources/ThorChainKit/Address/AddressCodec.swift',
 ]
 source = '\n'.join(path.read_text() for path in source_paths)
+assert source.count('struct CosmosAccountAddressDeriver: AccountAddressDeriving, Sendable') == 1
+assert 'struct CosmosAccountAddressDeriver: AccountAddressDeriving, Sendable' in (root / 'Sources/ThorChainKit/Crypto/CosmosAccountAddressDeriver.swift').read_text()
 assert 'import HsCryptoKit' in source
 assert 'RIPEMD160' not in source
 assert 'import UIKit' not in source and 'import SwiftUI' not in source
@@ -144,8 +150,36 @@ print('PASS verify-s1-03-source-fixtures')
 PY
 
 if [[ "$fixtures_only" == false ]]; then
-    swift test --filter DerivationTests
-    swift test --filter AddressCodecTests
-    swift test
+    run_tests() {
+        local label=$1 selector=$2 allowlist=$3
+        local derived_data result_bundle
+        local -a selection=()
+        [[ -z "$selector" ]] || selection=("-only-testing:ThorChainKitTests/$selector")
+        derived_data=$(mktemp -d)
+        result_bundle=$(mktemp -d)/"$label.xcresult"
+        : "${derived_data:?derived-data path missing}"
+        : "${result_bundle:?xcresult path missing}"
+        xcodebuild -scheme ThorChainKit \
+            -destination "platform=iOS Simulator,id=${simulator_udid}" \
+            -derivedDataPath "$derived_data" \
+            -resultBundlePath "$result_bundle" \
+            "${selection[@]}" \
+            CODE_SIGNING_ALLOWED=NO test
+        Scripts/verify-xcresult.sh "verify-s1-03-$label" "$result_bundle" "$allowlist"
+    }
+
+    derivation_allowlist=$(mktemp)
+    codec_allowlist=$(mktemp)
+    full_allowlist=$(mktemp)
+    trap 'rm -f "$derivation_allowlist" "$codec_allowlist" "$full_allowlist"' EXIT
+    rg '^ThorChainKitTests\.DerivationTests/' Tests/ThorChainKitTests/Fixtures/S1-03-tests.txt > "$derivation_allowlist"
+    rg '^ThorChainKitTests\.AddressCodecTests/' Tests/ThorChainKitTests/Fixtures/S1-03-tests.txt > "$codec_allowlist"
+    cat Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt \
+        Tests/ThorChainKitTests/Fixtures/S1-02-tests.txt \
+        Tests/ThorChainKitTests/Fixtures/S1-03-tests.txt \
+        | sort -u > "$full_allowlist"
+    run_tests derivation DerivationTests "$derivation_allowlist"
+    run_tests codec AddressCodecTests "$codec_allowlist"
+    run_tests full '' "$full_allowlist"
 fi
 echo "PASS verify-s1-03"

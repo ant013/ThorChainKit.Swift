@@ -5,22 +5,38 @@ set -euo pipefail
 repository_root=$(cd "$(dirname "$0")/.." && pwd -P)
 temporary_root=$(mktemp -d)
 trap 'rm -rf "$temporary_root"' EXIT
-
-swift_flags=(
-    -Xcc -nostdinc
-    -Xcc -isystem
-    -Xcc "$(xcrun clang -print-resource-dir)/include"
-    -Xcc -isystem
-    -Xcc "$(xcrun --sdk macosx --show-sdk-path)/usr/include"
-    -Xcc -iframework
-    -Xcc "$(xcrun --sdk macosx --show-sdk-path)/System/Library/Frameworks"
-)
+simulator_udid=${THORCHAIN_SIMULATOR_UDID:-}
+[[ "$simulator_udid" =~ ^[0-9A-Fa-f-]{36}$ ]] || {
+    echo "FAIL test-s1-01-mutants: THORCHAIN_SIMULATOR_UDID must contain one UUID" >&2
+    exit 1
+}
 
 lifecycle_test="ThorChainKitTests.PublicApiTests/testLifecycleSerializesIdempotentStartStopAndRunningRefresh"
 namespace_test="ThorChainKitTests.PublicApiTests/testPersistenceNamespaceIsDeterministicInternalAndAbsentFromErrors"
 
-swift test --package-path "$repository_root" --filter "$lifecycle_test" "${swift_flags[@]}"
-swift test --package-path "$repository_root" --filter "$namespace_test" "${swift_flags[@]}"
+run_test() {
+    local label=$1 package_path=$2 test_name=$3 expect_failure=${4:-false}
+    local result_bundle="$temporary_root/$label.xcresult"
+    local allowlist="$temporary_root/$label-tests.txt"
+    printf '%s\n' "$test_name" > "$allowlist"
+    if (cd "$package_path" && xcodebuild -scheme ThorChainKit \
+        -destination "platform=iOS Simulator,id=${simulator_udid}" \
+        -derivedDataPath "$temporary_root/$label-derived-data" \
+        -resultBundlePath "$result_bundle" \
+        "-only-testing:$test_name" \
+        CODE_SIGNING_ALLOWED=NO test); then
+        [[ "$expect_failure" == true ]] \
+            || "$repository_root/Scripts/verify-xcresult.sh" "$label" "$result_bundle" "$allowlist"
+    else
+        [[ "$expect_failure" == true ]] \
+            || { echo "FAIL $label: simulator test command failed" >&2; exit 1; }
+    fi
+    [[ "$expect_failure" == true ]] && \
+        "$repository_root/Scripts/verify-xcresult.sh" "$label" "$result_bundle" "$allowlist" true
+}
+
+run_test s1-01-lifecycle "$repository_root" "$lifecycle_test"
+run_test s1-01-namespace "$repository_root" "$namespace_test"
 
 copy_package() {
     local destination=$1
@@ -32,16 +48,7 @@ require_mutant_failure() {
     local package_path=$1
     local test_name=$2
     local label=$3
-    local log="$temporary_root/$label.log"
-
-    if swift test --package-path "$package_path" --filter "$test_name" "${swift_flags[@]}" > "$log" 2>&1; then
-        echo "FAIL $label: mutant passed" >&2
-        exit 1
-    fi
-    grep -q "Test Case .* failed" "$log" || {
-        echo "FAIL $label: mutant did not reach the target assertion" >&2
-        exit 1
-    }
+    run_test "$label" "$package_path" "$test_name" true
     echo "PASS $label"
 }
 

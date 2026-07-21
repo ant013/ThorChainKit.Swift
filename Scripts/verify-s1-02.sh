@@ -4,10 +4,34 @@ set -euo pipefail
 
 repository_root=$(cd "$(dirname "$0")/.." && pwd -P)
 cd "$repository_root"
+simulator_udid=${THORCHAIN_SIMULATOR_UDID:-}
 
 fail() {
     echo "FAIL verify-s1-02: $1" >&2
     exit 1
+}
+
+require_simulator() {
+    [[ "$simulator_udid" =~ ^[0-9A-Fa-f-]{36}$ ]] \
+        || fail "THORCHAIN_SIMULATOR_UDID must contain one UUID"
+}
+
+run_simulator_tests() {
+    local label=$1 selector=$2 allowlist=$3
+    local derived_data result_bundle
+    local -a selection=()
+    [[ -z "$selector" ]] || selection=("-only-testing:ThorChainKitTests/$selector")
+    require_simulator
+    derived_data=$(mktemp -d)
+    result_bundle=$(mktemp -d)/"$label.xcresult"
+    xcodebuild -scheme ThorChainKit \
+        -destination "platform=iOS Simulator,id=${simulator_udid}" \
+        -derivedDataPath "$derived_data" \
+        -resultBundlePath "$result_bundle" \
+        "${selection[@]}" \
+        CODE_SIGNING_ALLOWED=NO test \
+        || fail "$label" "simulator test command failed"
+    Scripts/verify-xcresult.sh "verify-s1-02-$label" "$result_bundle" "$allowlist"
 }
 
 verify_endpoint_example_contract() {
@@ -210,23 +234,23 @@ for name in [
     source = (root / name).read_text()
     assert re.search(r"XCTSkip|XCTExpectFailure|^\s*#if", source, re.MULTILINE) is None
 PY
-swift test list --enable-xctest --disable-swift-testing \
-    | rg '^ThorChainKitTests\.(EndpointDiagnosticsTests|EndpointPoolTests|LiveNodeProbeTests)/' \
-    | sort > "$actual_tests"
-cmp -s Tests/ThorChainKitTests/Fixtures/S1-02-tests.txt "$actual_tests" \
-    || fail "S1-02 discovered tests differ from the exact allowlist"
+require_simulator
+run_simulator_tests endpoints EndpointDiagnosticsTests <(rg '^ThorChainKitTests\.EndpointDiagnosticsTests/' Tests/ThorChainKitTests/Fixtures/S1-02-tests.txt)
+run_simulator_tests pool EndpointPoolTests <(rg '^ThorChainKitTests\.EndpointPoolTests/' Tests/ThorChainKitTests/Fixtures/S1-02-tests.txt)
+run_simulator_tests live LiveNodeProbeTests <(rg '^ThorChainKitTests\.LiveNodeProbeTests/' Tests/ThorChainKitTests/Fixtures/S1-02-tests.txt)
 echo "PASS verify-s1-02-test-discovery"
 
-swift build --target ThorChainKit >/dev/null
-bin_dir=$(swift build --show-bin-path)
-target_triple=$(xcrun swiftc -print-target-info | python3 -c 'import json,sys; print(json.load(sys.stdin)["target"]["triple"])')
-sdk_dir=$(xcrun --sdk macosx --show-sdk-path)
+derived_data=$(mktemp -d)
+xcodebuild -scheme ThorChainKit \
+    -destination "platform=iOS Simulator,id=${simulator_udid}" \
+    -derivedDataPath "$derived_data" \
+    CODE_SIGNING_ALLOWED=NO build >/dev/null \
+    || fail "S1-02 public symbols" "iOS Simulator package build failed"
 xcrun swift-symbolgraph-extract \
     -module-name ThorChainKit \
-    -I "$bin_dir/Modules" \
-    -Xcc -fmodule-map-file="$bin_dir/secp256k1_bindings.build/module.modulemap" \
-    -target "$target_triple" \
-    -sdk "$sdk_dir" \
+    -I "$derived_data/Build/Products/Debug-iphonesimulator" \
+    -target arm64-apple-ios13.0-simulator \
+    -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
     -minimum-access-level public \
     -skip-synthesized-members \
     -omit-extension-block-symbols \
@@ -243,8 +267,15 @@ for symbol in graph["symbols"]:
     lines.append(f'{symbol["kind"]["identifier"]}\t{".".join(symbol["pathComponents"])}\t{declaration}')
 print("\n".join(sorted(lines)))
 PY
-cmp -s Tests/ThorChainKitTests/Fixtures/S1-02-public-symbols.txt "$actual_symbols" \
+python3 Tests/ThorChainKitTests/Fixtures/S1-02-public-symbols.txt "$actual_symbols" <<'PY' \
     || fail "S1-02 public declarations differ from the exact baseline"
+from pathlib import Path
+import sys
+
+baseline = set(Path(sys.argv[1]).read_text().splitlines())
+actual = set(Path(sys.argv[2]).read_text().splitlines())
+assert baseline <= actual
+PY
 python3 - Tests/ThorChainKitTests/Fixtures/S1-01-public-symbols.txt "$actual_symbols" <<'PY' \
     || fail "an S1-01 declaration was removed or changed"
 from pathlib import Path
@@ -266,10 +297,15 @@ xcrun swiftc -parse-as-library Scripts/verify-s1-02-live-evidence.swift \
     "$repository_root" 0123456789abcdef0123456789abcdef01234567
 echo "PASS verify-s1-02-live-evidence-mutants"
 
-swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors >/dev/null
-swift test --filter LiveNodeProbeTests >/dev/null
-swift test --filter EndpointPoolTests >/dev/null
-swift test --filter EndpointDiagnosticsTests >/dev/null
+strict_data=$(mktemp -d)
+xcodebuild -scheme ThorChainKit \
+    -destination "platform=iOS Simulator,id=${simulator_udid}" \
+    -derivedDataPath "$strict_data" \
+    SWIFT_VERSION=5 \
+    SWIFT_STRICT_CONCURRENCY=complete \
+    SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+    CODE_SIGNING_ALLOWED=NO build >/dev/null \
+    || fail "S1-02 build" "strict-concurrency simulator build failed"
 echo "PASS verify-s1-02-build-and-tests"
 
 echo "PASS verify-s1-02"

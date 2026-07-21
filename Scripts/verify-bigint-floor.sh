@@ -6,6 +6,11 @@ repository_root=$(cd "$(dirname "$0")/.." && pwd -P)
 temporary_root=$(mktemp -d)
 trap 'rm -rf "$temporary_root"' EXIT
 package_copy="$temporary_root/package"
+simulator_udid=${THORCHAIN_SIMULATOR_UDID:-}
+[[ "$simulator_udid" =~ ^[0-9A-Fa-f-]{36}$ ]] || {
+    echo "FAIL verify-bigint-floor: THORCHAIN_SIMULATOR_UDID must contain one UUID" >&2
+    exit 1
+}
 
 [[ -f "$repository_root/Package.resolved" ]] || {
     echo "FAIL verify-bigint-floor: default Package.resolved is unavailable" >&2
@@ -49,21 +54,23 @@ assert pin["state"] == {
 }
 PY
 
-strict_flags=(
-    -Xswiftc -swift-version
-    -Xswiftc 5
-    -Xswiftc -strict-concurrency=complete
-    -Xswiftc -warnings-as-errors
-    -Xcc -nostdinc
-    -Xcc -isystem
-    -Xcc "$(xcrun clang -print-resource-dir)/include"
-    -Xcc -isystem
-    -Xcc "$(xcrun --sdk macosx --show-sdk-path)/usr/include"
-    -Xcc -iframework
-    -Xcc "$(xcrun --sdk macosx --show-sdk-path)/System/Library/Frameworks"
-)
-swift build --package-path "$package_copy" "${strict_flags[@]}"
-swift test --package-path "$package_copy" "${strict_flags[@]}"
+derived_data="$temporary_root/derived-data"
+result_bundle="$temporary_root/bigint-floor.xcresult"
+(cd "$package_copy" && xcodebuild \
+    -scheme ThorChainKit \
+    -destination "platform=iOS Simulator,id=${simulator_udid}" \
+    -derivedDataPath "$derived_data" \
+    -resultBundlePath "$result_bundle" \
+    SWIFT_VERSION=5 \
+    SWIFT_STRICT_CONCURRENCY=complete \
+    SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+    CODE_SIGNING_ALLOWED=NO test)
+cat "$repository_root/Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt" \
+    "$repository_root/Tests/ThorChainKitTests/Fixtures/S1-02-tests.txt" \
+    "$repository_root/Tests/ThorChainKitTests/Fixtures/S1-03-tests.txt" \
+    | sort -u > "$temporary_root/full-tests.txt"
+"$repository_root/Scripts/verify-xcresult.sh" verify-bigint-floor \
+    "$result_bundle" "$temporary_root/full-tests.txt"
 
 current_lock_hash=$(shasum -a 256 "$repository_root/Package.resolved" | awk '{print $1}')
 [[ "$current_lock_hash" == "$default_lock_hash" ]] || {

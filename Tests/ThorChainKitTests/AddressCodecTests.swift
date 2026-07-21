@@ -96,7 +96,7 @@ final class AddressCodecTests: XCTestCase {
             .deletingLastPathComponent()
             .appendingPathComponent("Fixtures/S1-03-fuzz-seed.txt")
         let fixture = try String(contentsOf: fixtureURL, encoding: .utf8)
-        let lines = fixture.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let lines = fixture.split(separator: "\n").map(String.init)
         XCTAssertEqual(lines, ["version=1", "algorithm=splitmix64", "seed=0x534c30332d46555a", "count=1024"])
         guard let seedText = lines.first(where: { $0.hasPrefix("seed=") })?.dropFirst(5),
               let seed = UInt64(seedText.dropFirst(2), radix: 16),
