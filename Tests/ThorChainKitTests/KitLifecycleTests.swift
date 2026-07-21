@@ -83,10 +83,11 @@ final class KitLifecycleTests: XCTestCase {
     func testFailedStartRollsBackFacadeAdmissionAndCanRetry() async throws {
         let address = try Address("thor166aczv0jatlnyzz8zsczdzk9xxxgppfpu530jl", network: .mainnet)
         let key = StorageKey(persistenceNamespace: String(repeating: "d", count: 64))
+        let dispatcher = DispatchQueue(label: "s1-05-failed-start-facade")
         let publishing = StatePublishing()
         let storage = FailFirstStartStorage()
         let gate = LifecycleGate(
-            dispatcher: DispatchQueue(label: "s1-05-failed-start-test"),
+            dispatcher: dispatcher,
             address: address,
             key: key,
             storage: storage,
@@ -97,9 +98,14 @@ final class KitLifecycleTests: XCTestCase {
             address: address,
             dependencies: KitDependencies(lifecycle: LifecycleCommandBridge(syncer: syncer, gate: gate)),
             persistenceNamespace: String(repeating: "d", count: 64),
-            facadeDispatcher: DispatchQueue(label: "s1-05-failed-start-facade"),
+            facadeDispatcher: dispatcher,
             publishing: publishing
         )
+        let cancellable = kit.syncStatePublisher.sink { state in
+            if case .notSynced(.storageUnavailable, cached: nil) = state {
+                kit.refresh()
+            }
+        }
 
         kit.start()
 
@@ -115,6 +121,7 @@ final class KitLifecycleTests: XCTestCase {
 
         let recoveredEvents = await syncer.eventLog()
         XCTAssertEqual(recoveredEvents, ["start"])
+        cancellable.cancel()
     }
 
     func testStopCompletionWaitsForSuccessAndControlFailureCancellation() throws {

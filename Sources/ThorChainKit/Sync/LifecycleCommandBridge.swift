@@ -15,11 +15,7 @@ import Foundation
         semaphore.signal()
     }
 
-    func wait() -> Bool {
-        semaphore.wait()
-        lock.lock(); defer { lock.unlock() }
-        return succeeded
-    }
+    func wait() { semaphore.wait() }
 
     var isSuccessful: Bool {
         lock.lock(); defer { lock.unlock() }

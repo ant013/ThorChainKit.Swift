@@ -65,9 +65,7 @@ public final class Kit {
         if isOnFacadeDispatcher {
             let shouldDrain = pendingLifecycleCommands.isEmpty
             enqueueLifecycleCommand(kind)
-            if shouldDrain, let barrier = drainPendingLifecycleCommands(), !barrier.isSuccessful {
-                desiredRunning = false
-            }
+            if shouldDrain { _ = drainPendingLifecycleCommands() }
             return
         }
 
@@ -77,9 +75,7 @@ public final class Kit {
             enqueueLifecycleCommand(kind)
             if shouldDrain { barrier = drainPendingLifecycleCommands() }
         }
-        if barrier?.wait() == false {
-            facadeDispatcher.sync { desiredRunning = false }
-        }
+        barrier?.wait()
     }
 
     private func enqueueLifecycleCommand(_ kind: LifecycleCommandKind) {
@@ -110,8 +106,12 @@ public final class Kit {
             case .stop: barrier = dependencies.lifecycle.stop(sequence: command.sequence)
             case .refresh: barrier = dependencies.lifecycle.refresh(sequence: command.sequence)
             }
-            if firstBarrier == nil { firstBarrier = barrier }
             pendingLifecycleCommands.removeFirst()
+            if firstBarrier == nil { firstBarrier = barrier }
+            if case .start = command.kind, !barrier.isSuccessful {
+                desiredRunning = false
+                pendingLifecycleCommands.removeAll()
+            }
         }
         return firstBarrier
     }
