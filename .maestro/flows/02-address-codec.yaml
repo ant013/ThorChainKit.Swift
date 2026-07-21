@@ -1,0 +1,25 @@
+appId: org.horizontalsystems.thorchainkit.example
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: address-codec-open
+- extendedWaitUntil:
+    visible:
+      id: derived-address
+      text: thor1tgxm5jw6hrlvslrd6lqpk4jwuu4g29dxytrean
+    timeout: 5000
+- assertVisible:
+    id: canonical-uppercase
+    text: thor1tgxm5jw6hrlvslrd6lqpk4jwuu4g29dxytrean
+- assertVisible:
+    id: mixed-case-result
+    text: mixedCase
+- assertVisible:
+    id: bad-checksum-result
+    text: invalidAddress
+- assertVisible:
+    id: wrong-hrp-result
+    text: wrongHrp
+- assertNotVisible: "(?i).*(mnemonic|seed phrase|private key).*"
+- takeScreenshot: address-codec-success

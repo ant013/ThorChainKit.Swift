@@ -1,0 +1,4 @@
+version=1
+algorithm=splitmix64
+seed=0x534c30332d46555a
+count=1024

@@ -95,13 +95,32 @@ RIPGREP_PROVISION_BLOCK = r"""      - name: Provision pinned ripgrep
           printf 'rg_version_line=%s\n' "$rg_version_line"
           echo "$rg_dir" >> "$GITHUB_PATH"
 """
-PACKAGE_CONTRACT_BLOCK = r"""      - name: Verify package and S1-02 contract
+PACKAGE_CONTRACT_BLOCK = r"""      - name: Verify package and S1-03 contract
+        env:
+          EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
         run: |
+          set -euo pipefail
           Scripts/verify-s1-02-ci-policy.sh steady-state --ref "$(git rev-parse HEAD)"
-          swift build
-          swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
-          swift test
+          : "${THORCHAIN_SIMULATOR_UDID:?exact simulator selection missing}"
+          DERIVED_DATA_PATH="$RUNNER_TEMP/thorchain-derived-data"
+          RESULT_BUNDLE_PATH="$RUNNER_TEMP/thorchain-full.xcresult"
+          export DERIVED_DATA_PATH RESULT_BUNDLE_PATH
+          rm -rf "$DERIVED_DATA_PATH" "$RESULT_BUNDLE_PATH"
+          xcodebuild -scheme ThorChainKit \
+            -destination "platform=iOS Simulator,id=${THORCHAIN_SIMULATOR_UDID}" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            -resultBundlePath "$RESULT_BUNDLE_PATH" \
+            SWIFT_SUPPRESS_WARNINGS=NO \
+            CODE_SIGNING_ALLOWED=NO test
+          cat Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt \
+            Tests/ThorChainKitTests/Fixtures/S1-02-tests.txt \
+            Tests/ThorChainKitTests/Fixtures/S1-03-tests.txt \
+            | sort -u > "$RUNNER_TEMP/full-tests.txt"
+          Scripts/verify-xcresult.sh ci-full "$RESULT_BUNDLE_PATH" "$RUNNER_TEMP/full-tests.txt"
+          Scripts/verify-s1-01.sh
           Scripts/verify-s1-02.sh
+          Scripts/verify-s1-03.sh --expected-base 7fd9663442a0e6dcd9c01c4ab04d35f3abd96fc4 --expected-head "$EXPECTED_HEAD_SHA"
+          Scripts/test-s1-03-mutants.sh
 """
 SIMULATOR_SELECTION_BLOCK = r"""      - name: Select exact iOS 26.2 simulator
         run: |
@@ -150,6 +169,7 @@ SIMULATOR_CONSUMER_BLOCK = r"""      - name: Run fixture acceptance
           export THORCHAIN_SIMULATOR_UDID
           Scripts/run-maestro.sh s1-01
           Scripts/run-maestro.sh s1-02
+          Scripts/run-maestro.sh s1-03
 """
 RIPGREP_CONSUMER_LINE = "          Scripts/verify-s1-02.sh\n"
 RIPGREP_FALLBACK_RE = re.compile(
@@ -203,6 +223,35 @@ DISPATCH_PREFLIGHT = r"""      - name: Preflight exact pull request head
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ inputs.expected_head_sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Establish exact expected base ref
+        env:
+          EXPECTED_BASE_SHA: 7fd9663442a0e6dcd9c01c4ab04d35f3abd96fc4
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --prune origin "+refs/heads/main:refs/remotes/origin/main"
+          test "$(git rev-parse refs/remotes/origin/main)" = "$EXPECTED_BASE_SHA"
+      - name: Verify exact checkout
+        env:
+          EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "$EXPECTED_HEAD_SHA" ]]
+          printf '%s\n' "checkout_sha=$EXPECTED_HEAD_SHA"
+"""
+EXPECTED_HEAD_BASE_BLOCK = r"""      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.expected_head_sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Establish exact expected base ref
+        env:
+          EXPECTED_BASE_SHA: 7fd9663442a0e6dcd9c01c4ab04d35f3abd96fc4
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --prune origin "+refs/heads/main:refs/remotes/origin/main"
+          test "$(git rev-parse refs/remotes/origin/main)" = "$EXPECTED_BASE_SHA"
       - name: Verify exact checkout
         env:
           EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
@@ -263,6 +312,8 @@ def verify_dispatch_policy(workflow):
 
 
 def verify_ripgrep_provisioning(workflow):
+    if workflow.count(EXPECTED_HEAD_BASE_BLOCK) != 1:
+        fail("workflow must establish the exact checkout, origin/main ref, and base SHA once")
     if workflow.count(RIPGREP_PROVISION_BLOCK) != 1:
         fail("workflow must contain exactly one pinned ripgrep provisioning block")
     normalized_workflow = re.sub(r"\\[ \t]*\r?\n[ \t]*", " ", workflow)

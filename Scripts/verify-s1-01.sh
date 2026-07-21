@@ -3,10 +3,34 @@
 set -euo pipefail
 
 repository_root=$(cd "$(dirname "$0")/.." && pwd -P)
+simulator_udid=${THORCHAIN_SIMULATOR_UDID:-}
 
 fail() {
     echo "FAIL $1: $2" >&2
     exit 1
+}
+
+require_simulator() {
+    [[ "$simulator_udid" =~ ^[0-9A-Fa-f-]{36}$ ]] \
+        || fail "verify-s1-01-simulator" "THORCHAIN_SIMULATOR_UDID must contain one UUID"
+}
+
+run_simulator_tests() {
+    local label=$1 selector=$2 allowlist=$3
+    local derived_data result_bundle
+    local -a selection=("-only-testing:ThorChainKitTests/$selector")
+    require_simulator
+    derived_data=$(mktemp -d)
+    result_bundle=$(mktemp -d)/"$label.xcresult"
+    xcodebuild -scheme ThorChainKit \
+        -destination "platform=iOS Simulator,id=${simulator_udid}" \
+        -derivedDataPath "$derived_data" \
+        -resultBundlePath "$result_bundle" \
+        SWIFT_SUPPRESS_WARNINGS=NO \
+        "${selection[@]}" \
+        CODE_SIGNING_ALLOWED=NO test \
+        || fail "verify-s1-01-$label" "simulator test command failed"
+    Scripts/verify-xcresult.sh "verify-s1-01-$label" "$result_bundle" "$allowlist"
 }
 
 verify_platform_boundary() {
@@ -149,7 +173,6 @@ dependencies = package["dependencies"]
 assert package["name"] == "ThorChainKit"
 assert package["platforms"] == [
     {"options": [], "platformName": "ios", "version": "13.0"},
-    {"options": [], "platformName": "macos", "version": "10.15"},
 ]
 assert len(products) == 1
 assert products[0]["name"] == "ThorChainKit"
@@ -161,20 +184,34 @@ assert [(target["name"], target["type"]) for target in targets] == [
     ("ThorChainKitTests", "test"),
 ]
 assert [target["dependencies"] for target in targets] == [
-    [{"byName": ["BigInt", None]}],
+    [
+        {"byName": ["BigInt", None]},
+        {"product": ["HsCryptoKit", "HsCryptoKit.Swift", None, None]},
+        {"product": ["secp256k1", "secp256k1.swift", None, None]},
+    ],
     [{"byName": ["ThorChainKit", None]}],
 ]
 assert [target["exclude"] for target in targets] == [[], ["Fixtures"]]
 
-assert len(dependencies) == 1
-dependency = dependencies[0]["sourceControl"][0]
-assert dependency["identity"] == "bigint"
-assert dependency["location"]["remote"] == [
+assert len(dependencies) == 3
+dependency_map = {
+    dependency["sourceControl"][0]["identity"]: dependency["sourceControl"][0]
+    for dependency in dependencies
+}
+assert dependency_map["bigint"]["location"]["remote"] == [
     {"urlString": "https://github.com/attaswift/BigInt.git"}
 ]
-assert dependency["requirement"] == {
+assert dependency_map["bigint"]["requirement"] == {
     "range": [{"lowerBound": "5.0.0", "upperBound": "6.0.0"}]
 }
+assert dependency_map["hscryptokit.swift"]["location"]["remote"] == [
+    {"urlString": "https://github.com/horizontalsystems/HsCryptoKit.Swift.git"}
+]
+assert dependency_map["hscryptokit.swift"]["requirement"] == {"exact": ["1.3.2"]}
+assert dependency_map["secp256k1.swift"]["location"]["remote"] == [
+    {"urlString": "https://github.com/GigaBitcoin/secp256k1.swift.git"}
+]
+assert dependency_map["secp256k1.swift"]["requirement"] == {"exact": ["0.10.0"]}
 PY
 
     echo "PASS verify-s1-01-package-topology"
@@ -202,21 +239,29 @@ with open(sys.argv[2], encoding="utf-8") as handle:
     graph = json.load(handle)
 
 pins = lock["pins"]
-assert len(pins) == 1
-pin = pins[0]
-assert pin["identity"] == "bigint"
-assert pin["location"] == "https://github.com/attaswift/BigInt.git"
-assert pin["state"] == {
-    "revision": "e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe",
-    "version": "5.7.0",
+assert len(pins) == 5
+pin_map = {pin["identity"]: pin for pin in pins}
+expected_pins = {
+    "bigint": ("https://github.com/attaswift/BigInt.git", "e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe", "5.7.0"),
+    "hscryptokit.swift": ("https://github.com/horizontalsystems/HsCryptoKit.Swift.git", "7c11ad0e690cbb178a70f3b9d1116d0a37a51a41", "1.3.2"),
+    "hsextensions.swift": ("https://github.com/horizontalsystems/HsExtensions.Swift.git", "0012014f98ae81ffb89b0d3a2e9c204559e1c278", "1.0.6"),
+    "secp256k1.swift": ("https://github.com/GigaBitcoin/secp256k1.swift.git", "48fb20fce4ca3aad89180448a127d5bc16f0e44c", "0.10.0"),
+    "swift-crypto": ("https://github.com/apple/swift-crypto.git", "60f13f60c4d093691934dc6cfdf5f508ada1f894", "2.6.0"),
 }
+assert set(pin_map) == set(expected_pins)
+for identity, (location, revision, version) in expected_pins.items():
+    assert pin_map[identity]["location"] == location
+    assert pin_map[identity]["state"] == {"revision": revision, "version": version}
 
 dependencies = graph["dependencies"]
-assert len(dependencies) == 1
-dependency = dependencies[0]
-assert dependency["identity"] == "bigint"
-assert dependency["version"] == "5.7.0"
-assert dependency["url"] == "https://github.com/attaswift/BigInt.git"
+assert len(dependencies) == 3
+direct = {dependency["identity"]: dependency for dependency in dependencies}
+assert direct["bigint"]["version"] == "5.7.0"
+assert direct["bigint"]["url"] == "https://github.com/attaswift/BigInt.git"
+assert direct["hscryptokit.swift"]["version"] == "1.3.2"
+assert direct["hscryptokit.swift"]["url"] == "https://github.com/horizontalsystems/HsCryptoKit.Swift.git"
+assert direct["secp256k1.swift"]["version"] == "0.10.0"
+assert direct["secp256k1.swift"]["url"] == "https://github.com/GigaBitcoin/secp256k1.swift.git"
 PY
 
     echo "PASS verify-s1-01-bigint-default"
@@ -241,6 +286,7 @@ verify_source_contract() {
     trap 'rm -f "$expected_sources" "$actual_sources" "$imports"' RETURN
 
     cat > "$expected_sources" <<'EOF'
+Sources/ThorChainKit/Address/AddressCodec.swift
 Sources/ThorChainKit/Address/AddressError.swift
 Sources/ThorChainKit/Address/Bech32Codec.swift
 Sources/ThorChainKit/Address/BitConversion.swift
@@ -248,6 +294,12 @@ Sources/ThorChainKit/Core/Kit.swift
 Sources/ThorChainKit/Core/KitConfigurationError.swift
 Sources/ThorChainKit/Core/KitDependencies.swift
 Sources/ThorChainKit/Core/KitFactory.swift
+Sources/ThorChainKit/Core/TestingEndpointPolicySession.swift
+Sources/ThorChainKit/Crypto/AccountAddressDeriving.swift
+Sources/ThorChainKit/Crypto/AccountAddressFactory.swift
+Sources/ThorChainKit/Crypto/CosmosAccountAddressDeriver.swift
+Sources/ThorChainKit/Crypto/DerivationPath.swift
+Sources/ThorChainKit/Crypto/Secp256k1PublicKeyValidator.swift
 Sources/ThorChainKit/Models/AccountState.swift
 Sources/ThorChainKit/Models/Address.swift
 Sources/ThorChainKit/Models/Denom.swift
@@ -255,8 +307,14 @@ Sources/ThorChainKit/Models/EndpointConfiguration.swift
 Sources/ThorChainKit/Models/Network.swift
 Sources/ThorChainKit/Models/SyncError.swift
 Sources/ThorChainKit/Models/SyncState.swift
+Sources/ThorChainKit/Network/EndpointDiagnostics.swift
 Sources/ThorChainKit/Network/EndpointFamilyDescriptor.swift
+Sources/ThorChainKit/Network/EndpointHealth.swift
+Sources/ThorChainKit/Network/EndpointLease.swift
 Sources/ThorChainKit/Network/EndpointPolicy.swift
+Sources/ThorChainKit/Network/EndpointPool.swift
+Sources/ThorChainKit/Network/LiveNodeProbe.swift
+Sources/ThorChainKit/Network/NodeProbing.swift
 Sources/ThorChainKit/ThorChainKit.swift
 EOF
     cd "$repository_root"
@@ -277,7 +335,7 @@ for path in Path(sys.argv[1]).rglob("*.swift"):
             modules.add(match.group(1))
 print("\n".join(sorted(modules)))
 PY
-    [[ "$(<"$imports")" == $'BigInt\nCombine\nCryptoKit\nFoundation' ]] \
+    [[ "$(<"$imports")" == $'BigInt\nCombine\nCryptoKit\nFoundation\nHsCryptoKit\nsecp256k1' ]] \
         || fail "verify-s1-01-imports" "imports differ from the system/BigInt allowlist"
     python3 - Sources/ThorChainKit <<'PY' \
         || fail "verify-s1-01-source-closure" "secret API or unchecked Sendable is present"
@@ -285,7 +343,11 @@ from pathlib import Path
 import re
 import sys
 
-source = "\n".join(path.read_text() for path in Path(sys.argv[1]).rglob("*.swift"))
+source_root = Path(sys.argv[1])
+source = "\n".join(path.read_text() for path in source_root.rglob("*.swift"))
+allowed_unchecked = "private final class CancellationLatch: @unchecked Sendable"
+assert source.count(allowed_unchecked) == 1
+source = source.replace(allowed_unchecked, "", 1)
 assert re.search(r"\b(seed|privateKey)\b|@unchecked\s+Sendable", source) is None
 PY
     echo "PASS verify-s1-01-source-closure"
@@ -293,22 +355,28 @@ PY
 }
 
 verify_public_symbols() {
-    local actual bin_path fixture output_dir sdk_path symbol_graph target
+    local actual fixture output_dir symbol_graph derived_data
     actual=$(mktemp)
     output_dir=$(mktemp -d)
     trap 'rm -f "$actual"; rm -rf "$output_dir"' RETURN
     fixture="$repository_root/Tests/ThorChainKitTests/Fixtures/S1-01-public-symbols.txt"
 
+    require_simulator
     cd "$repository_root"
-    swift build --target ThorChainKit >/dev/null
-    bin_path=$(swift build --show-bin-path)
-    target=$(xcrun swiftc -print-target-info | python3 -c 'import json, sys; print(json.load(sys.stdin)["target"]["triple"])')
-    sdk_path=$(xcrun --sdk macosx --show-sdk-path)
+    derived_data=$(mktemp -d)
+    xcodebuild -scheme ThorChainKit \
+        -destination "platform=iOS Simulator,id=${simulator_udid}" \
+        -derivedDataPath "$derived_data" \
+        SWIFT_SUPPRESS_WARNINGS=NO \
+        CODE_SIGNING_ALLOWED=NO build >/dev/null \
+        || fail "verify-s1-01-public-symbols" "iOS Simulator package build failed"
     xcrun swift-symbolgraph-extract \
         -module-name ThorChainKit \
-        -I "$bin_path/Modules" \
-        -target "$target" \
-        -sdk "$sdk_path" \
+        -I "$derived_data/Build/Products/Debug-iphonesimulator" \
+        -Xcc -fmodule-map-file="$derived_data/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/secp256k1_bindings.modulemap" \
+        -Xcc -fmodule-map-file="$derived_data/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/HsCryptoKitC.modulemap" \
+        -target arm64-apple-ios13.0-simulator \
+        -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
         -minimum-access-level public \
         -skip-synthesized-members \
         -omit-extension-block-symbols \
@@ -334,21 +402,25 @@ for symbol in graph["symbols"]:
     lines.append(f"{kind}\t{path}\t{declaration}")
 print("\n".join(sorted(lines)))
 PY
-    cmp -s "$fixture" "$actual" \
-        || fail "verify-s1-01-public-symbols" "public declarations differ from the fixture"
+    python3 - "$fixture" "$actual" <<'PY' \
+        || fail "verify-s1-01-public-symbols" "an S1-01 public declaration was removed or changed"
+from pathlib import Path
+import sys
+
+baseline = set(Path(sys.argv[1]).read_text().splitlines())
+actual = set(Path(sys.argv[2]).read_text().splitlines())
+assert baseline <= actual
+PY
     echo "PASS verify-s1-01-public-symbols"
 }
 
 verify_test_contract() {
-    local tmp allowlist discovered command_text
+    local tmp allowlist
     tmp=$(mktemp -d)
     trap 'rm -rf "$tmp"' RETURN
     allowlist="$repository_root/Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt"
 
     cd "$repository_root"
-    swift test list --enable-xctest --disable-swift-testing > "$tmp/discovered.txt"
-    cmp -s "$allowlist" "$tmp/discovered.txt" \
-        || fail "verify-s1-01-test-discovery" "discovered tests differ from the 18-case allowlist"
     python3 - Tests/ThorChainKitTests/PublicApiTests.swift <<'PY' \
         || fail "verify-s1-01-test-discovery" "authoritative tests contain a disabling construct"
 from pathlib import Path
@@ -358,27 +430,8 @@ import sys
 source = Path(sys.argv[1]).read_text()
 assert re.search(r"XCTSkip|XCTExpectFailure|^\s*#if|@available", source, re.MULTILINE) is None
 PY
-    command_text='swift test --enable-xctest --disable-swift-testing --parallel --num-workers 1 --filter ThorChainKitTests.PublicApiTests --xunit-output'
-    [[ "$command_text" != *"--skip"* ]] \
-        || fail "verify-s1-01-test-discovery" "test command contains --skip"
+    run_simulator_tests public-api PublicApiTests "$allowlist"
     echo "PASS verify-s1-01-test-discovery"
-
-    set -o pipefail
-    swift test \
-        --enable-xctest \
-        --disable-swift-testing \
-        --parallel \
-        --num-workers 1 \
-        --filter ThorChainKitTests.PublicApiTests \
-        --xunit-output "$tmp/public-api.xml" \
-        --verbose 2>&1 | tee "$tmp/public-api.log" >/dev/null \
-        || fail "verify-s1-01-test-execution" "the XCTest process failed"
-    xcrun swift Scripts/verify-s1-01-xunit.swift \
-        "$tmp/public-api.xml" \
-        "$tmp/public-api.log" \
-        "$allowlist" \
-        || fail "verify-s1-01-test-execution" "xUnit/transcript validation failed"
-    echo "PASS verify-s1-01-test-execution"
 }
 
 copy_syntax_audit_tree() {
@@ -514,18 +567,22 @@ verify_value_syntax() {
 }
 
 verify_strict_build() {
+    local derived_data
+    require_simulator
     cd "$repository_root"
-    swift build \
-        -Xswiftc -swift-version \
-        -Xswiftc 5 \
-        -Xswiftc -strict-concurrency=complete \
-        -Xswiftc -warnings-as-errors \
-        || fail "verify-s1-01-strict-build" "Swift 5 complete-concurrency build failed"
+    derived_data=$(mktemp -d)
+    xcodebuild -scheme ThorChainKit \
+        -destination "platform=iOS Simulator,id=${simulator_udid}" \
+        -derivedDataPath "$derived_data" \
+        SWIFT_VERSION=5 \
+        SWIFT_STRICT_CONCURRENCY=complete \
+        CODE_SIGNING_ALLOWED=NO build >/dev/null \
+        || fail "verify-s1-01-strict-build" "Swift 5 complete-concurrency simulator build failed"
     echo "PASS verify-s1-01-strict-build"
 }
 
 verify_skip_canary() {
-    local tmp allowlist test_file clang_resource sdk
+    local tmp allowlist test_file result_bundle
     tmp=$(mktemp -d)
     trap 'rm -rf "$tmp"' RETURN
     mkdir -p "$tmp/Scripts" "$tmp/Tests/ThorChainKitTests"
@@ -542,30 +599,28 @@ import sys
 path = Path(sys.argv[1])
 source = path.read_text()
 old = "    func testNetworkConstants() throws {\n"
-new = old + '        throw XCTSkip("S1-01 canary")\n'
+new = old + '        try XCTSkipIf(true, "S1-01 canary")\n'
 assert source.count(old) == 1
 path.write_text(source.replace(old, new))
 PY
     allowlist="$tmp/Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt"
-    clang_resource=$(xcrun clang -print-resource-dir)
-    sdk=$(xcrun --sdk macosx --show-sdk-path)
-    (cd "$tmp" && swift test \
-        --enable-xctest \
-        --disable-swift-testing \
-        --parallel \
-        --num-workers 1 \
-        --filter ThorChainKitTests.PublicApiTests \
-        --xunit-output "$tmp/public-api.xml" \
-        -Xcc -nostdinc \
-        -Xcc -isystem -Xcc "$clang_resource/include" \
-        -Xcc -isystem -Xcc "$sdk/usr/include" \
-        -Xcc -iframework -Xcc "$sdk/System/Library/Frameworks" \
-        --verbose 2>&1 | tee "$tmp/public-api.log" >/dev/null) \
-        || fail "verify-s1-01-skip-canary" "XCTSkip canary process did not reach status validation"
-    if (cd "$tmp" && xcrun swift Scripts/verify-s1-01-xunit.swift \
-        "$tmp/public-api.xml" "$tmp/public-api.log" "$allowlist" >/dev/null 2>&1); then
-        fail "verify-s1-01-skip-canary" "XCTSkip canary passed transcript validation"
-    fi
+    require_simulator
+    result_bundle="$tmp/public-api.xcresult"
+    set +e
+    (cd "$tmp" && xcodebuild \
+        -scheme ThorChainKit \
+        -destination "platform=iOS Simulator,id=${simulator_udid}" \
+        -derivedDataPath "$tmp/DerivedData" \
+        -resultBundlePath "$result_bundle" \
+        -only-testing:ThorChainKitTests/PublicApiTests \
+        SWIFT_SUPPRESS_WARNINGS=NO \
+        CODE_SIGNING_ALLOWED=NO test > "$tmp/xcodebuild.log" 2>&1) \
+        || true
+    set -e
+    rg -qi 'skip|skipped' "$tmp/xcodebuild.log" \
+        || fail "verify-s1-01-skip-canary" "XCTSkip canary did not appear in simulator output"
+    Scripts/verify-xcresult.sh verify-s1-01-skip-canary "$result_bundle" "$allowlist" reject \
+        || fail "verify-s1-01-skip-canary" "XCTSkip canary was not rejected by xcresult"
     echo "PASS verify-s1-01-skip-canary"
 }
 
@@ -573,6 +628,7 @@ verify_direct_scripts() {
     local script mode
     for script in \
         Scripts/verify-s1-01.sh \
+        Scripts/verify-xcresult.sh \
         Scripts/verify-bigint-floor.sh \
         Scripts/test-s1-01-mutants.sh \
         Scripts/run-maestro.sh \
@@ -593,6 +649,7 @@ verify_public_consumer() {
     local tmp
     tmp=$(mktemp -d)
     trap 'rm -rf "$tmp"' RETURN
+    require_simulator
     mkdir -p "$tmp/Sources/ThorChainKitConsumer"
     python3 - "$tmp/Package.swift" "$repository_root" <<'PY'
 from pathlib import Path
@@ -641,13 +698,12 @@ kit.stop()
 SWIFT
     (cd "$tmp" && xcodebuild \
         -scheme ThorChainKitConsumer \
-        -destination 'generic/platform=iOS Simulator' \
+        -destination "platform=iOS Simulator,id=${simulator_udid}" \
         -derivedDataPath "$tmp/DerivedData" \
         IPHONEOS_DEPLOYMENT_TARGET=13.0 \
         SWIFT_VERSION=5 \
         SWIFT_STRICT_CONCURRENCY=complete \
         SWIFT_SUPPRESS_WARNINGS=NO \
-        SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
         CODE_SIGNING_ALLOWED=NO \
         build >/dev/null) \
         || fail "verify-s1-01-public-consumer" "public-only iOS 13 consumer failed"

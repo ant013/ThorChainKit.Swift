@@ -1,0 +1,4 @@
+root=AccountAddressFactory.address
+allowed=Secp256k1PublicKeyValidator.validate,AccountAddressHasher.hash160,AddressCodec.encode,Address.init,BitConversion.convert,Bech32Codec.encode
+forbidden=mnemonic,seed,privateKey,HdWalletKit,WalletCore,URLSession,FileHandle,UserDefaults,print,os_log,Task,DispatchQueue,UIKit,SwiftUI,try?,try!,fatalError,precondition,return ""
+boundary=compressedPublicKey-only

@@ -183,6 +183,21 @@ assert "00-launch-foundation.yaml" not in maestro
 PY
 echo "PASS run-maestro-shim-s1-02"
 
+happy="$test_root/happy-s1-03"
+copy_fixture_repo "$happy"
+run_fixture "$happy" s1-03
+python3 - "$happy/commands.log" <<'PY' \
+    || fail "S1-03 exact flow argv audit failed"
+import sys
+
+lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+maestro = next(line for line in lines if line.startswith("maestro --device "))
+assert maestro.endswith(" .maestro/flows/02-address-codec.yaml"), maestro
+assert "00-launch-foundation.yaml" not in maestro
+assert "01-endpoint-policy.yaml" not in maestro
+PY
+echo "PASS run-maestro-shim-s1-03"
+
 fixture="$test_root/missing-slice"
 copy_fixture_repo "$fixture"
 if SHIM_LOG="$fixture/commands.log" SHIM_UDID="$canary_udid" PATH="$fixture/shims:$PATH" \

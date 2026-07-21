@@ -34,9 +34,15 @@ struct DiagnosticsView: View {
         }
         .navigationTitle("THORChainKit")
         .toolbar {
-            NavigationLink(destination: EndpointsView(model: endpoints)) {
-                Text("Endpoints")
-                    .accessibilityIdentifier("endpoint-policy-open")
+            HStack {
+                NavigationLink(destination: AddressView(network: model.runtime.network)) {
+                    Text("Address")
+                        .accessibilityIdentifier("address-codec-open")
+                }
+                NavigationLink(destination: EndpointsView(model: endpoints)) {
+                    Text("Endpoints")
+                        .accessibilityIdentifier("endpoint-policy-open")
+                }
             }
         }
     }
