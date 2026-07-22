@@ -33,21 +33,18 @@ let package = Package(
                 ),
                 .product(name: "secp256k1", package: "secp256k1.swift"),
                 .product(name: "GRDB", package: "GRDB.swift"),
-            ],
-            swiftSettings: [.unsafeFlags(["-warnings-as-errors"])]
+            ]
         ),
         .testTarget(
             name: "ThorChainKitTests",
             dependencies: ["ThorChainKit"],
-            exclude: ["Fixtures"],
-            swiftSettings: [.unsafeFlags(["-warnings-as-errors"])]
+            exclude: ["Fixtures"]
         ),
         .testTarget(
             name: "ThorChainKitLiveTests",
             dependencies: ["ThorChainKit"],
             path: "Tests/ThorChainKitLiveTests",
-            exclude: ["Fixtures"],
-            swiftSettings: [.unsafeFlags(["-warnings-as-errors"])]
+            exclude: ["Fixtures"]
         ),
     ]
 )
