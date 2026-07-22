@@ -44,7 +44,7 @@ The adjacent MarketKit checkout was verified with Git and JSON inspection. It co
 - `D-THR118-SEC@1` — ACCEPT: strict mainnet codec, canonical output, fail-closed metadata, exact integer balance, and no secret material.
 - `D-THR118-VERIFY@1` — ACCEPT: released metadata gate, AppTests, Development manual acceptance, and no Maestro in Unstoppable.
 
-Discovery 1/2 requested changes. The stable blocker allowlist is `D-S107-REV-001` through `D-S107-REV-007`; revision 3 addresses each with current-tree anchors and explicit tests or a named release artifact gate. No closure review has been consumed; closure remains `0/5`. Gimle trust remains YELLOW because the freshness warning and current-tree workaround are unchanged. Implementation remains blocked pending fresh bounded review, explicit operator approval of the exact spec and plan, and the MarketKit owner’s released metadata/cache artifact.
+Discovery 1/2 requested changes. Revision 3 was rejected for seven frozen corrections; revision 4 reworks the design without reopening discovery. The stable blocker allowlist remains `D-S107-REV-001` through `D-S107-REV-007`; no closure review has been consumed; closure remains `0/5`. Gimle trust remains YELLOW because the freshness warning and current-tree workaround are unchanged. Implementation remains blocked pending fresh bounded review, explicit operator approval of the exact spec and plan, and the MarketKit owner’s released metadata/cache artifact.
 
 ## Revision 3 evidence updates
 
@@ -54,3 +54,11 @@ Discovery 1/2 requested changes. The stable blocker allowlist is `D-S107-REV-001
 - Current cache evidence is named rather than inferred: `EnabledWalletCache` uses `enabled_wallet_caches` with (tokenQueryId, accountId) primary key and `total`/`available` columns; `StorageMigrator` registers `Update EnabledWalletCache scheme`. Revision 3 requires a seeded native-RUNE row, expected post-migration values, and deterministic throwing query injection.
 - The explorer URL literal remains unresolved because the local MarketKit feature branch is not a release and does not establish the backend/cache value. Step 1 is therefore explicitly blocked on a MarketKit owner artifact containing the exact release version, decoded fixture, and literal template.
 - Manual verification now requires offline relaunch with unchanged address, stale/error cached state rather than fresh/zero, recovery to fresh, and one-adapter evidence after reload.
+
+## Revision 4 corrections
+
+- `D-S107-REV-001`: names the production `WalletQuerying` seam, `WalletLoadResult`, display-only `UnavailableWallet` consumer, and exact terminal/retryable codes `invalid_stored_token_query`, `token_metadata_unavailable`, and `blockchain_metadata_unavailable`; `WalletListViewModel` never constructs a zero-balance fallback for an unavailable record.
+- `D-S107-REV-003`: restores guards/tests for WalletView row Send/Swap, top-level SendTokenList and Swap, WalletTokenViewModel buttons, token-seeded MultiSwap, and QR/deep-link Send, with generic non-THOR behavior unchanged.
+- `D-S107-REV-005`: selects value-preserving `Update EnabledWalletCache scheme` migration by copying `(tokenQueryId, accountId, total, available)` through the rewrite; intentional invalidation/reseed is excluded.
+- `D-S107-REV-006`: names `AdapterFactory`’s `.native/.thorChain` case and `ThorChainAdapter.init`, adds exact `thorchain/thorchain/RUNE/native/8` negatives, and names `.mnemonic/.native` support in `AccountType.supports(token:)`.
+- `D-S107-REV-007`: adds a runnable `xcodebuild -showdestinations` plus `xcodebuild test -only-testing:AppTests` block and a concrete online/offline/recovery/adapter-count checklist without a host-local path or secret fixture.
