@@ -1,13 +1,18 @@
 # S1-06 — Unstoppable lifecycle composition
 
-**Status:** design revision 5; implementation blocked pending adversarial review,
-explicit approval, and a dedicated host feature worktree.
+**Status:** design revision 6; implementation blocked pending adversarial review
+and explicit approval of this corrected `version/0.50` design.
 **Risk:** high/host integration.
-**Base:** clean `origin/main` at
-`0f572e455be07df798a233eff31bbc27bb0940c5`; discovery 2/2, closure 0/5.
+**ThorChainKit spec base:** clean `origin/main` at
+`0f572e455be07df798a233eff31bbc27bb0940c5`.
+**Unstoppable base:** clean official `origin/version/0.50` at
+`8a63bfda028dd8543115b26dd777235a53304311` in the adjacent local worktree
+`/Users/ant013/Data/AI/unstoppable-wallet-ios-THR-104-v0.50`; no Unstoppable
+commit, push, PR, or merge is permitted before the owner declares the complete
+local integration ready for delivery.
 **Observable outcome:** the approved host composition seam constructs one
 unstarted `ThorChainKit` wrapper for a manually constructed native RUNE wallet
-from exact consumable ThorChainKit and MarketKit revisions, and the adapter
+from the adjacent local ThorChainKit and MarketKit worktrees, and the adapter
 owns start/stop/refresh with checked state bridging. The minimum
 `.native/.thorChain` route is included; discovery, UI, import, relaunch, and
 explorer surfaces remain S1-07.
@@ -21,22 +26,20 @@ sole lifecycle owner. S1-06 also supplies the smallest MarketKit identity and
 native-RUNE metadata needed for the real manually constructed route. Discovery,
 UI, import, relaunch, and explorer behavior remain S1-07 work.
 
-This spec describes future Unstoppable changes, but does not create a branch,
-spec, or files in that repository now. Phase 1 used only the detached clean
-evidence worktree bound in the Gimle checkpoint, fetched `origin/master` at
-`db86b99e9a12d758729a41c83a514b709df0a525`, with the official
-`https://github.com/horizontalsystems/unstoppable-wallet-ios.git` origin and a
-clean status. The pre-existing dirty Zcash checkout remains untouched and is
-excluded from source evidence.
+The only implementation workspace is the adjacent clean local worktree based
+on the official `origin/version/0.50` commit above. Its branch
+`local/THR-104-thorchain-lifecycle-v0.50` is local-only and initially clean.
+The obsolete `master`-based branch and closed PR #7132 are recovery evidence,
+not implementation input. The pre-existing dirty Zcash checkout remains
+untouched and excluded from source evidence.
 
-The existing reviewed S1-06 draft is the input to this revision, not approval
-of it. Exact-head verification corrected two draft assumptions: the host has
-no `AccountAddressProvider.swift` or `IAccountAddressProvider`; the mnemonic
-boundary belongs in the existing `AccountAddress.swift`, and the host's
-current `Core` construction uses a local manager value rather than a stored
-`Core` property. The current `TronKitManager` starts its kit at the manager
-boundary and the current `TronAdapter` lifecycle methods are empty; those are
-the explicit deltas for this slice.
+The existing reviewed S1-06 draft is input to this revision, not approval of
+it. Verification at the corrected base changes one load-bearing decision:
+`version/0.50` has `IAccountAddressProvider` and provider registration in
+`AccountAddress.swift`, so THOR derivation must extend that provider boundary.
+The old direct-static `master` patch is rejected. The current
+`TronKitManager` still starts its kit at the manager boundary and the current
+`TronAdapter` lifecycle methods remain empty; those are the lifecycle deltas.
 
 ## Scope
 
@@ -75,7 +78,7 @@ Unstoppable/Tests/ThorChain/ThorChainIntegrationTests.swift
 
 The current WalletCore `Package.swift` has no test target. Host tests are added
 to the existing `AppTests` target under `Unstoppable/Tests/ThorChain`; the
-exact origin/master checkout already contains `Unstoppable/Tests/AppTests.swift`
+exact `version/0.50` checkout already contains `Unstoppable/Tests/AppTests.swift`
 and the current Xcode test target is the host test seam. No new speculative
 `WalletCoreTests` target is created in S1-06.
 
@@ -102,41 +105,39 @@ The change is limited to the public identity required by the host route:
   `Package.swift` test-target wiring — assert enum round-trip, native query,
   decimals, and token type without discovery or UI behavior.
 
-The exact resulting MarketKit commit is a release input to the host branch and
-must be pinned by exact `revision:` in `packages/WalletCore/Package.swift`
-before the host PR is reviewable. The local path is never written into a
-manifest or committed file; resolver output is external verification evidence.
+During implementation, the adjacent MarketKit checkout is used by a relative
+local path in the uncommitted WalletCore manifest. No new MarketKit push or PR
+is part of this slice. Converting that local path to a deliverable revision,
+committing, and pushing are deferred until the owner explicitly declares the
+complete local integration ready.
 
 ## Host files to modify
 
 - `unstoppable-wallet-ios/packages/WalletCore/Package.swift:1` — dependency/product `ThorChainKit`.
 - `unstoppable-wallet-ios/Unstoppable.xcodeproj/project.pbxproj:1` — direct
   `ThorChainKit` product dependency for the existing `AppTests` target.
-- `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Models/AccountAddress.swift:1` — add the direct `thorChainAddress(account:)` boundary alongside the existing EVM/TRON static address methods.
+- `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Models/AccountAddress.swift:1` — extend `IAccountAddressProvider` with THOR address resolution and route `AccountAddress.thorChainAddress(account:)` through the registered providers.
+- `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Models/AccountAddressProvider.swift:1` — implement the mnemonic-only THOR derivation method in the existing default provider.
 - `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Core/Factories/AdapterFactory.swift:8` — manager injection, native route.
 - `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Core/Core.swift:250-348` — construction/wiring; verify exact anchors before editing.
 
-The package dependency uses the public ThorChainKit repository URL
-`https://github.com/ant013/ThorChainKit.Swift.git` and product `ThorChainKit`.
-The currently reviewed `0f572e455be07df798a233eff31bbc27bb0940c5` manifest is
-not consumable as a remote WalletCore dependency because it places
-`-warnings-as-errors` in target `unsafeFlags`. Before host resolution, a
-separately reviewed ThorChainKit commit removes all target-level unsafe flags;
-warnings-as-errors remain an explicit owned-target build/CI invocation. The
-host pins that exact published SHA in `packages/WalletCore/Package.swift`. No tag, moving branch,
-host-local path, or absolute operator path is committed.
+`Wallet.xcworkspace` already consumes `packages/WalletCore` locally. During
+development, the uncommitted WalletCore manifest uses relative sibling paths
+to ThorChainKit and MarketKit; it must not contain an absolute operator path.
+Warnings-as-errors remains an owned local ThorChainKit verification command.
+Delivery-form remote revisions, if required, are chosen only at the final
+owner-authorized commit/push stage and are not an S1-06 implementation gate.
 
 `AdapterManager` must not change for the THORChain lifecycle. If implementation requires a THOR-specific refresh case, the design returns for review.
 
 The exact MarketKit base is `origin/master` at
 `95c92c876c3f40c28816e8e9891d6ffaf6eb0828` in the adjacent clean clone
 label `MarketKit.Swift-THR-104` on branch
-`feature/THR-104-thorchain-metadata`. S1-06 owns the smallest committed
+`feature/THR-104-thorchain-metadata`. S1-06 owns the smallest local
 MarketKit delta from that base: `BlockchainType.thorChain` with stable UID,
 the native RUNE blockchain/token metadata and query result needed by the host
-route, and focused public metadata tests. The resulting commit SHA is recorded
-in the final Unstoppable `Package.swift`; during local development only, the
-clean adjacent clone may be used as an uncommitted resolver override. No
+route, and focused public metadata tests. The adjacent clone is used through
+an uncommitted relative resolver path until final delivery authorization. No
 temporary local enum or wrong-chain mapping is allowed. S1-07 owns discovery,
 UI, import, relaunch, and explorer behavior above this identity layer.
 
@@ -247,12 +248,22 @@ No signer in Sprint 1 wrapper. It is added by send spec, so read-only boundary c
 ## Address host boundary
 
 ```swift
+public protocol IAccountAddressProvider {
+    func thorChainAddress(account: Account) throws -> ThorChainKit.Address?
+}
+
+public extension IAccountAddressProvider {
+    func thorChainAddress(account _: Account) throws -> ThorChainKit.Address? { nil }
+}
+
 extension AccountAddress {
     static func thorChainAddress(account: Account) throws -> ThorChainKit.Address
 }
 ```
 
-- `AccountAddress.thorChainAddress` is a direct static method in the existing `AccountAddress.swift`, matching the current EVM/TRON boundary; no provider protocol or new provider file is introduced;
+- `IAccountAddressProvider` is the current `version/0.50` address extension seam; its existing conformer gains the THOR method and `AccountAddress.thorChainAddress` iterates registered providers exactly like EVM/TRON;
+- the protocol extension returns `nil` by default so adding the method does not break existing external conformers; the built-in `AccountAddressProvider` supplies the mnemonic THOR implementation;
+- no parallel direct-static derivation bypass or new provider registry is introduced;
 - supports only `.mnemonic`;
 - obtains mnemonic seed through existing `AccountType.mnemonicSeed`;
 - uses `DerivationPath.defaultAccount.rawValue` through the approved S1-03
@@ -423,6 +434,7 @@ dimension.
 | TRON host analog | ThorChain decision |
 |---|---|
 | `TronKitManager` cache/wrapper/factory shape | retained |
+| `IAccountAddressProvider` plus `AccountAddressProvider` | retained and extended for mnemonic-only THOR derivation |
 | manager calls `tronKit.start()` | prohibited |
 | `TronAdapter.start/stop/refresh` empty | rejected lifecycle counterexample |
 | `MoneroAdapter` real `IAdapter` lifecycle | positive lifecycle contract for exact signatures and non-empty lifecycle |
@@ -440,6 +452,7 @@ dimension.
   wrapper;
 - concurrent same-account construction is serialized and creates one live kit;
 - mnemonic no seed and unsupported type typed errors;
+- a legacy custom `IAccountAddressProvider` that implements only the existing EVM/TRON methods still compiles and returns `nil` for THOR through the default method;
 - factory receives exact address/network/walletId/endpoints;
 - deterministic full-address vector proves the S1-03 derivation boundary and
   guards against local path reconstruction;
@@ -493,11 +506,10 @@ dimension.
 
 ## Verification
 
-- Build the ThorChainKit package after removing target-level unsafe flags and
-  enforce `-warnings-as-errors` in the owned local verifier. Build WalletCore
-  against the exact published ThorChainKit and MarketKit SHAs recorded in
-  `Package.swift`; local development may temporarily resolve MarketKit from
-  the adjacent clean clone only.
+- Build the local ThorChainKit package with `-warnings-as-errors` through the
+  owned local verifier. Build WalletCore from the tracked local workspace with
+  relative local ThorChainKit and MarketKit dependencies in the uncommitted
+  manifest.
 - Run the manager, adapter, and integration tests, including the real
   `.native/.thorChain` route and the MarketKit identity query.
 - Compile `AppTests` with normal `import ThorChainKit` after adding the direct
@@ -507,22 +519,21 @@ dimension.
   with stable `-only-testing:AppTests/ThorChainKitManagerTests`,
   `-only-testing:AppTests/ThorChainAdapterTests`, and
   `-only-testing:AppTests/ThorChainIntegrationTests` selectors, an explicitly
-  named physical iPhone destination, and a result bundle path. Before and after
-  the command, assert clean status, exact approved HEAD, zero skipped tests,
-  exact dependency SHAs, and the implementation file allowlist; do not use a
-  simulator.
+  named approved local destination and a result bundle path. Bind evidence to
+  the exact `version/0.50` base SHA plus SHA-256 of the complete uncommitted
+  binary diff, assert zero skipped tests, and check the implementation file
+  allowlist.
 - Search/diff proves no `.thorChain` special-case added to `AdapterManager.refresh`.
 - Run the manually constructed native RUNE wallet against the approved
-  controlled mainnet endpoint after both exact dependency SHAs resolve.
+  controlled mainnet endpoint after both local dependencies resolve.
 - Inspect injected lifecycle logs/counters: exactly one active kit per account,
   one stop on removal, and no post-stop work.
 
 ## Acceptance criteria
 
-- Host manager/adapter code compiles with the standalone package product at
-  the exact published manifest-compatible ThorChainKit SHA and exact resulting
-  MarketKit SHA recorded in `Package.swift`; the reviewed unsafe-flag
-  revision is rejected.
+- Host manager/adapter code compiles from the tracked `version/0.50` workspace
+  with local ThorChainKit and MarketKit dependencies; no absolute local path is
+  present.
 - `AppTests` has a direct ThorChainKit product dependency and compiles the
   exact current adapter protocol surface; no invented WalletCore test target is
   required.
@@ -538,5 +549,6 @@ dimension.
 
 ## Recorded decisions
 
-1. Before implementation, the anchors are refreshed on the new host integration branch because the Gimle index is stale; the architectural targets remain `packages/WalletCore/Sources/WalletCore/Models/AccountAddress.swift`, `packages/WalletCore/Sources/WalletCore/Core/Core.swift`, `AdapterFactory`, and `AdapterManager`.
+1. The authoritative host base is `origin/version/0.50` at `8a63bfda028dd8543115b26dd777235a53304311`; Palace and the adjacent clean worktree match this commit, while the `master` patch is rejected.
 2. Standalone correctness remains in `ThorChainKitTests`; host manager/adapter/factory tests run in the existing `AppTests` target through the `Development` scheme.
+3. Unstoppable review and QA bind the local snapshot as `base SHA + SHA-256(binary diff)`. There is no Unstoppable commit, push, PR, or merge before explicit final delivery authorization.

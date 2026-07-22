@@ -98,7 +98,7 @@ any design edit; a plan pin does not imply approval.
 | `S1-03-derivation-address-codec.md` | `e0b742799b14222947b8e43f56a17bfc92b3f0279c3a5abbe4a2a0fcb2a335cd` |
 | `S1-04-thornode-read-client.md` | `72d9054b52a987bee0e056af9cdfd0039b66a48271bf77f279214615240ed4a0` |
 | `S1-05-rune-account-sync.md` | `5345c4ef169d4c39187bef7371a16cae5a779164ddecbbe97a99ff12b471a0ff` |
-| `S1-06-unstoppable-lifecycle-composition.md` | `c5b7fc0fca855a2d77479c12c0966cff8634d22566797c47a207361743235c54` |
+| `S1-06-unstoppable-lifecycle-composition.md` | `cbd16b637761df6f3b370a4ea79279a2bb7b84c2276a305ac800ba2e6e880bd3` |
 | `S1-07-unstoppable-rune-surface.md` | `9da09bfc288bf9e43565f503d2db06b29f57291f0870c1d9729f9d092e2f502c` |
 | `docs/specs/ci/build-only-github-actions.md` | `57f2a0dd85c50aeeaa67ffd87da278b5b9897103138a8dafee901b1ab6b66f15` |
 | `docs/superpowers/plans/2026-07-19-THR-13-s1-02-network-endpoint-policy.md` | `b6f98cda1a9e6c04107633a871e63b5c47be7e456150288ca63f716a814fd497` |
