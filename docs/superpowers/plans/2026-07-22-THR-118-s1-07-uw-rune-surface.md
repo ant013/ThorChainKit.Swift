@@ -7,8 +7,8 @@ Make native mainnet RUNE discoverable, strictly addressable, balance/receive-vis
 ## Current phase and approval gate
 
 - [x] Evidence and analog selection completed (`discovery 1/2`); exact v0.50 checkout independently verified.
-- [x] Design revision 2 and delta matrix written.
-- [x] Adversarial review completed and recorded (`D-THR118-ARCH`, `D-THR118-SEC`, `D-THR118-VERIFY`).
+- [x] Design revision 3 and delta matrix written; discovery-1 blocker allowlist addressed (`D-S107-REV-001` … `D-S107-REV-007`).
+- [ ] Fresh bounded adversarial review of revision 3 (`discovery 1/2`, closure `0/5`).
 - [ ] Operator explicitly approves this spec and plan.
 - [ ] Released MarketKit/backend/cache contract is available.
 - [ ] Implementation is authorized and assigned to the Swift engineer.
@@ -17,7 +17,7 @@ No implementation, UW commit, push, or PR is authorized by this plan revision.
 
 ## Assumptions and non-goals
 
-Assumptions: MarketKit will release UID `thorchain`, native RUNE with decimals `8`, and the approved explorer template; S1-06 remains the owner of `ThorChainKitManager`, factory, adapter, and address-provider composition; existing WalletCore generic discovery/storage/lifecycle seams remain valid.
+Assumptions: the MarketKit owner will provide a released UID `thorchain`, native RUNE with decimals `8`, and an authoritative explorer/cache fixture; S1-06 remains the owner of `ThorChainKitManager`, factory, adapter, and address-provider lifecycle composition; existing WalletCore generic seams can carry a retryable unavailable state with the smallest compatible API delta.
 
 Non-goals: default enable, URI/deeplink, history, send/swap, non-native THOR assets, stagenet, Maestro, fixture transport, launch arguments, acceptance-only runtime code, atomic restore migration, or changes to S1-06-owned files.
 
@@ -29,9 +29,9 @@ Non-goals: default enable, URI/deeplink, history, send/swap, non-native THOR ass
 
 **Affected paths:** released MarketKit package and backend/cache contract; `packages/WalletCore/Package.swift` only for the dependency bump.
 
-**Acceptance:** release contains `.thorChain`, UID `thorchain`, native RUNE code, decimals `8`, and explorer `$ref` metadata; WalletCore resolves the released version. A local feature branch alone is insufficient.
+**Acceptance:** release contains `.thorChain`, UID `thorchain`, native RUNE code, decimals `8`, and explorer metadata. The MarketKit owner must attach the exact release tag/version plus decoded cache fixture (including the literal explorer template) as the authoritative verification artifact; until then this step is blocked and a local feature branch is insufficient.
 
-**Verification:** MarketKit UID/backend/cache/native-query tests and a clean WalletCore dependency resolution against the released version.
+**Verification:** MarketKit UID/backend/cache/native-query tests, decoded release/cache artifact, and clean WalletCore dependency resolution against that released version.
 
 **Dependency:** blocks Steps 2–5.
 
@@ -41,7 +41,7 @@ Non-goals: default enable, URI/deeplink, history, send/swap, non-native THOR ass
 
 **Affected paths:** `packages/WalletCore/Sources/WalletCore/Extensions/BlockchainType.swift`; existing Manage Wallets/AppTests seams.
 
-**Acceptance:** `.thorChain` is supported and ordered immediately after `.tron`, is described as `RUNE`, uses generic native-token queries, supports only the approved mnemonic policy, and is not default-enabled.
+**Acceptance:** `.thorChain` is supported and ordered immediately after `.tron`, is described as `RUNE`, uses generic native-token queries filtered to exact RUNE identity, preserves create defaults, is selectable by `RestoreCoinsViewModel`, supports only the approved mnemonic policy, and is not default-enabled.
 
 **Verification:** targeted AppTests for supported/order/description/native query/account policy plus Manage Wallets search → manual enable.
 
@@ -63,11 +63,11 @@ Non-goals: default enable, URI/deeplink, history, send/swap, non-native THOR ass
 
 **Owner:** Swift engineer, then independent QA.
 
-**Affected paths:** `AppStatusViewModel.swift` for the one status enum case; existing AppTests; no speculative edits to WalletStorage, WalletManager, RestoreHelper, adapter, or receive/balance consumers.
+**Affected paths:** `AppStatusViewModel.swift`, `WalletStorage.swift`, `WalletManager.swift`/`WalletData`, `WalletView.swift`, existing AppTests, and cache migration fixtures; no lifecycle rewrite in the S1-06 manager/adapter.
 
-**Acceptance:** exact 8-decimal balance, canonical `thor1…` receive address, sanitized status, restore selection, cold reconstruction, offline stale/error retention, recovery, remove/stop, and reinstall/no-cache all work through generic seams. Missing metadata fails closed without silent deletion.
+**Acceptance:** exact 8-decimal balance, canonical `thor1…` receive address, sanitized status, restore selection, direct WalletView Send/Swap guard, cold reconstruction, durable unavailable identity, stale/error publication and retry, offline stale/error retention, recovery, one-adapter invariant, remove/stop, and reinstall/no-cache all work through generic seams. Missing token/chain or throwing token/blockchain queries fail closed without silent deletion.
 
-**Verification:** AppTests with adapter/storage spies; manual Development checklist on a public no-funds account. Record app/configuration/device/OS/endpoint/observed values without mnemonic material. No Maestro.
+**Verification:** AppTests with deterministic MarketKit/adapter/endpoint spies covering cache seed, both throwing query sites, unavailable-state retry, exact identity negatives, WalletView guards, offline/recovery transitions, and adapter count; manual Development checklist on a public no-funds account. Record app/configuration/device/OS/endpoint/observed values without mnemonic material. No Maestro.
 
 **Dependency:** Steps 1–3 and S1-06 local lifecycle composition.
 
@@ -85,4 +85,4 @@ Non-goals: default enable, URI/deeplink, history, send/swap, non-native THOR ass
 
 ## Handoff and closure rules
 
-The implementation phase is a separate authorized workflow. Every handoff records `discovery 1/2` and `closure 0/5` until closure starts. Medium/low observations become backlog; a new blocker must cite a current acceptance criterion, exact repository evidence, and a concrete safety/implementation/verification failure. Once acceptance is satisfied, stop revising and hand off once.
+The implementation phase is a separate authorized workflow. Every handoff records `discovery 1/2` and `closure 0/5` until closure starts. The seven discovery blockers are now the stable allowlist; closure rechecks only those IDs and changed-line regressions. Medium/low observations become backlog; a new blocker must cite a current acceptance criterion, exact repository evidence, and a concrete safety/implementation/verification failure. Once acceptance is satisfied, stop revising and hand off once.

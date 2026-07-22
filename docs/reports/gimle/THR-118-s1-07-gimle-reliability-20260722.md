@@ -44,4 +44,13 @@ The adjacent MarketKit checkout was verified with Git and JSON inspection. It co
 - `D-THR118-SEC@1` — ACCEPT: strict mainnet codec, canonical output, fail-closed metadata, exact integer balance, and no secret material.
 - `D-THR118-VERIFY@1` — ACCEPT: released metadata gate, AppTests, Development manual acceptance, and no Maestro in Unstoppable.
 
-Discovery is frozen at `1/2`; closure is `0/5`. Implementation remains blocked pending explicit operator approval of the exact spec and plan revision.
+Discovery 1/2 requested changes. The stable blocker allowlist is `D-S107-REV-001` through `D-S107-REV-007`; revision 3 addresses each with current-tree anchors and explicit tests or a named release artifact gate. No closure review has been consumed; closure remains `0/5`. Gimle trust remains YELLOW because the freshness warning and current-tree workaround are unchanged. Implementation remains blocked pending fresh bounded review, explicit operator approval of the exact spec and plan, and the MarketKit owner’s released metadata/cache artifact.
+
+## Revision 3 evidence updates
+
+- `WalletStorage.wallets(account:)` currently compacts missing token queries and missing fallback metadata; `WalletManager._reloadWallets` publishes `WalletData(wallets: [], account:)` after either query failure. Revision 3 defines durable `EnabledWallet` identity, sanitized unavailable codes, the published `WalletData` state, `preloadWallets()` retry, and four exact AppTest failure/retry assertions.
+- `RestoreCoinsViewModel.loadBlockchains()` and `restore()` are the normal mnemonic import owner/consumer path; `CreateAccountViewModel.activateDefaultWallets()` remains BTC BIP84 plus ETH native. Revision 3 tests both paths and exact RUNE-only filtering, including RUJI/TCY negatives.
+- `WalletView.itemsView()` has direct Send and token-seeded MultiSwap context actions. Revision 3 makes that ingress part of the acceptance contract and requires RUNE rows to hide/block both actions.
+- Current cache evidence is named rather than inferred: `EnabledWalletCache` uses `enabled_wallet_caches` with (tokenQueryId, accountId) primary key and `total`/`available` columns; `StorageMigrator` registers `Update EnabledWalletCache scheme`. Revision 3 requires a seeded native-RUNE row, expected post-migration values, and deterministic throwing query injection.
+- The explorer URL literal remains unresolved because the local MarketKit feature branch is not a release and does not establish the backend/cache value. Step 1 is therefore explicitly blocked on a MarketKit owner artifact containing the exact release version, decoded fixture, and literal template.
+- Manual verification now requires offline relaunch with unchanged address, stale/error cached state rather than fresh/zero, recovery to fresh, and one-adapter evidence after reload.
