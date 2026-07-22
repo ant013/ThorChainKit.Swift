@@ -44,7 +44,7 @@ The adjacent MarketKit checkout was verified with Git and JSON inspection. It co
 - `D-THR118-SEC@1` — ACCEPT: strict mainnet codec, canonical output, fail-closed metadata, exact integer balance, and no secret material.
 - `D-THR118-VERIFY@1` — ACCEPT: released metadata gate, AppTests, Development manual acceptance, and no Maestro in Unstoppable.
 
-Discovery 1/2 requested changes. The authoritative state records seven `REVISE` decisions against the first recorded spec artifact; no one of those decisions is treated as accepted. Design revision 5 addresses all seven without reopening discovery. No closure review has been consumed; closure remains `0/5`. Gimle trust remains YELLOW because the freshness warning and current-tree workaround are unchanged. Implementation remains blocked pending the next fresh bounded review and explicit operator approval of the exact spec and plan. The MarketKit owner’s released metadata/cache artifact remains a separate hard final-acceptance/commit gate; approved local implementation may use only pinned head `2c327452237cfbbdc4d87bcd5dd417d1da46a61e` until then.
+Discovery 1/2 requested changes. The first recorded spec artifact received seven `REVISE` decisions. Exact-head design revision 5 then received `ACCEPT` for IDs 001, 002, 004, and 005 and targeted `REVISE` for IDs 003, 006, and 007. Design revision 6 corrects those three direct regressions without reopening discovery. No closure review has been consumed; closure remains `0/5`. Gimle trust remains YELLOW because the freshness warning and current-tree workaround are unchanged. Implementation remains blocked pending the next fresh bounded review and explicit operator approval of the exact spec and plan. The MarketKit owner’s released metadata/cache artifact remains a separate hard final-acceptance/commit gate; approved local implementation may use only pinned head `2c327452237cfbbdc4d87bcd5dd417d1da46a61e` until then.
 
 ## Revision 3 evidence updates
 
@@ -66,3 +66,13 @@ Discovery 1/2 requested changes. The authoritative state records seven `REVISE` 
 - `D-S107-REV-007` (REVISE → addressed): requires offline relaunch with unchanged address, explicit stale/unavailable state, fresh recovery, and exactly one adapter after every reload, backed by deterministic AppTests and the manual checklist.
 
 The prior handoff label `GIMLE-THR118-WORKTREE-001` is reconciled here as a non-separate alias for the canonical `GIMLE-THR118-FRESHNESS-001` limitation recorded above; no second defect is claimed.
+
+## Revision 5 exact-head review and revision 6 corrections
+
+- `D-S107-REV-001@2` — ACCEPT: the unknown literal explorer template is bound to an owner-supplied release/cache artifact required before final delivery; local work remains pinned and cannot claim that gate.
+- `D-S107-REV-002@2` — ACCEPT: durable unavailable identity, exact codes, deterministic retry, and identity-keyed terminal removal are explicit.
+- `D-S107-REV-003@2` — REVISE → addressed: `RegularMultiSwapView` and `MultiSwapViewModel` are now named as the direct seed boundary, with native-RUNE rejection and mixed non-THOR direct-seed tests.
+- `D-S107-REV-004@2` — ACCEPT: `RestoreCoinsViewModel` remains the actual import owner and create defaults remain unchanged.
+- `D-S107-REV-005@2` — ACCEPT: the legacy `balance`/`balanceLocked` mapping, composite key, and non-zero sentinel are truthful and deterministic.
+- `D-S107-REV-006@2` — REVISE → addressed: affected paths now include preferred-token discovery, restore selection, WalletStorage reconstruction, direct seed, and adapter composition; decoded mismatches are terminal `invalid_stored_token_query` before any `Wallet` construction.
+- `D-S107-REV-007@2` — REVISE → addressed: the final-delivery preflight now proves canonical root/HEAD, rejects a local MarketKit path, binds the released version and resolved digest, and specifies exact adapter-map counting while preserving the acyclic phase dependency.

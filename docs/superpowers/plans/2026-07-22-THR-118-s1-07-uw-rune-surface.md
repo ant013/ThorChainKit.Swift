@@ -1,4 +1,4 @@
-# THR-118 — S1-07 Unstoppable RUNE surface (design revision 5)
+# THR-118 — S1-07 Unstoppable RUNE surface (design revision 6)
 
 ## Goal
 
@@ -7,8 +7,8 @@ Make native mainnet RUNE discoverable, strictly addressable, balance/receive-vis
 ## Current phase and approval gate
 
 - [x] Evidence and analog selection completed (`discovery 1/2`); exact v0.50 checkout independently verified.
-- [x] Design revision 5 and delta matrix written; all seven frozen `D-S107-REV-001` through `D-S107-REV-007` corrections are addressed.
-- [ ] Fresh bounded adversarial review of revision 5 (`discovery 1/2`, closure `0/5`).
+- [x] Design revision 6 and delta matrix written; exact-head review corrections for `D-S107-REV-003`, `006`, and `007` are addressed; `001`, `002`, `004`, and `005` are accepted.
+- [ ] Fresh bounded adversarial review of revision 6 (`discovery 1/2`, closure `0/5`).
 - [ ] Operator explicitly approves this spec and plan.
 - [ ] Released MarketKit/backend/cache contract is available before final acceptance/commit; approved local work remains pinned to MarketKit head `2c327452237cfbbdc4d87bcd5dd417d1da46a61e` until then.
 - [ ] Implementation is authorized and assigned to the Swift engineer.
@@ -39,7 +39,7 @@ Non-goals: default enable, URI/deeplink, history, send/swap, non-native THOR ass
 
 **Owner:** Swift engineer.
 
-**Affected paths:** `packages/WalletCore/Sources/WalletCore/Extensions/BlockchainType.swift`, `Models/AccountType.swift`; existing Manage Wallets/AppTests seams.
+**Affected paths:** `packages/WalletCore/Sources/WalletCore/Extensions/BlockchainType.swift`, `Models/AccountType.swift`, `Modules/ManageWallets/ManageWalletsTokenFetcher.swift`, `Modules/RestoreAccount/RestoreCoins/RestoreCoinsViewModel.swift`; existing Manage Wallets/AppTests seams.
 
 **Acceptance:** `.thorChain` is supported and ordered immediately after `.tron`, is described as `RUNE`, uses generic native-token queries filtered to exact RUNE identity after metadata resolution, applies the same predicate to preferred-token discovery, preserves create defaults, is selectable by `RestoreCoinsViewModel`, adds only `.mnemonic/.native` support in `AccountType.supports(token:)`, and is not default-enabled.
 
@@ -63,11 +63,11 @@ Non-goals: default enable, URI/deeplink, history, send/swap, non-native THOR ass
 
 **Owner:** Swift engineer.
 
-**Affected paths:** `Core/Factories/AdapterFactory.swift`, `Core/Adapters/ThorChain/ThorChainAdapter.swift`, `Modules/Wallet/WalletView.swift`, `Modules/Wallet/WalletViewModel.swift`, `Modules/Wallet/Token/WalletTokenViewModel.swift`, `Modules/Wallet/SendTokenListViewModel.swift`, `Modules/MultiSwap/TokenSelect/MultiSwapTokenSelectViewModel.swift`, `Modules/Main/Workers/SendAppShowWorker/AddressEventHandler.swift`, and existing AppTests.
+**Affected paths:** `Core/Factories/AdapterFactory.swift`, `Core/Adapters/ThorChain/ThorChainAdapter.swift`, `Modules/Wallet/WalletView.swift`, `Modules/Wallet/WalletViewModel.swift`, `Modules/Wallet/Token/WalletTokenViewModel.swift`, `Modules/Wallet/SendTokenListViewModel.swift`, `Modules/MultiSwap/RegularMultiSwapView.swift`, `Modules/MultiSwap/MultiSwapViewModel.swift`, `Modules/MultiSwap/TokenSelect/MultiSwapTokenSelectViewModel.swift`, `Modules/Main/Workers/SendAppShowWorker/AddressEventHandler.swift`, and existing AppTests.
 
 **Acceptance:** the `.native/.thorChain` factory case and adapter initializer both require `thorchain/thorchain/RUNE/native/8`; RUJI, TCY, wrong coin/blockchain UID, custom-token, and wrong-decimal records return no adapter. One shared capability predicate is applied to the five ingress families—WalletView row actions, downstream top-level SendTokenList/Swap selectors, token buttons, token-seeded MultiSwap, and QR/deep-link Send—and direct token-seeded initialization cannot bypass it. Mixed BTC/ETH-plus-RUNE fixtures keep generic non-THOR routes usable.
 
-**Verification:** composition negatives and one test per ingress family through existing AppTests seams; `rg` confirms every named route has the guard.
+**Verification:** composition negatives, native-RUNE direct-seed rejection, mixed non-THOR direct-seed compatibility, and one test per ingress family through existing AppTests seams; `rg` confirms every named route has the guard.
 
 **Dependency:** Steps 2–3, pinned local MarketKit head, and S1-06 local lifecycle composition; Step 1 remains the final-delivery gate.
 
