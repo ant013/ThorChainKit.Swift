@@ -1,14 +1,35 @@
 # S1-06 — Unstoppable lifecycle composition
 
-**Status:** design ready, implementation blocked pending approval.
+**Status:** design revision 2; implementation blocked pending adversarial review,
+explicit approval, and a dedicated host feature worktree.
 **Risk:** high/host integration.
+**Base:** clean `origin/main` at
+`0f572e455be07df798a233eff31bbc27bb0940c5`; discovery 1/2, closure 0/5.
 **Observable outcome:** a manually constructed native RUNE wallet creates one `ThorChainKit`; the adapter owns its start/stop/refresh lifecycle, and the balance reaches the existing wallet consumer without THOR-specific branches in `AdapterManager.refresh`.
 
 ## Goal
 
 Connect the standalone kit to the current WalletCore architecture along the verified TRON vertical, while correcting split lifecycle ownership: the manager only creates/caches the wrapper, and the adapter is the sole lifecycle owner.
 
-This spec describes future Unstoppable changes, but does not create a branch, spec, or files in that repository now.
+This spec describes future Unstoppable changes, but does not create a branch,
+spec, or files in that repository now. Phase 1 used only the detached clean
+evidence worktree at
+`/Users/ant013/Data/AI/gimle-skills/audit/worktrees/THR-104-uw-evidence`,
+fetched `origin/master` at
+`db86b99e9a12d758729a41c83a514b709df0a525`, with the official
+`https://github.com/horizontalsystems/unstoppable-wallet-ios.git` origin and a
+clean status. The pre-existing checkout at
+`/Users/ant013/Ios/HorizontalSystems/unstoppable-wallet-ios` remains untouched
+because it contains unrelated Zcash changes and an `.env` file.
+
+The existing reviewed S1-06 draft is the input to this revision, not approval
+of it. Exact-head verification corrected two draft assumptions: the host has
+no `AccountAddressProvider.swift` or `IAccountAddressProvider`; the mnemonic
+boundary belongs in the existing `AccountAddress.swift`, and the host's
+current `Core` construction uses a local manager value rather than a stored
+`Core` property. The current `TronKitManager` starts its kit at the manager
+boundary and the current `TronAdapter` lifecycle methods are empty; those are
+the explicit deltas for this slice.
 
 ## Scope
 
@@ -44,13 +65,16 @@ Unstoppable/Tests/ThorChain/ThorChainAdapterTests.swift
 Unstoppable/Tests/ThorChain/ThorChainIntegrationTests.swift
 ```
 
-The current WalletCore `Package.swift` has no test target. Host tests are added to the existing `AppTests` target under `Unstoppable/Tests/ThorChain`: this folder is already connected as a filesystem-synchronized group, and the shared `Development` scheme runs `AppTests` inside `Unstoppable.app`. No new speculative `WalletCoreTests` target is created in S1-06.
+The current WalletCore `Package.swift` has no test target. Host tests are added
+to the existing `AppTests` target under `Unstoppable/Tests/ThorChain`; the
+exact origin/master checkout already contains `Unstoppable/Tests/AppTests.swift`
+and the current Xcode test target is the host test seam. No new speculative
+`WalletCoreTests` target is created in S1-06.
 
 ## Host files to modify
 
 - `unstoppable-wallet-ios/packages/WalletCore/Package.swift:1` — dependency/product `ThorChainKit`.
-- `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Models/AccountAddress.swift:1` — add `thorChainAddress(account:)` and a protocol requirement with a compatibility default.
-- `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Models/AccountAddressProvider.swift:5` — mnemonic→HdWallet public key→ThorChainKit address.
+- `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Models/AccountAddress.swift:1` — add the direct `thorChainAddress(account:)` boundary alongside the existing EVM/TRON static address methods.
 - `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Core/Factories/AdapterFactory.swift:8` — manager injection, native route.
 - `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Core/Core.swift:98` — property/construction/wiring; verify the exact current path before editing.
 
@@ -107,7 +131,12 @@ final class ThorChainKitFactory: IThorChainKitFactory {
 }
 ```
 
-`IThorChainKit` is a regular internal production abstraction in WalletCore, not a test/DEBUG API or an extension to the public ThorChainKit API. The production conformance delegates to the exact public facade without adding behavior. `AppTests` pass a spy that implements the same protocol and verify lifecycle/publisher mapping without `@_spi(Testing)`, a fixture transport, or host launch arguments.
+`IThorChainKit` is a regular internal production abstraction in WalletCore, not
+a test/DEBUG API or an extension to the public ThorChainKit API. The production
+conformance delegates to the exact public facade without adding behavior.
+`AppTests` use the existing `Unstoppable/Tests` target and pass a spy that
+implements the same protocol; they do not import `@_spi(Testing)`, use a kit
+fixture transport, or require host launch arguments.
 
 ### `_thorChainKitWrapper(account:)`
 
@@ -137,10 +166,7 @@ extension AccountAddress {
 }
 ```
 
-- `AccountAddress.thorChainAddress` traverses registered `IAccountAddressProvider` instances in the same way as the EVM/TRON methods;
-- `IAccountAddressProvider` gains `func thorChainAddress(account:) throws -> ThorChainKit.Address?`;
-- the public protocol gains a default implementation returning `nil` to avoid source-level breakage for external/custom providers;
-- the concrete `AccountAddressProvider` implements the mnemonic path;
+- `AccountAddress.thorChainAddress` is a direct static method in the existing `AccountAddress.swift`, matching the current EVM/TRON boundary; no provider protocol or new provider file is introduced;
 - supports only `.mnemonic`;
 - obtains mnemonic seed through existing `AccountType.mnemonicSeed`;
 - derives default path 931 using approved S1-03 boundary;
@@ -232,19 +258,15 @@ Other token types on `.thorChain` return nil in Sprint 1.
 
 ## Core wiring
 
-Add:
-
-```swift
-let thorChainKitManager: ThorChainKitManager
-```
-
 Construction order:
 
 1. endpoint configuration provider;
 2. production `ThorChainKitFactory`;
 3. `ThorChainKitManager`;
 4. inject into `AdapterFactory`;
-5. `AdapterManager` receives only factory/wallet managers, not a new special-case manager.
+5. `AdapterManager` receives only its existing generic dependencies, not a new
+   THOR-specific manager or refresh branch. As in the current `Core` source,
+   the manager may remain a local construction value held by `AdapterFactory`.
 
 ## Lifecycle sequence
 
