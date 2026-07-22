@@ -8,7 +8,7 @@ Make native mainnet RUNE discoverable, strictly addressable, balance/receive-vis
 
 - [x] Evidence and analog selection completed (`discovery 1/2`); exact v0.50 checkout independently verified.
 - [x] Design revision 2 and delta matrix written.
-- [ ] Adversarial review completed and recorded.
+- [x] Adversarial review completed and recorded (`D-THR118-ARCH`, `D-THR118-SEC`, `D-THR118-VERIFY`).
 - [ ] Operator explicitly approves this spec and plan.
 - [ ] Released MarketKit/backend/cache contract is available.
 - [ ] Implementation is authorized and assigned to the Swift engineer.
