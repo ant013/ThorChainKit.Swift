@@ -4,7 +4,7 @@
 
 **Base:** `origin/main` / `0f572e455be07df798a233eff31bbc27bb0940c5`
 
-**Workflow phase:** design revision 3; approval blocked by MarketKit metadata
+**Workflow phase:** design revision 4; approval remains gated by MarketKit metadata
 
 **Trust:** RED for Gimle; current-tree fallback is usable.
 
@@ -53,6 +53,17 @@ uses the existing direct `AccountAddress.swift` boundary and keeps the manager
 local in `Core`, held by `AdapterFactory`, matching the current construction
 shape.
 
+## Dependency delivery decision
+
+ThorChainKit is public at
+`https://github.com/ant013/ThorChainKit.Swift.git`, with package/product name
+`ThorChainKit` and iOS 13 support. S1-06 pins the WalletCore package dependency
+to exact revision `0f572e455be07df798a233eff31bbc27bb0940c5` and records that
+revision in `Package.resolved`; no local path or moving branch is permitted.
+The repository currently has no tag or release. That is recorded as a bounded
+release-management residual, not an S1-06 blocker. Local resolution/build only
+is required.
+
 ## Adversarial review
 
 The bounded architecture, security/protocol-safety, and verification/operability
@@ -66,10 +77,11 @@ exhaustive state mapping, and refresh/concurrency negatives.
 
 The current host pin is MarketKit.Swift `3.6.12` at
 `95c92c876c3f40c28816e8e9891d6ffaf6eb0828`; it does not define THOR chain
-metadata. This is a critical current-slice dependency blocker, not a guessed
-fallback: S1-07 owns the released metadata revision and the `.native/.thorChain`
-route. The revised design keeps that route explicitly unavailable until the
-prerequisite is supplied.
+metadata. This remains the separate current-tree route boundary: S1-07 owns
+the metadata revision and the `.native/.thorChain` route. The revised design
+keeps that route explicitly unavailable until the prerequisite is supplied.
+The prior ThorChainKit no-tag/no-release concern is resolved as a bounded
+release-management residual by the exact remote SHA decision above.
 
 No implementation, host-repository modification, GitHub Actions test, mutant,
 simulator, Maestro run, or acceptance run was performed in phase 1.

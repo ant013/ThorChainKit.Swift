@@ -85,14 +85,17 @@ arguments.
 and the exact current `Core.swift`/`AdapterFactory.swift` wiring points.
 
 **Acceptance:** ThorChainKit is imported from
-`https://github.com/ant013/ThorChainKit.Swift.git` at the immutable post-merge
-SHA recorded in `Package.resolved`, never a host-local path; the existing
-`AppTests` target has a direct product dependency. Mnemonic derivation uses the
-approved S1-03 boundary and deterministic full-address vector; the manager
-caches by account ID, holds only an unstarted wrapper, and receives a provider
-and factory by injection. The provider enforces approved HTTPS mainnet hosts;
-production factory delegates exactly once to `Kit.instance` and never starts
-work. No new provider file, signer, or temporary chain enum is introduced.
+`https://github.com/ant013/ThorChainKit.Swift.git` at exact revision
+`0f572e455be07df798a233eff31bbc27bb0940c5`, recorded in `Package.resolved`,
+never a host-local path or moving branch; the product name is `ThorChainKit`
+and the existing `AppTests` target has a direct product dependency. The absence
+of a tag/release is a bounded release-management residual, not a slice blocker.
+Mnemonic derivation uses the approved S1-03 boundary and deterministic
+full-address vector; the manager caches by account ID, holds only an unstarted
+wrapper, and receives a provider and factory by injection. The provider
+enforces approved HTTPS mainnet hosts; production factory delegates exactly
+once to `Kit.instance` and never starts work. No new provider file, signer, or
+temporary chain enum is introduced.
 
 ### 3. Implement the adapter lifecycle and Rx bridge
 
@@ -139,7 +142,8 @@ approval.
 `-only-testing:AppTests/ThorChainAdapterTests` selectors, a named physical
 iPhone destination, and a result bundle path. Before and after, assert clean
 status, exact approved HEAD, and the implementation file allowlist. WalletCore
-builds against the immutable package revision. Exact `rg`/diff checks cover no
+resolves and builds against the public remote at exact revision
+`0f572e455be07df798a233eff31bbc27bb0940c5`. Exact `rg`/diff checks cover no
 `@_spi(Testing)`, no new `AdapterManager` THOR branch, no signer/history/swap/
 S1-07 files, no literal mnemonic, no secrets, and no post-stop work. Manual
 acceptance is gated on the MarketKit prerequisite and uses lifecycle counters.

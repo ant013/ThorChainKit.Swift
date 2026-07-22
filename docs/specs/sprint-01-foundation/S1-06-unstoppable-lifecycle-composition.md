@@ -1,14 +1,15 @@
 # S1-06 — Unstoppable lifecycle composition
 
-**Status:** design revision 3; implementation blocked pending adversarial review,
+**Status:** design revision 4; implementation blocked pending adversarial review,
 explicit approval, and a dedicated host feature worktree.
 **Risk:** high/host integration.
 **Base:** clean `origin/main` at
 `0f572e455be07df798a233eff31bbc27bb0940c5`; discovery 2/2, closure 0/5.
 **Observable outcome:** the approved host composition seam constructs one
-unstarted `ThorChainKit` wrapper and the adapter owns start/stop/refresh with
-checked state bridging. A manually constructed native RUNE consumer route is
-unavailable until the S1-07 MarketKit metadata prerequisite is released.
+unstarted `ThorChainKit` wrapper from the exact public package revision, and the
+adapter owns start/stop/refresh with checked state bridging. A manually
+constructed native RUNE consumer route remains gated by the S1-07 MarketKit
+metadata boundary.
 
 ## Goal
 
@@ -85,11 +86,12 @@ and the current Xcode test target is the host test seam. No new speculative
 - `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Core/Core.swift:250-348` — construction/wiring; verify exact anchors before editing.
 
 The package dependency uses the public ThorChainKit repository URL
-`https://github.com/ant013/ThorChainKit.Swift.git` and an immutable post-merge
-commit supplied by the ThorChainKit merge gate. A host-local sibling path is
-forbidden. The implementation gate records that exact resolved SHA in
-`Package.resolved` and proves the package product import in the existing
-`AppTests` target; the current documentation head is not used as a dependency.
+`https://github.com/ant013/ThorChainKit.Swift.git`, exact revision
+`0f572e455be07df798a233eff31bbc27bb0940c5`, and product `ThorChainKit`.
+There is no tag or release yet; that is a bounded release-management residual,
+not an S1-06 blocker. A host-local sibling path and moving branch are
+forbidden. `Package.resolved` must record this exact SHA and the existing
+`AppTests` target must import the product normally.
 
 `AdapterManager` must not change for the THORChain lifecycle. If implementation requires a THOR-specific refresh case, the design returns for review.
 
@@ -427,9 +429,10 @@ dimension.
 
 ## Verification
 
-- Build WalletCore against local package revision.
-- Narrow manager/adapter tests; the route test remains unavailable until the
-  approved MarketKit revision is present.
+- Build WalletCore after resolving the public remote package at exact revision
+  `0f572e455be07df798a233eff31bbc27bb0940c5`; no local package override.
+- Narrow manager/adapter tests; the route test remains gated only by the
+  separately owned MarketKit metadata boundary.
 - Compile `AppTests` with normal `import ThorChainKit` after adding the direct
   test-target product dependency; fail if `@_spi(Testing)` appears anywhere
   under Unstoppable.
@@ -447,8 +450,9 @@ dimension.
 
 ## Acceptance criteria
 
-- Host manager/adapter code compiles with the standalone package product. The
-  `.thorChain` route is unavailable until the approved MarketKit revision.
+- Host manager/adapter code compiles with the standalone package product at
+  exact revision `0f572e455be07df798a233eff31bbc27bb0940c5`. The `.thorChain`
+  route remains unavailable until the approved MarketKit revision.
 - `AppTests` has a direct ThorChainKit product dependency and compiles the
   exact current adapter protocol surface; no invented WalletCore test target is
   required.
