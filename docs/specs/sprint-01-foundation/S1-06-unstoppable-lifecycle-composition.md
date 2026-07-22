@@ -1,23 +1,25 @@
 # S1-06 — Unstoppable lifecycle composition
 
-**Status:** design revision 4; implementation blocked pending adversarial review,
+**Status:** design revision 5; implementation blocked pending adversarial review,
 explicit approval, and a dedicated host feature worktree.
 **Risk:** high/host integration.
 **Base:** clean `origin/main` at
 `0f572e455be07df798a233eff31bbc27bb0940c5`; discovery 2/2, closure 0/5.
 **Observable outcome:** the approved host composition seam constructs one
-unstarted `ThorChainKit` wrapper from the exact public package revision, and the
-adapter owns start/stop/refresh with checked state bridging. A manually
-constructed native RUNE consumer route remains gated by the S1-07 MarketKit
-metadata boundary.
+unstarted `ThorChainKit` wrapper for a manually constructed native RUNE wallet
+from exact consumable ThorChainKit and MarketKit revisions, and the adapter
+owns start/stop/refresh with checked state bridging. The minimum
+`.native/.thorChain` route is included; discovery, UI, import, relaunch, and
+explorer surfaces remain S1-07.
 
 ## Goal
 
 Connect the standalone kit to the current WalletCore architecture along the
 verified composition and lifecycle analogs, while correcting split lifecycle
 ownership: the manager only creates/caches the wrapper, and the adapter is the
-sole lifecycle owner. The WalletCore native route is gated on the later
-MarketKit metadata release.
+sole lifecycle owner. S1-06 also supplies the smallest MarketKit identity and
+native-RUNE metadata needed for the real manually constructed route. Discovery,
+UI, import, relaunch, and explorer behavior remain S1-07 work.
 
 This spec describes future Unstoppable changes, but does not create a branch,
 spec, or files in that repository now. Phase 1 used only the detached clean
@@ -40,20 +42,19 @@ the explicit deltas for this slice.
 
 Included:
 
-- dependency/product import;
+- dependency/product import, including the package-manifest compatibility gate;
 - address factory boundary for mnemonic accounts;
 - manager/wrapper;
 - native adapter `IAdapter + IBalanceAdapter + IDepositAdapter`;
-- AdapterFactory routing;
+- AdapterFactory native route;
 - Core construction/injection;
 - Combine→Rx bridge;
-- manually constructed RUNE wallet integration test.
+- manually constructed native RUNE wallet integration test.
 
 Excluded:
 
-- MarketKit discovery/release and the real Manage Wallets flow (S1-07);
-- the `.thorChain` WalletCore route until a released MarketKit revision
-  provides `BlockchainType.thorChain` and native RUNE metadata;
+- MarketKit discovery/release beyond the minimum identity/metadata commit and
+  the real Manage Wallets flow (S1-07);
 - signer/send/history;
 - custom node UI/source manager;
 - private-key/watch-only accounts;
@@ -78,31 +79,66 @@ exact origin/master checkout already contains `Unstoppable/Tests/AppTests.swift`
 and the current Xcode test target is the host test seam. No new speculative
 `WalletCoreTests` target is created in S1-06.
 
+## Minimum MarketKit prerequisite
+
+The adjacent clean MarketKit clone is the only implementation workspace for
+this prerequisite:
+
+```text
+label `MarketKit.Swift-THR-104`
+branch: feature/THR-104-thorchain-metadata
+base: origin/master 95c92c876c3f40c28816e8e9891d6ffaf6eb0828
+```
+
+The change is limited to the public identity required by the host route:
+
+- `Sources/MarketKit/Classes/Models/BlockchainType.swift` — add
+  `.thorChain` and UID `thorchain` with round-trip tests;
+- `Sources/MarketKit/Dumps/blockchains.json` — add the THORChain blockchain
+  record required by the existing query path;
+- `Sources/MarketKit/Dumps/coins.json` — add the native RUNE record with
+  decimals `8` and the approved native token identifiers;
+- `Tests/MarketKitTests/ThorChainMetadataTests.swift` and the minimal
+  `Package.swift` test-target wiring — assert enum round-trip, native query,
+  decimals, and token type without discovery or UI behavior.
+
+The exact resulting MarketKit commit is a release input to the host branch and
+must be pinned by exact `revision:` in `packages/WalletCore/Package.swift`
+before the host PR is reviewable. The local path is never written into a
+manifest or committed file; resolver output is external verification evidence.
+
 ## Host files to modify
 
 - `unstoppable-wallet-ios/packages/WalletCore/Package.swift:1` — dependency/product `ThorChainKit`.
+- `unstoppable-wallet-ios/Unstoppable.xcodeproj/project.pbxproj:1` — direct
+  `ThorChainKit` product dependency for the existing `AppTests` target.
 - `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Models/AccountAddress.swift:1` — add the direct `thorChainAddress(account:)` boundary alongside the existing EVM/TRON static address methods.
 - `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Core/Factories/AdapterFactory.swift:8` — manager injection, native route.
 - `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Core/Core.swift:250-348` — construction/wiring; verify exact anchors before editing.
 
 The package dependency uses the public ThorChainKit repository URL
-`https://github.com/ant013/ThorChainKit.Swift.git`, exact revision
-`0f572e455be07df798a233eff31bbc27bb0940c5`, and product `ThorChainKit`.
-There is no tag or release yet; that is a bounded release-management residual,
-not an S1-06 blocker. A host-local sibling path and moving branch are
-forbidden. `Package.resolved` must record this exact SHA and the existing
-`AppTests` target must import the product normally.
+`https://github.com/ant013/ThorChainKit.Swift.git` and product `ThorChainKit`.
+The currently reviewed `0f572e455be07df798a233eff31bbc27bb0940c5` manifest is
+not consumable as a remote WalletCore dependency because it places
+`-warnings-as-errors` in target `unsafeFlags`. Before host resolution, a
+separately reviewed ThorChainKit commit removes all target-level unsafe flags;
+warnings-as-errors remain an explicit owned-target build/CI invocation. The
+host pins that exact published SHA in `packages/WalletCore/Package.swift`. No tag, moving branch,
+host-local path, or absolute operator path is committed.
 
 `AdapterManager` must not change for the THORChain lifecycle. If implementation requires a THOR-specific refresh case, the design returns for review.
 
-The exact host dependency currently pins MarketKit.Swift `3.6.12` at
-`95c92c876c3f40c28816e8e9891d6ffaf6eb0828`; that revision has no
-`BlockchainType.thorChain` or native RUNE metadata. Therefore the actual
-WalletCore `.native/.thorChain` route is a hard prerequisite owned by S1-07:
-S1-06 may not claim that route is buildable, map it to another chain, or add a
-temporary local enum. The design records the composition seam and a compile-time
-route proof target for the released MarketKit revision; until that prerequisite
-is supplied, the route is explicitly unavailable and the issue remains blocked.
+The exact MarketKit base is `origin/master` at
+`95c92c876c3f40c28816e8e9891d6ffaf6eb0828` in the adjacent clean clone
+label `MarketKit.Swift-THR-104` on branch
+`feature/THR-104-thorchain-metadata`. S1-06 owns the smallest committed
+MarketKit delta from that base: `BlockchainType.thorChain` with stable UID,
+the native RUNE blockchain/token metadata and query result needed by the host
+route, and focused public metadata tests. The resulting commit SHA is recorded
+in the final Unstoppable `Package.swift`; during local development only, the
+clean adjacent clone may be used as an uncommitted resolver override. No
+temporary local enum or wrong-chain mapping is allowed. S1-07 owns discovery,
+UI, import, relaunch, and explorer behavior above this identity layer.
 
 ## Manager
 
@@ -173,17 +209,25 @@ fixture transport, or require host launch arguments.
 
 ### `_thorChainKitWrapper(account:)`
 
-1. Return cached wrapper if `currentAccountId == account.id`.
-2. Guard `.mnemonic` and available seed; other account types throw `.unsupportedAccount`.
-3. `AccountAddress.thorChainAddress(account:)` derives canonical mainnet address.
-4. Resolve configuration from the injected provider. It must be HTTPS mainnet
+1. Guard `.mnemonic` and available seed; other account types throw
+   `.unsupportedAccount` before consulting or returning the cache.
+2. `AccountAddress.thorChainAddress(account:)` derives the canonical mainnet
+   address.
+3. Resolve configuration from the injected provider. It must be HTTPS mainnet
    configuration from the approved production source, and every endpoint host
    must be in `approvedMainnetHosts`; endpoint-reported identity never expands
    that allowlist. Reject an unapproved host before kit construction.
+4. Form a non-secret cache identity from account ID, full derived address,
+   network, and approved endpoint-family identity. Serialize validation, cache
+   lookup, replacement, and factory construction on the manager queue. Return a
+   cached wrapper only when the complete identity matches. A same-ID replacement
+   with a changed or unsupported mnemonic/address/network must invalidate the
+   prior cache and never receive the prior wrapper.
 5. Call injected `kitFactory.kit(address: address, walletId: account.id, endpoints: endpoints.value)`;
    production factory delegates to `ThorChainKit.Kit.instance`, which derives
    its sole network from `address.network`.
-6. Construct wrapper, cache weak wrapper + `account.id` only. The manager must
+6. Construct wrapper, cache weak wrapper plus the complete non-secret identity.
+   The manager must
    not retain `Account`, `AccountType`, mnemonic, seed, or private material.
 7. **Do not call `thorChainKit.start()`**.
 
@@ -191,9 +235,11 @@ No signer in Sprint 1 wrapper. It is added by send spec, so read-only boundary c
 
 ### Cache semantics
 
-- same account ID → same live wrapper while strongly held by adapter;
-- different account → new wrapper;
+- same complete identity → same live wrapper while strongly held by adapter;
+- different account or changed address/network/endpoint identity → new wrapper;
 - replacing an account invalidates the prior cache identity;
+- same-ID replacement is validated before cache lookup and cannot reuse the
+  prior wrapper;
 - wrapper lifetime belongs to adapter; manager weak reference avoids hidden lifetime;
 - no `createdRelay` unless a proven consumer needs it;
 - no node-source update observer in S1 because node-source UI excluded.
@@ -253,8 +299,11 @@ func refresh() { thorChainKitWrapper.thorChainKit.refresh() }
 
 `stop()` is an idempotent release barrier. Adapter removal invokes it exactly
 once, it cancels the current kit generation, and no request or publisher event
-may occur after the barrier. `deinit` may call the same idempotent stop as a
-safety net; the normal owner remains `AdapterManager` removal.
+may occur after the barrier. A terminal/replayed state already queued before
+the barrier may be observed after stop, but no stale-generation request,
+subscription admission, or network work may begin after it. `deinit` may call
+the same idempotent stop as a safety net; the normal owner remains
+`AdapterManager` removal.
 
 `isMainNet` is derived from `thorChainKitWrapper.thorChainKit.network == .mainnet`. `statusInfo` and `debugInfo` contain the sanitized sync state, accepted height, chain ID, and endpoint family ID, but no endpoint credentials, mnemonic, seed, or raw internal error body.
 
@@ -285,7 +334,11 @@ No empty methods. No manager-owned parallel refresh.
   maximum safe values, overflow, and decimal mismatch are distinguished; any
   overflow, precision loss, or mismatch preserves the cached balance and
   publishes an invariant error rather than zero.
-- Adapter initializer receives `Wallet` or `Token` metadata if required for decimals; assert token `.native`, chain `.thorChain`, decimals `8`.
+- Adapter initializer receives the `Wallet`/`Token` metadata required for
+  decimals and throws a production `ThorChainAdapterError.invalidTokenIdentity`
+  before subscriptions or lifecycle admission unless the token is native, the
+  chain is `.thorChain`, and decimals are exactly `8`. This is a throwing guard,
+  not an assertion, so optimized builds fail closed.
 - BigUInt→Decimal conversion must detect overflow/precision loss; no `Double` intermediate.
 
 ### Deposit
@@ -383,6 +436,9 @@ dimension.
 
 - same account reuses wrapper while adapter holds it;
 - different account replaces wrapper;
+- same-ID replacement with changed seed/address/network cannot reuse the prior
+  wrapper;
+- concurrent same-account construction is serialized and creates one live kit;
 - mnemonic no seed and unsupported type typed errors;
 - factory receives exact address/network/walletId/endpoints;
 - deterministic full-address vector proves the S1-03 derivation boundary and
@@ -393,6 +449,9 @@ dimension.
   task;
 - runtime-generated synthetic mnemonic material only; no literal mnemonic is
   committed;
+- the synthetic mnemonic is derived from fixed non-secret test entropy using
+  `SHA256("THR-104-S1-06-test-seed-v1")`; the expected full address is stored
+  as a public test vector;
 - approved endpoint configuration is accepted and an unapproved host is
   rejected before construction;
 - normal `IThorChainKit` spy proves construction/lifecycle without importing `@_spi(Testing)` or adding DEBUG branches.
@@ -401,7 +460,8 @@ dimension.
 
 - adapter `start/stop/refresh` forward exactly once;
 - lifecycle spy records exact call order, one stop on removal, no request/event
-  after stop, and weak wrapper/adapter leak sentinels;
+  after stop except a terminal/replayed state already queued before the barrier,
+  and weak wrapper/adapter leak sentinels;
 - exact `IAdapter`/`IBalanceAdapter`/`IDepositAdapter` surface compiles against current WalletCore protocols;
 - `balanceStateUpdatedObservable` and `balanceDataUpdatedObservable` map kit Combine publishers to Rx;
 - exhaustive `SyncState`/`SyncError` mapping table has one assertion per case,
@@ -412,12 +472,16 @@ dimension.
 - decimals != 8 and precision/overflow loss preserve cached data and produce a
   typed invariant error, never silent zero;
 - receive address exact canonical string;
+- native/THOR/8-decimal mismatch each throws before any subscription or
+  lifecycle call, including optimized-build behavior;
 - no activation semantics.
 
 `ThorChainIntegrationTests`:
 
-- compile-time proof is present for the future `.native/.thorChain` route, but
-  no route is claimed until the S1-07 MarketKit revision is released;
+- the adjacent MarketKit revision exposes `BlockchainType.thorChain` and the
+  native RUNE metadata/query needed for the real `.native/.thorChain` route;
+- a manually constructed native RUNE wallet reaches the `.native/.thorChain`
+  route and the injected manager/adapter seam;
 - AdapterManager start causes first sync;
 - wallet removal causes stop/cancellation;
 - refresh uses generic `adapter.refresh()`, with no manager direct call;
@@ -429,30 +493,36 @@ dimension.
 
 ## Verification
 
-- Build WalletCore after resolving the public remote package at exact revision
-  `0f572e455be07df798a233eff31bbc27bb0940c5`; no local package override.
-- Narrow manager/adapter tests; the route test remains gated only by the
-  separately owned MarketKit metadata boundary.
+- Build the ThorChainKit package after removing target-level unsafe flags and
+  enforce `-warnings-as-errors` in the owned local verifier. Build WalletCore
+  against the exact published ThorChainKit and MarketKit SHAs recorded in
+  `Package.swift`; local development may temporarily resolve MarketKit from
+  the adjacent clean clone only.
+- Run the manager, adapter, and integration tests, including the real
+  `.native/.thorChain` route and the MarketKit identity query.
 - Compile `AppTests` with normal `import ThorChainKit` after adding the direct
   test-target product dependency; fail if `@_spi(Testing)` appears anywhere
   under Unstoppable.
 - Run `xcodebuild test -workspace Wallet.xcworkspace -scheme Development`
-  with stable `-only-testing:AppTests/ThorChainKitManagerTests` and
-  `-only-testing:AppTests/ThorChainAdapterTests` selectors, an explicitly
-  approved local iPhone destination, and a result bundle path. Before and after
-  the command, assert clean status, exact approved HEAD, and an implementation
-  file allowlist; do not use a simulator.
+  with stable `-only-testing:AppTests/ThorChainKitManagerTests`,
+  `-only-testing:AppTests/ThorChainAdapterTests`, and
+  `-only-testing:AppTests/ThorChainIntegrationTests` selectors, an explicitly
+  named physical iPhone destination, and a result bundle path. Before and after
+  the command, assert clean status, exact approved HEAD, zero skipped tests,
+  exact dependency SHAs, and the implementation file allowlist; do not use a
+  simulator.
 - Search/diff proves no `.thorChain` special-case added to `AdapterManager.refresh`.
-- Run only after the MarketKit route gate is satisfied: manually constructed
-  wallet against the approved controlled mainnet endpoint.
+- Run the manually constructed native RUNE wallet against the approved
+  controlled mainnet endpoint after both exact dependency SHAs resolve.
 - Inspect injected lifecycle logs/counters: exactly one active kit per account,
   one stop on removal, and no post-stop work.
 
 ## Acceptance criteria
 
 - Host manager/adapter code compiles with the standalone package product at
-  exact revision `0f572e455be07df798a233eff31bbc27bb0940c5`. The `.thorChain`
-  route remains unavailable until the approved MarketKit revision.
+  the exact published manifest-compatible ThorChainKit SHA and exact resulting
+  MarketKit SHA recorded in `Package.swift`; the reviewed unsafe-flag
+  revision is rejected.
 - `AppTests` has a direct ThorChainKit product dependency and compiles the
   exact current adapter protocol surface; no invented WalletCore test target is
   required.
@@ -460,9 +530,10 @@ dimension.
 - Manager never starts/stops/refreshes kit.
 - Adapter implements all three lifecycle methods non-empty.
 - Generic AdapterManager path is sufficient.
-- Native RUNE composition exposes sync/balance/deposit surfaces; discovery and
-  the WalletCore `.thorChain` route remain explicitly unavailable until S1-07.
-- No signer, history, swap or MarketKit discovery added in this slice.
+- Native RUNE composition exposes sync/balance/deposit surfaces through the
+  real `.native/.thorChain` route using the minimum MarketKit identity delta.
+- Discovery, UI, import, relaunch, explorer, signer, history, swap, and custom
+  node behavior remain out of scope for S1-06.
 - Tests and manual live constructed-wallet gate pass.
 
 ## Recorded decisions

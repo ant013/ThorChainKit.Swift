@@ -4,18 +4,29 @@
 
 **Base:** `origin/main` / `0f572e455be07df798a233eff31bbc27bb0940c5`
 
-**Workflow phase:** design revision 4; approval remains gated by MarketKit metadata
+**Workflow phase:** design revision 5; discovery 2/2, closure 0/5; exact-head
+review is required before approval
 
 **Trust:** RED for Gimle; current-tree fallback is usable.
 
+**Revision 5 artifact hashes:** spec
+`c5b7fc0fca855a2d77479c12c0966cff8634d22566797c47a207361743235c54`; plan
+`75e97e671cba99f6b719acadbe2f1057a841cecc5def384f0e409b71ef7892a0`.
+**Reviewed ThorChainKit design head:** `45ca84599df07501d20f701cb2fcde466c4bca87`
+(spec-only branch; implementation remains prohibited).
+
 ## Identity
 
-The exact ThorChainKit design branch is based on the clean base above. The exact UW
-phase-1 evidence checkout is a detached clean worktree at
-`db86b99e9a12d758729a41c83a514b709df0a525`, fetched from the official
-`https://github.com/horizontalsystems/unstoppable-wallet-ios.git` origin.
-The unrelated dirty Zcash checkout was not edited, switched, cleaned, stashed,
-or read for source evidence.
+The exact ThorChainKit design branch is based on the clean base above. Current
+UW evidence uses the adjacent clean clone labeled
+`unstoppable-wallet-ios-THR-104`, branch
+`feature/THR-104-thorchain-lifecycle`, at
+`db86b99e9a12d758729a41c83a514b709df0a525`, fetched from the official origin.
+MarketKit evidence uses the adjacent clean clone labeled
+`MarketKit.Swift-THR-104`, branch
+`feature/THR-104-thorchain-metadata`, at clean base
+`95c92c876c3f40c28816e8e9891d6ffaf6eb0828`. The unrelated dirty Unstoppable
+checkout was not edited or read for source evidence.
 
 Codebase-memory project `Users-ant013-Data-AI-thorchain` was queried first and
 reported `status=ready`; its index-status response did not provide an indexed
@@ -57,12 +68,13 @@ shape.
 
 ThorChainKit is public at
 `https://github.com/ant013/ThorChainKit.Swift.git`, with package/product name
-`ThorChainKit` and iOS 13 support. S1-06 pins the WalletCore package dependency
-to exact revision `0f572e455be07df798a233eff31bbc27bb0940c5` and records that
-revision in `Package.resolved`; no local path or moving branch is permitted.
-The repository currently has no tag or release. That is recorded as a bounded
-release-management residual, not an S1-06 blocker. Local resolution/build only
-is required.
+`ThorChainKit` and iOS 13 support. The reviewed `0f572e455be07df798a233eff31bbc27bb0940c5`
+manifest is not consumable by remote WalletCore while production target-level
+unsafe flags remain. S1-06 requires a separately reviewed ThorChainKit commit
+that removes those flags and keeps warnings-as-errors in the owned build
+invocation; the exact resulting SHA is pinned in the final host resolver.
+MarketKit's exact resulting metadata SHA is likewise pinned in the final host
+resolver. The adjacent MarketKit path is a local-only development override.
 
 ## Adversarial review
 
@@ -77,11 +89,14 @@ exhaustive state mapping, and refresh/concurrency negatives.
 
 The current host pin is MarketKit.Swift `3.6.12` at
 `95c92c876c3f40c28816e8e9891d6ffaf6eb0828`; it does not define THOR chain
-metadata. This remains the separate current-tree route boundary: S1-07 owns
-the metadata revision and the `.native/.thorChain` route. The revised design
-keeps that route explicitly unavailable until the prerequisite is supplied.
-The prior ThorChainKit no-tag/no-release concern is resolved as a bounded
-release-management residual by the exact remote SHA decision above.
+metadata. The revised design moves only `BlockchainType.thorChain`, native
+RUNE metadata/query, and focused tests into S1-06. Discovery/UI/import/relaunch/
+explorer remain S1-07. Stable reviewer findings `D-VER-001` through
+`D-VER-006`, `D-SEC-001` through `D-SEC-003`, and `D-DELIVERY-001` are explicitly
+resolved in the current revision; the exact hashes, clean clone heads, changed-
+file allowlist, complete physical-device selectors, and decision outcomes are
+bound in the authoritative external Gimle state for run
+`THR-104-s1-06-20260722`.
 
 No implementation, host-repository modification, GitHub Actions test, mutant,
-simulator, Maestro run, or acceptance run was performed in phase 1.
+simulator, Maestro run, or acceptance run was performed in this design phase.

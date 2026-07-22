@@ -28,7 +28,7 @@ Success is demonstrated simultaneously by four independent layers:
 | S1-03 | [`S1-03-derivation-address-codec.md`](S1-03-derivation-address-codec.md) | independent vectors produce the exact THORChain address; invalid inputs are rejected |
 | S1-04 | [`S1-04-thornode-read-client.md`](S1-04-thornode-read-client.md) | complete account/balances read pinned to one Cosmos height |
 | S1-05 | [`S1-05-rune-account-sync.md`](S1-05-rune-account-sync.md) | lifecycle, cache, and publication are protected by cancellation/generation invariants |
-| S1-06 | [`S1-06-unstoppable-lifecycle-composition.md`](S1-06-unstoppable-lifecycle-composition.md) | manually constructed RUNE wallet passes the exact WalletCore adapter contracts |
+| S1-06 | [`S1-06-unstoppable-lifecycle-composition.md`](S1-06-unstoppable-lifecycle-composition.md) | minimum MarketKit identity plus manually constructed native RUNE wallet passes the exact WalletCore adapter contracts |
 | S1-07 | [`S1-07-unstoppable-rune-surface.md`](S1-07-unstoppable-rune-surface.md) | MarketKit discovery and the real create/import/enable/relaunch path are completed end to end |
 
 Consolidated verification: [`test-plan.md`](test-plan.md).
@@ -67,7 +67,7 @@ Out of scope: send/sign/broadcast, transaction history, native swap, THORName, p
 - Unstoppable WalletCore: address factory, kit manager/factory, adapter, parser, and Core wiring;
 - Unstoppable host: only existing `AppTests` and manual product acceptance; no acceptance-only runtime is added.
 
-Exact files, classes, functions, and APIs are listed in each slice spec. Until S1-06, the reference source repositories remain read-only.
+Exact files, classes, functions, and APIs are listed in each slice spec. Before S1-06, the reference source repositories remain read-only.
 
 ## Acceptance and Verification Order
 
@@ -98,7 +98,7 @@ any design edit; a plan pin does not imply approval.
 | `S1-03-derivation-address-codec.md` | `e0b742799b14222947b8e43f56a17bfc92b3f0279c3a5abbe4a2a0fcb2a335cd` |
 | `S1-04-thornode-read-client.md` | `72d9054b52a987bee0e056af9cdfd0039b66a48271bf77f279214615240ed4a0` |
 | `S1-05-rune-account-sync.md` | `5345c4ef169d4c39187bef7371a16cae5a779164ddecbbe97a99ff12b471a0ff` |
-| `S1-06-unstoppable-lifecycle-composition.md` | `0a598cdc320e5da99c805bb676241b9c1924eb2a4d9078f68a21896681fa1703` |
+| `S1-06-unstoppable-lifecycle-composition.md` | `c5b7fc0fca855a2d77479c12c0966cff8634d22566797c47a207361743235c54` |
 | `S1-07-unstoppable-rune-surface.md` | `9da09bfc288bf9e43565f503d2db06b29f57291f0870c1d9729f9d092e2f502c` |
 | `docs/specs/ci/build-only-github-actions.md` | `57f2a0dd85c50aeeaa67ffd87da278b5b9897103138a8dafee901b1ab6b66f15` |
 | `docs/superpowers/plans/2026-07-19-THR-13-s1-02-network-endpoint-policy.md` | `b6f98cda1a9e6c04107633a871e63b5c47be7e456150288ca63f716a814fd497` |
