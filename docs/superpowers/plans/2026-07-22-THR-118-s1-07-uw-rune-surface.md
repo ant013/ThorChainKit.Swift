@@ -1,75 +1,100 @@
-# THR-118 S1-07 plan — UW v0.50 native RUNE surface
+# THR-118 — S1-07 Unstoppable RUNE surface (design revision 5)
 
-Status: design revision 3; docs-only plan awaiting exact-head
-`ThorChainCodeReviewer` adversarial review. Implementation starts only after
-reviewer ACCEPT and a fresh operator approval interaction.
+## Goal
 
-## Step 1 — Release metadata and explorer dependency gate
+Make native mainnet RUNE discoverable, strictly addressable, balance/receive-visible, restorable, and restart-stable in Unstoppable Wallet v0.50 through the existing S1-06 lifecycle composition.
 
-- Owner: MarketKit/backend owner, coordinated by CTO.
-- Paths: local MarketKit metadata tests/fixtures; ThorChainKit spec and report.
-- Acceptance: released/cache data proves `thorchain` blockchain, native RUNE,
-  8 decimals, and a non-null explorer URL with the exact approved template.
-  Null or unverified explorer data is a hard blocked dependency.
-- Verification: deterministic metadata fixture/test and captured exact URL
-  value; no Unstoppable source change.
-- Dependency: none. Steps 2–5 are blocked until this gate is resolved.
+## Current phase and approval gate
 
-## Step 2 — Mnemonic AccountType and discovery/restore policy
+- [x] Evidence and analog selection completed (`discovery 1/2`); exact v0.50 checkout independently verified.
+- [x] Design revision 5 and delta matrix written; all seven frozen `D-S107-REV-001` through `D-S107-REV-007` corrections are addressed.
+- [ ] Fresh bounded adversarial review of revision 5 (`discovery 1/2`, closure `0/5`).
+- [ ] Operator explicitly approves this spec and plan.
+- [ ] Released MarketKit/backend/cache contract is available before final acceptance/commit; approved local work remains pinned to MarketKit head `2c327452237cfbbdc4d87bcd5dd417d1da46a61e` until then.
+- [ ] Implementation is authorized and assigned to the Swift engineer.
 
-- Owner: ThorChainSwiftEngineer after approval.
-- Paths: UW `AccountType`, Manage Wallets fetch/view model, RestoreHelper,
-  focused AppTests.
-- Acceptance: mnemonic supports only THOR native RUNE; RUJI, TCY, and other
-  non-native THOR assets are rejected; Manage Wallets and create/import restore
-  expose RUNE without changing unrelated account behavior.
-- Verification: positive native fixture and negative RUJI/TCY/non-native
-  fixtures, plus hermetic Manage Wallets and restore tests.
-- Dependency: Step 1.
+No implementation, UW commit, push, or PR is authorized by this plan revision.
 
-## Step 3 — Receive-only capability surfaces
+## Assumptions and non-goals
 
-- Owner: ThorChainSwiftEngineer after approval.
-- Paths: wallet/token button view models, SendTokenList, AddressEventHandler
-  and its send-page consumer, MultiSwap token selection/default resolution.
-- Acceptance: RUNE retains address/balance/receive, while Send/Swap buttons,
-  SendTokenList, QR/address-to-Send, and MultiSwap token-in exclude it. Generic
-  non-THOR routes remain unchanged. Send/swap implementation is not added.
-- Verification: focused view-model/event tests with direct assertions on all
-  five prohibited ingress paths.
-- Dependency: Step 2.
+Assumptions: approved local implementation uses exact MarketKit head `2c327452237cfbbdc4d87bcd5dd417d1da46a61e`; the MarketKit owner will provide a released UID `thorchain`, native RUNE with decimals `8`, and an authoritative explorer/cache fixture before final delivery; S1-06 remains the owner of `ThorChainKitManager`, factory, and address-provider lifecycle composition; existing WalletCore generic seams can carry a display-only unavailable row with the smallest compatible API delta; current migration behavior can be corrected to preserve cache rows using the legacy `balance`/`balanceLocked` contract.
 
-## Step 4 — Durable cache, migration, restart, and failure recovery
+Non-goals: default enable, URI/deeplink, history, send/swap, non-native THOR assets, stagenet, Maestro, fixture transport, launch arguments, acceptance-only runtime code, atomic restore migration, or changes to S1-06-owned files.
 
-- Owner: ThorChainSwiftEngineer after approval.
-- Paths: WalletStorage, WalletManager, cache doubles, AppTests.
-- Acceptance: isolated fresh-cache and existing-v2-cache migration tests prove
-  persistence through terminate/relaunch. Missing token, missing chain, and
-  thrown query retain the enabled record/account identity and expose a
-  diagnosable unavailable/retry state; no silent wallet disappearance.
-- Verification: three failure-injection tests plus restart assertions.
-- Dependency: Steps 1–2; recovery contract must be agreed in review before
-  implementation.
+## Steps
 
-## Step 5 — Address, balance, and status host integration
+### 1. Close the released metadata gate
 
-- Owner: ThorChainSwiftEngineer after approval.
-- Paths: existing S1-06 ThorChainKitManager/ThorChainAdapter integration seams,
-  AppStatus mapping, focused AppTests.
-- Acceptance: canonical `thor1` address and native RUNE balance render after
-  enable/restore and after relaunch; endpoint validation and adapter lifecycle
-  remain unchanged.
-- Verification: focused local AppTests and manual MacBook launch/terminate/
-  relaunch evidence. No Maestro in Unstoppable and no CI device execution.
-- Dependency: Steps 1, 2, and 4.
+**Owner:** CTO / MarketKit owner before final acceptance and commit.
 
-## Step 6 — Review and approval gates
+**Affected paths:** released MarketKit package and backend/cache contract; `packages/WalletCore/Package.swift` only for the dependency bump.
 
-- Owner: ThorChainCodeReviewer, then operator, then CTO.
-- Paths: exact docs commit, Gimle state/report, issue handoff.
-- Acceptance: reviewer posts a severity-tagged ACCEPT for the exact commit;
-  only then does CTO request fresh operator confirmation. No implementation
-  child issue, UW source edit, commit, push, or PR precedes that confirmation.
-- Verification: state validates at `adversarial_review`; later state transition
-  to `awaiting_approval` includes reviewer decisions and exact revision.
-- Dependency: Steps 1–5 plan coverage and docs-only push.
+**Acceptance:** release contains `.thorChain`, UID `thorchain`, native RUNE code, decimals `8`, and explorer metadata. The MarketKit owner must attach the exact release tag/version plus decoded cache fixture (including the literal explorer template) as the authoritative verification artifact; until then this step is blocked and a local feature branch is insufficient.
+
+**Verification:** MarketKit UID/backend/cache/native-query tests, decoded release/cache artifact, and clean WalletCore dependency resolution against that released version.
+
+**Dependency:** blocks final acceptance/commit and Step 6 closure, but not approved local test-first Steps 2–5 against the exact pinned checkout.
+
+### 2. Add host discoverability policy
+
+**Owner:** Swift engineer.
+
+**Affected paths:** `packages/WalletCore/Sources/WalletCore/Extensions/BlockchainType.swift`, `Models/AccountType.swift`; existing Manage Wallets/AppTests seams.
+
+**Acceptance:** `.thorChain` is supported and ordered immediately after `.tron`, is described as `RUNE`, uses generic native-token queries filtered to exact RUNE identity after metadata resolution, applies the same predicate to preferred-token discovery, preserves create defaults, is selectable by `RestoreCoinsViewModel`, adds only `.mnemonic/.native` support in `AccountType.supports(token:)`, and is not default-enabled.
+
+**Verification:** targeted AppTests for supported/order/description/native query/account policy plus Manage Wallets search → manual enable.
+
+**Dependency:** pinned local MarketKit head for implementation; Step 1 for final acceptance. S1-06 composition remains unchanged.
+
+### 3. Add strict address parsing
+
+**Owner:** Swift engineer.
+
+**Affected paths:** `packages/WalletCore/Sources/WalletCore/Core/Address/ThorChainAddressParser.swift`; `Core/Factories/AddressParserFactory.swift`; existing parser tests.
+
+**Acceptance:** factory routes `.thorChain` to a mainnet parser backed by `ThorChainKit.Address`; valid addresses return canonical lowercase raw values, invalid values return `Single.error`/`false`, and non-THOR HRPs, mixed case, malformed length, and bad checksum are rejected.
+
+**Verification:** parser AppTests through the factory with valid, checksum, HRP, length, case, and malformed vectors; `rg` confirms no URI/parser fallback.
+
+**Dependency:** pinned local MarketKit head for implementation; Step 1 for final acceptance. Uses the S1-06 kit codec without duplicating it.
+
+### 4. Enforce exact composition identity and all prohibited ingress guards
+
+**Owner:** Swift engineer.
+
+**Affected paths:** `Core/Factories/AdapterFactory.swift`, `Core/Adapters/ThorChain/ThorChainAdapter.swift`, `Modules/Wallet/WalletView.swift`, `Modules/Wallet/WalletViewModel.swift`, `Modules/Wallet/Token/WalletTokenViewModel.swift`, `Modules/Wallet/SendTokenListViewModel.swift`, `Modules/MultiSwap/TokenSelect/MultiSwapTokenSelectViewModel.swift`, `Modules/Main/Workers/SendAppShowWorker/AddressEventHandler.swift`, and existing AppTests.
+
+**Acceptance:** the `.native/.thorChain` factory case and adapter initializer both require `thorchain/thorchain/RUNE/native/8`; RUJI, TCY, wrong coin/blockchain UID, custom-token, and wrong-decimal records return no adapter. One shared capability predicate is applied to the five ingress families—WalletView row actions, downstream top-level SendTokenList/Swap selectors, token buttons, token-seeded MultiSwap, and QR/deep-link Send—and direct token-seeded initialization cannot bypass it. Mixed BTC/ETH-plus-RUNE fixtures keep generic non-THOR routes usable.
+
+**Verification:** composition negatives and one test per ingress family through existing AppTests seams; `rg` confirms every named route has the guard.
+
+**Dependency:** Steps 2–3, pinned local MarketKit head, and S1-06 local lifecycle composition; Step 1 remains the final-delivery gate.
+
+### 5. Prove generic balance, receive, status, restore, and restart
+
+**Owner:** Swift engineer, then independent QA.
+
+**Affected paths:** `AppStatusViewModel.swift`, `WalletStorage.swift`/`WalletManager.swift`/`WalletData`, `WalletService.swift`, `WalletListViewModel.swift`, `StorageMigrator.swift`, `EnabledWalletCache_v_0_36.swift` fixture seam, existing AppTests, and cache migration fixtures; no lifecycle rewrite in the S1-06 manager/factory/adapter.
+
+**Acceptance:** exact 8-decimal balance, canonical `thor1…` receive address, sanitized status, restore selection, cold reconstruction, durable unavailable identity, exact terminal/retryable diagnostic codes for empty/missing and throwing metadata, display-only unavailable row, identity-keyed unavailable removal/publication cleanup, stale/error publication and retry, truthful value-preserving migration from legacy `balance`/`balanceLocked` to new `total`/`available` (`total = balance`, `available = balance` per the old runtime model), offline stale/error retention, recovery, one-adapter invariant, remove/stop, and reinstall/no-cache all work through generic seams. Missing token/chain or throwing token/blockchain queries fail closed without silent deletion or fabricated zero state.
+
+**Verification:** AppTests with deterministic `WalletQuerying`/adapter/endpoint spies covering cache seed and old-schema value-preserving migration with a non-zero `balanceLocked` sentinel, malformed identity, empty/missing and both throwing query sites, unavailable-state retry, terminal identity-keyed removal/publication cleanup, exact identity negatives, mixed BTC/ETH-plus-RUNE selector compatibility, one test per ingress family, offline/recovery transitions, and adapter count; manual Development checklist and exact `xcodebuild` command in the spec on a public no-funds account. Record app/configuration/device/OS/endpoint/observed values without mnemonic material. No Maestro.
+
+**Dependency:** Steps 2–4 and S1-06 local lifecycle composition; Step 1 remains the final-delivery gate.
+
+### 6. Mechanical review, adversarial review, and QA
+
+**Owner:** target-local CodeReviewer → architect reviewer → QA engineer → CTO merge gate.
+
+**Affected paths:** implementation PR only after approval; this plan and spec remain the source of truth.
+
+**Acceptance:** tests and required CI are green; review covers the frozen blocker allowlist and changed-line regressions; QA cites the exact PR head and manual evidence; CTO merges only after required Paperclip approvals.
+
+**Verification:** project-equivalent lint/typecheck/test output, `gh pr checks`, no conflict markers, exact plan references, and QA evidence in the PR.
+
+**Dependency:** explicit operator approval plus completed Steps 1–5.
+
+## Handoff and closure rules
+
+The implementation phase is a separate authorized workflow. Unstoppable changes remain local and uncommitted until final operator delivery authorization. Every handoff records `discovery 1/2` and `closure 0/5` until closure starts. The seven discovery blockers are now the stable allowlist; closure rechecks only those IDs and changed-line regressions. Medium/low observations become backlog; a new blocker must cite a current acceptance criterion, exact repository evidence, and a concrete safety/implementation/verification failure. Once acceptance is satisfied, stop revising and hand off once.
