@@ -67,6 +67,13 @@ Discovery 1/2 requested changes. The first recorded spec artifact received seven
 
 The prior handoff label `GIMLE-THR118-WORKTREE-001` is reconciled here as a non-separate alias for the canonical `GIMLE-THR118-FRESHNESS-001` limitation recorded above; no second defect is claimed.
 
+## Revision 7 targeted corrections
+
+- `D-S107-REV-006@3` — addressed: the single `ThorChainRuneIdentityPolicy.isExactNativeRune(...)` owner is invoked only for THOR candidates (query `.thorChain` or resolved blockchain UID `thorchain`). BTC/ETH persisted, discovery, and restore candidates retain the generic construction path; THOR RUJI/TCY/malformed/wrong-decimal records fail closed. The spec and plan require mixed-chain assertions at each of those three ingress families.
+- `D-S107-REV-007@3` — addressed: release preflight uses `swift package dump-package` and structured `jq` checks for exactly one canonical remote MarketKit dependency and no matching file-system dependency, then checks resolved identity, URL, version, revision, and owner-supplied `Package.resolved` SHA-256. It no longer matches one `Package.swift` spelling.
+
+No Gimle discovery call was added for this targeted design correction; the existing YELLOW trust limitation and current-tree Serena/`rg`/Git fallback remain unchanged. Fresh bounded review and explicit approval of design revision 7 are still required before implementation.
+
 ## Revision 5 exact-head review and revision 6 corrections
 
 - `D-S107-REV-001@2` — ACCEPT: the unknown literal explorer template is bound to an owner-supplied release/cache artifact required before final delivery; local work remains pinned and cannot claim that gate.
