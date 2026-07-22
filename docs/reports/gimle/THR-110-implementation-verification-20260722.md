@@ -4,7 +4,7 @@ Implementation heads:
 
 - ThorChainKit: `3f492c8c7f334d69ce0cacb14157ba9846f59c69`
 - MarketKit: `2c327452237cfbbdc4d87bcd5dd417d1da46a61e`
-- Unstoppable: `1a531bbb43c81902fe4d573ded39ec047ae5437c`
+- Unstoppable: `a24ef1b0cc4b5adf270df50512539df9e36408a9`
 
 Passed checks:
 
@@ -17,6 +17,8 @@ Passed checks:
 - Project-file lint and whitespace validation passed:
   `plutil -lint Unstoppable/Unstoppable.xcodeproj/project.pbxproj` and
   `git diff --check`.
+- Swift parser validation passed for every changed Swift source and host test
+  file with `swiftc -parse`.
 
 Unrun or environment-blocked checks:
 
