@@ -14,7 +14,7 @@ Send, history, and swap are intentionally outside Sprint 1.
 | S1-02 | Network and endpoint policy | an endpoint with the wrong chain ID/role or a stale endpoint is rejected fail-closed | S1-01 | ✅ Implemented — PR #3 — 2026-07-20 |
 | S1-03 | Derivation and address codec | an official/independent vector produces the expected `thor1…`; wrong HRP/checksum is rejected | S1-01 | ✅ Implemented — PR #5 — 2026-07-21 |
 | S1-04 | THORNode read client | fixtures and opt-in mainnet requests return typed status/account/balances | S1-02, S1-03 | ✅ Implemented — PR #7 — 2026-07-21 |
-| S1-05 | RUNE account sync | start/refresh/stop/restart produce an atomic account snapshot without stale publication | S1-04 | Pending |
+| S1-05 | RUNE account sync | start/refresh/stop/restart produce an atomic account snapshot without stale publication | S1-04 | ✅ Implemented — PR #8 — 2026-07-22 |
 | S1-06 | UW lifecycle composition | the adapter creates the kit, owns its lifecycle, and displays a manually constructed RUNE wallet | S1-05 | Pending |
 | S1-07 | UW discovery/address/balance/restart | MarketKit metadata + real create/import/enable/relaunch flows | S1-06 | Pending |
 
