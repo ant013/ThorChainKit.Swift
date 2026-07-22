@@ -1,284 +1,108 @@
-# S1-07 — Unstoppable RUNE address/balance/deposit surface
+# S1-07 — Unstoppable RUNE discovery, address, balance, and restart
 
-**Status:** design ready, implementation blocked pending approval.
-**Risk:** high/cross-repository product path.
-**Observable outcome:** RUNE is available in Manage Wallets and the restore flow; mainnet address/balance/receive work through the S1-06 adapter, and the wallet and kit are reconstructed correctly after terminate/relaunch.
+**Status:** design revision 2; implementation blocked pending adversarial review and explicit approval of this exact revision.
+**Risk:** high, cross-repository product path.
 
 ## Goal
 
-Complete the real user journey. S1-06 proves the adapter on a manually constructed wallet; S1-07 adds MarketKit metadata, the address parser/factory, and the existing discovery/storage/restart consumers.
+Make native mainnet RUNE a real opt-in wallet in Unstoppable Wallet: discoverable in Manage Wallets, selectable during restore, strictly parsed, visible through the existing balance/receive/status surfaces, and reconstructed with the same address after terminate/relaunch.
 
-## Hard dependency gate
-
-The current MarketKit `3.6.12` does not contain THORChain. S1-07 cannot be considered complete through a change to the Unstoppable checkout alone.
-
-Before the host merge, the following must exist:
-
-1. an agreed MarketKit UID;
-2. a released MarketKit version with `BlockchainType.thorChain`;
-3. backend/cache blockchain record;
-4. native RUNE coin/token, decimals `8`;
-5. explorer URL template;
-6. a WalletCore dependency bump to this release.
-
-The recorded UID proposal is `thorchain`; the backend owner must implement this exact contract before release. It is not equal to the Cosmos chain ID `thorchain-1`, and the two are not used interchangeably.
-
-## Scope
-
-Included:
-
-- MarketKit chain/token metadata contract;
-- WalletCore `BlockchainType` support/order/description/block time;
-- native token routing;
-- `ThorChainAddressParser` and the parser chain/factory;
-- balance/deposit consumers;
-- create → manual enable flow;
-- import/restore flow;
-- persistence/relaunch reconstruction;
-- explorer metadata, but not a transaction adapter/history UI.
-
-Excluded:
-
-- RUNE as the default wallet for a new account;
-- URI/deeplink scheme;
-- transaction history/explorer action;
-- token denoms other than native RUNE;
-- send/swap;
-- stagenet UI.
-
-## Host acceptance boundary
-
-No `.maestro`, UI-test target, runner scripts, acceptance fixtures, DEBUG transport, test-only factory, or launch-argument branches are added to Unstoppable. Automated host verification lives only in the existing `AppTests`; the observable product path additionally passes a manual checklist in the `Development` app. Maestro is used exclusively in `ThorChainKit/iOS Example`.
-
-## MarketKit changes
-
-### Files
-
-- `MarketKit.Swift/Sources/MarketKit/Classes/Models/BlockchainType.swift:1`
-- `MarketKit.Swift/Sources/MarketKit/Classes/Models/Blockchain.swift:1`
-- `MarketKit.Swift/Sources/MarketKit/Classes/Models/TokenType.swift:1`
-- `MarketKit.Swift/Package.swift:1` — add a `MarketKitTests` target.
-- `Tests/MarketKitTests/BlockchainTypeTests.swift`
-- `Tests/MarketKitTests/ThorChainMetadataTests.swift`
-- backend/cache fixtures/tests at the exact current paths found before implementation.
-
-### Contract
-
-```swift
-public enum BlockchainType {
-    case thorChain
-}
-
-public extension BlockchainType {
-    var uid: String {
-        case .thorChain: "thorchain"
-    }
-}
-```
-
-Native RUNE:
-
-```text
-blockchainType = .thorChain
-tokenType      = .native
-coin code      = RUNE
-token code     = RUNE
-decimals       = 8
-```
-
-The explorer template is `https://thorchain.net/tx/$ref`; the URL was confirmed against current transaction pages at the time of the spec. It flows through MarketKit metadata rather than remaining a hardcoded swap-only branch.
-
-### MarketKit tests
-
-- `Package.swift` contains `.testTarget(name: "MarketKitTests", dependencies: ["MarketKit"])`;
-- UID encode/decode round-trip;
-- backend/cache decode chain + native token;
-- native `TokenQuery(.thorChain, .native)` resolution;
-- decimals exact `8`;
-- explorer `$ref` replacement;
-- release consumer test from WalletCore.
-
-## WalletCore metadata changes
-
-`unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Extensions/BlockchainType.swift:8`:
-
-- add `.thorChain` to `supported`;
-- place `.thorChain` immediately after `.tron` in `supported` and `order`;
-- description Sprint 1 — `RUNE`;
-- add an exhaustive `blockTime` of approximately `6` seconds only after confirmation from the current protocol source; do not use it as a sync timeout;
-- `supports(accountType:)`: Sprint 1 supports mnemonic only. If the current generic branch automatically allows all mnemonic chains, add explicit tests rather than a duplicate case;
-- `defaultTokenQuery/nativeTokenQueries` must return `.native` automatically; a test pins this behavior.
-
-Localizations are added only for the user-facing chain description/name, not for low-level kit errors.
-
-## Address parser
-
-### New file
-
-```text
-packages/WalletCore/Sources/WalletCore/Core/Address/ThorChainAddressParser.swift
-```
-
-```swift
-final class ThorChainAddressParser: IAddressParserItem {
-    private let network: ThorChainKit.Network
-
-    init(network: ThorChainKit.Network = .mainnet)
-
-    var blockchainType: BlockchainType { .thorChain }
-    func handle(address: String) -> Single<Address>
-    func isValid(address: String) -> Single<Bool>
-}
-```
-
-Behavior:
-
-1. `handle` performs `try ThorChainKit.Address(address, network: network)` and returns `Single.just(Address(raw: validated.raw, blockchainType: blockchainType))`.
-2. A strict-decode error is returned through `Single.error` rather than hidden as `nil`.
-3. `isValid` returns `Single.just((try? ThorChainKit.Address(address, network: network)) != nil)`.
-4. The host `Address` is created only after strict decoding; the raw value is canonical lowercase.
-5. Do not add ENS/TNS/async resolution.
-6. The mainnet parser rejects `sthor`, `cthor`, and `tthor`.
-
-### Factory/chain files
-
-- `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Core/Factories/AddressParserFactory.swift:1` — `.thorChain → ThorChainAddressParser()`.
-
-`AddressParserChain.swift` does not change: the factory already supplies an array of `IAddressParserItem`, and the chain calls `isValid/handle` generically.
-
-The parser must not intercept arbitrary Bech32 addresses from other Cosmos chains: the exact HRP and a 20-byte payload are mandatory.
-
-## Balance/deposit consumers
-
-The S1-06 `ThorChainAdapter` already implements `IBalanceAdapter` and `IDepositAdapter`.
-
-Verify without additional THOR branches:
-
-- `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Modules/Wallet/WalletAdapterService.swift:28` — receives `BalanceData`;
-- the wallet list shows the RUNE amount using 8-decimal metadata;
-- `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Modules/Wallet/Receive/Address/BaseReceiveAddressService.swift:28` receives a simple `DepositAddress`;
-- copying the address returns the exact canonical `thor1…`;
-- there are no activation/gasless warnings.
-
-`unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Modules/AppStatus/AppStatusViewModel.swift:84` adds `.thorChain` to the existing non-EVM adapter `statusInfo` switch. This provides a manual diagnostic surface through Settings → About → App Status without a new THOR-specific debug screen.
-
-The exact paths are refreshed before implementation; the stale Gimle path is not used for editing.
-
-## Create flow
-
-`unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Modules/CreateAccount/CreateAccountViewModel.swift:36` currently enables only BTC and ETH automatically. S1-07 preserves this behavior.
-
-Acceptance:
-
-1. Create a mnemonic account.
-2. Open Manage Wallets.
-3. RUNE/THORChain is present among searchable native assets.
-4. Enable RUNE manually.
-5. WalletManager publishes the wallet; AdapterFactory creates the adapter; the generic lifecycle starts.
-6. The address and live balance are available.
-
-Automatically enabling RUNE by default requires a separate product decision and spec delta.
-
-## Import/restore flow
-
-- `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Modules/RestoreAccount/RestoreCoins/RestoreCoinsViewModel.swift:43` receives the native tokens of all supported chains.
-- The user can select RUNE.
-- The single-chain path in `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Modules/RestoreAccount/RestoreHelper.swift:4` handles `.thorChain` through the generic metadata route.
-- The current flow saves the account, restore marker, and wallet sequentially through three `Void` calls; this is not an atomic transaction, and the spec does not call it atomic.
-- The derived address is compared with an independent fixture.
-
-THORChain integration does not add a network call between these three saves and does not degrade the existing order. The successful path verifies the presence of the account, restore marker, and wallet after cold reconstruction. Cross-system restore crash atomicity is an existing general WalletCore risk and is not masked by THORChain tests; if implementation affects this flow beyond generic metadata routing, a separate cross-wallet recovery spec is required.
-
-## Relaunch flow
-
-```text
-WalletStorage loads TokenQuery(.thorChain, .native)
-  → MarketKit resolves released chain/token metadata
-    → WalletManager publishes wallet
-      → AdapterManager asks AdapterFactory
-        → ThorChainKitManager reconstructs address/Kit
-          → adapter.start
-            → cached stale state
-              → live fresh state
-```
-
-Key files:
-
-- `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Core/Storage/WalletStorage.swift:25`
-- `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Core/Managers/WalletManager.swift:41`
-
-If the MarketKit backend/cache does not know the UID after cold launch, the wallet must not be silently deleted. This is a hard failure for S1-07 acceptance.
-
-## Explorer
-
-- Chain metadata contains the transaction URL template.
-- `unstoppable-wallet-ios/packages/WalletCore/Sources/WalletCore/Extensions/Blockchain.swift:11` replaces `$ref`.
-- S1-07 does not add `ITransactionsAdapter`; therefore, the explorer link is verified by a model-level test and is not displayed through the transaction screen.
-- History Sprint 3 activates the real transaction explorer consumer.
-
-## Tests before implementation
-
-### MarketKit
-
-- UID round-trip and backend fixture;
-- native RUNE query/decimals/explorer;
-- cache/cold-load reconstruction.
-
-### AppTests unit/integration
-
-- `.thorChain` present in supported/order/description/blockTime exhaustiveness;
-- account-type policy supports mnemonic and rejects unsupported types from S1-06;
-- `IAddressParserItem` contract: `handle/isValid` for a valid fixture, bad checksum, wrong HRP, malformed input, mixed case, and canonical uppercase input;
-- factory route only `.native/.thorChain`;
-- adapter balance/deposit consumers need no special branches;
-- WalletStorage round-trip preserves token query.
-- App Status shows sanitized THORChain sync/height/endpoint-family fields and does not expose credentials/seed/raw error bodies.
-
-### Real user flows
-
-- create → search → enable → address/live balance;
-- import fixed mnemonic → expected full address/live balance;
-- terminate/relaunch → wallet present → same address → cached stale → live fresh;
-- offline relaunch → wallet/address/cached balance retained with error state;
-- remove RUNE wallet → adapter stop and no orphan task;
-- reinstall/no cache → metadata fetched and RUNE discoverable.
-
-`AppTests` verify metadata/parser/storage/factory/lifecycle through the existing dependency seams. The manual checklist verifies create/import/enable/Receive/terminate/relaunch/App Status on a public no-funds test account. The test runtime is not embedded in the Unstoppable production or Development targets.
-
-### Mandatory manual checklist
-
-Each run records the app commit/configuration, device or simulator + OS, timestamp, account provenance, endpoint family, observed address/height/balance, and the pass/fail result of each step. The mnemonic is not recorded.
-
-1. **Baseline:** clean launch → create or import a public no-funds account → manually enable RUNE → open Receive → record the exact `thor1…` → wait for a fresh balance and verify App Status.
-2. **Offline relaunch:** after a fresh state, terminate the process completely → disable the network through the device/simulator controls → launch without clearing app data → verify that the wallet, the same address, and the cached balance are preserved, while state is explicitly `stale/error`, not `fresh/zero`.
-3. **Recovery:** restore the network → foreground/refresh → wait for a fresh state → verify that the address did not change, the error disappeared, the accepted height is valid, and the adapter was not duplicated.
-4. **Remove wallet:** remove the RUNE wallet while the adapter is active → verify that the UI/Receive disappears and there are no subsequent THORChain state updates; at the same time, `AppTests` proves exactly one `stop`, cancellation, and no orphan publication through the `IThorChainKit` spy.
-5. **Reinstall/no cache:** delete app data on the dedicated test device/simulator → clean install/launch → create or import the test account → verify that MarketKit metadata loads without the old cache, RUNE is available in Manage Wallets, and enabling it produces the same independent address.
-
-Offline/reinstall steps use only external control of the test device and the production network path. They do not add a fixture transport, launch arguments, or acceptance-only source to Unstoppable.
-
-## Telemetry/privacy
-
-- Do not log the mnemonic/seed/private key.
-- Address and balance telemetry follow the existing app policy only; do not add new events by default.
-- The live test account must be created specifically for testing and must not contain user funds.
-- Manual verification does not record or publish the mnemonic or private material.
+S1-06 owns the THORChain adapter lifecycle composition. S1-07 owns the metadata/discovery and host-consumer integration that makes that adapter reachable through the existing wallet lifecycle.
 
 ## Acceptance criteria
 
-- A released MarketKit version, backend/cache metadata, and WalletCore bump exist.
-- RUNE is discoverable and opt-in, not enabled by default.
-- The strict mainnet parser works through the ThorChainKit codec.
-- Balance and Receive use generic consumers.
-- Create/import/relaunch/offline-relaunch flows are proven.
-- `AppTests` are green; the manual `Development` checklist is completed and recorded separately from the Example Maestro evidence.
-- Unstoppable contains no Maestro/acceptance-only files or runtime hooks.
-- The full address is stable and matches the independent fixture.
-- Decimals are exactly `8`, with BigUInt conversion that does not use `Double`.
-- There is no URI, history, send, swap, or non-native-token support.
+1. A released MarketKit version, backend/cache record, native RUNE metadata, and WalletCore dependency bump exist. The contract is UID `thorchain`, native RUNE, decimals exactly `8`, and the approved explorer template.
+2. RUNE is searchable and manually enabled in Manage Wallets; it is not automatically enabled for a new account.
+3. The host parser accepts only strict mainnet `ThorChainKit.Address` values, returns canonical lowercase raw addresses, rejects invalid checksum/HRP/length/mixed-case inputs, and routes through `AddressParserFactory`.
+4. Balance and Receive use the generic adapter consumers; amount conversion remains exact and does not use `Double`.
+5. App Status includes THORChain in the existing non-EVM status surface and sanitizes endpoint/error output using current app conventions.
+6. AppTests cover metadata, supported/order policy, parser vectors, factory routing, storage round-trip, and the generic lifecycle. Manual Development acceptance proves create → enable, import/restore, terminate/relaunch, offline cached state, recovery, remove, and reinstall/no-cache.
+7. The full address is stable and matches an independent fixture. No mnemonic, private key, provider credential, or host-local absolute path is recorded.
+8. No URI/deeplink, history, send, swap, non-native token, stagenet, Maestro, acceptance-only runtime hook, or new host test target is added.
 
-## Recorded decisions
+## Evidence base and current boundary
 
-1. The MarketKit UID is `thorchain`; the explorer template is `https://thorchain.net/tx/$ref`. Backend/release must implement the exact values before the host merge.
-2. Product placement is immediately after TRON; the Sprint 1 description is `RUNE`; block time is 6 seconds.
-3. `AppTests` cover host package integration; the real create/import/relaunch/App Status flows undergo manual product acceptance. Maestro is limited to `ThorChainKit/iOS Example`.
+Evidence was collected from the exact assigned worktrees, with current-tree Serena and targeted `rg`/Git verification after codebase-memory lookup.
+
+| Evidence | Current fact | Design consequence |
+| --- | --- | --- |
+| ThorChainKit `bed49c5` | S1-06 lifecycle design is the current repository boundary; this checkout also contains pre-existing local S1-06 report files. | S1-07 edits this spec/plan/report only and does not implement S1-06. |
+| UW v0.50 checkout `8a63bfd` | The adjacent branch has uncommitted S1-06 manager/factory/adapter/address-provider work. | Treat those files as fixed S1-06 input; no commit, push, or PR to UW is authorized in this phase. |
+| MarketKit feature `2c32745`, based on tag `3.6.12` | Native THORChain metadata exists locally but is not a released dependency. | Release/backend/cache metadata is a hard gate before host merge. |
+| `ManageWalletsViewModel` / `ManageWalletsTokenFetcher` | Discovery enumerates supported blockchains and native token queries generically. | Add policy/metadata; do not add a THOR-specific Manage Wallets branch. |
+| `RestoreCoinsViewModel` / `RestoreHelper` | Restore uses supported native queries and sequential account/marker/wallet saves. | Preserve generic routing and order; do not claim atomic restore. |
+| `WalletStorage` / `WalletManager` | Stored token-query IDs are reconstructed through MarketKit and published by the normal queue. | Prove cold reconstruction; do not add a THOR-specific storage manager. |
+| `MoneroAdapter` / `BaseReceiveAddressService` | Non-EVM lifecycle and deposit presentation are generic adapter/consumer seams. | Prove the S1-06 adapter through existing consumers, with no activation warning branch. |
+| `AppStatusViewModel` | The existing non-EVM status switch omits `.thorChain`. | Add one enum case to the existing sanitized status surface. |
+
+Load-bearing current anchors are:
+
+- `packages/WalletCore/Sources/WalletCore/Modules/ManageWallets/ManageWalletsViewModel.swift:4-153`
+- `packages/WalletCore/Sources/WalletCore/Modules/ManageWallets/ManageWalletsTokenFetcher.swift:4-29`
+- `packages/WalletCore/Sources/WalletCore/Modules/RestoreAccount/RestoreCoins/RestoreCoinsViewModel.swift:4-65`
+- `packages/WalletCore/Sources/WalletCore/Modules/RestoreAccount/RestoreHelper.swift:2-21`
+- `packages/WalletCore/Sources/WalletCore/Core/Storage/WalletStorage.swift:24-75`
+- `packages/WalletCore/Sources/WalletCore/Core/Managers/WalletManager.swift:6-112`
+- `packages/WalletCore/Sources/WalletCore/Core/Adapters/MoneroAdapter.swift:8-153`
+- `packages/WalletCore/Sources/WalletCore/Modules/Wallet/Receive/Address/BaseReceiveAddressService.swift:7-84`
+- `packages/WalletCore/Sources/WalletCore/Modules/AppStatus/AppStatusViewModel.swift:3-215`
+
+## Hard dependency gate
+
+Before the host can merge, the MarketKit/backend contract must be released and consumable: UID `thorchain` (not Cosmos chain ID `thorchain-1`), `.thorChain`, native RUNE, code `RUNE`, decimals `8`, and the approved explorer template `https://thorchain.net/tx/$ref`. The final released version and cache decode must be recorded in the implementation PR. A local feature branch is evidence of the proposed contract, not proof that this gate is closed.
+
+## Minimal implementation delta
+
+The following files are the only intended host changes unless a test demonstrates a generic-route failure:
+
+- `packages/WalletCore/Sources/WalletCore/Extensions/BlockchainType.swift`: add `.thorChain` to `supported` immediately after `.tron`, to `order` at the same position, description `RUNE`, and the protocol-confirmed block time. Keep mnemonic policy and native-token query behavior generic and test them.
+- `packages/WalletCore/Sources/WalletCore/Core/Address/ThorChainAddressParser.swift`: add a strict parser using `ThorChainKit.Address` and `ThorChainKit.Network.mainnet`.
+- `packages/WalletCore/Sources/WalletCore/Core/Factories/AddressParserFactory.swift`: import ThorChainKit if needed and route `.thorChain` to the parser; retain generic chain behavior.
+- `packages/WalletCore/Sources/WalletCore/Modules/AppStatus/AppStatusViewModel.swift`: add `.thorChain` to the existing non-EVM status case.
+- Existing AppTests and the exact MarketKit test target: add contract tests only where the current targets already provide a seam.
+
+S1-06-owned files are explicitly out of scope: `ThorChainKitManager`, `ThorChainKitFactory`, `ThorChainAdapter`, `AccountAddress`, `AccountAddressProvider`, and their existing local tests. Do not modify `AdapterFactory`, `WalletStorage`, `WalletManager`, `RestoreHelper`, or receive/balance consumers for speculative THOR branches.
+
+Parser contract: `handle` performs strict construction and returns `Single.error` on failure; `isValid` returns the corresponding boolean. The host address is created only after validation, with canonical lowercase raw text. The mainnet parser rejects `sthor`, `cthor`, and `tthor`, arbitrary Cosmos HRPs, malformed input, mixed-case input, and non-20-byte payloads. URI/deeplink parsing is not part of this slice.
+
+## Lifecycle and safety behavior
+
+The intended path is:
+
+```text
+released MarketKit metadata
+  → supported/native query discovery
+  → WalletStorage token-query reconstruction
+  → WalletManager publication
+  → existing AdapterFactory/S1-06 manager and adapter
+  → generic balance/receive/status consumers
+```
+
+Restore preserves the existing sequential account → restore-marker → wallet saves. It does not add a THOR network call or claim cross-store atomicity. Cold launch must preserve the wallet and address. If released metadata cannot resolve a stored `thorchain` query, the wallet must fail closed and remain diagnosable; it must not be silently deleted or replaced by a zero balance.
+
+Balance verification uses the existing exact integer/BigUInt path and pins decimals to `8`; no `Double` conversion is permitted. Receive displays the canonical `thor1…` address. Offline relaunch preserves cached state as explicitly stale/error, never fresh/zero; recovery returns to fresh state without duplicate adapter publication. Removing the wallet stops the adapter and leaves no orphan publication.
+
+## Delta matrix
+
+| Slice | Primary analog and coverage | Invariants | Required difference / rejected difference | Failure modes | Tests before code | Verification |
+| --- | --- | --- | --- | --- | --- | --- |
+| Discovery | Manage Wallets; responsibility, boundary, dependencies, lifecycle, state errors | supported/order/native query are consistent; opt-in only | add `.thorChain` metadata; reject default enable and special discovery branch | absent search result, wrong token type, accidental default | supported/order/native-query tests | MarketKit release decode + AppTests Manage Wallets path |
+| Parser | AddressParserFactory + strict Tron parser; responsibility, boundary, lifecycle, state errors, trust | codec owns validity; host receives canonical address only after validation | use THOR codec/HRP; reject URI parser and generic Cosmos fallback | wrong HRP, checksum, length, case, hidden error | valid and invalid vectors through factory | targeted AppTests and exact `rg`/test output |
+| Balance/Receive/Status | Monero adapter + BaseReceive + App Status; responsibility, boundary, lifecycle, trust | generic consumers, exact 8 decimals, sanitized diagnostics | add only enum/status routing; reject activation warnings and THOR UI | stale/fresh confusion, duplicate updates, secret leakage | adapter spy, BigUInt/metadata, status sanitization | AppTests plus Development manual checklist |
+| Restore/Relaunch | WalletStorage/WalletManager + RestoreHelper; lifecycle, dependencies, state errors, trust | stored query reconstructs; address stable; missing metadata fails closed | preserve sequential saves; reject atomicity claim and backup shortcut | silent deletion, changed address, orphan adapter, stale zero | storage round-trip, restore, restart/offline tests | AppTests plus terminate/relaunch/remove/reinstall manual runs |
+
+## Tests before implementation
+
+MarketKit tests must pin UID encode/decode, backend/cache chain and native token decode, native RUNE query, decimals `8`, explorer `$ref` replacement, and the released dependency version. WalletCore AppTests must pin supported/order/description/block-time policy, mnemonic account policy, native query behavior, strict parser vectors, factory routing, exact amount conversion without `Double`, storage round-trip, generic adapter lifecycle, and sanitized App Status.
+
+Manual Development acceptance uses a public no-funds test account and records app commit/configuration, device/OS, timestamp, endpoint family, observed address/height/balance, and per-step result without recording the mnemonic. It covers create → search → enable → Receive/live balance; import/restore; terminate/relaunch; offline cached stale/error state; network recovery; remove; and reinstall/no-cache. No Maestro suite is applied to Unstoppable.
+
+## Adversarial review and approval gate
+
+Discovery is frozen at `discovery 1/2`; closure begins at `closure 0/5`. The review must challenge freshness, identity, similarity, completeness, primary coherence, counterexample, conflicts, inherited defects, missing/excess delta, failure behavior, test validity, and the smaller safe alternative. The current evidence has one Gimle freshness warning with an explicit current-tree workaround; it does not override independent local verification.
+
+Implementation may begin only after the operator approves this exact spec revision and the linked plan. The approval must also confirm the released MarketKit/backend/cache dependency gate and authorize a separately assigned implementation phase. Until then this repository contains documentation only for S1-07.
+
+## Non-goals
+
+No default enable, URI/deeplink, history, explorer UI, send, swap, non-native THOR assets, stagenet, new host test target, Maestro, fixture transport, launch argument, acceptance-only source, secret material, or changes to the S1-06 lifecycle composition.
