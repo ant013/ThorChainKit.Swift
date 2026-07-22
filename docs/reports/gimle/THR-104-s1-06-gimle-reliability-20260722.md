@@ -12,7 +12,7 @@ review is required before approval
 **Revision 5 artifact hashes:** spec
 `c5b7fc0fca855a2d77479c12c0966cff8634d22566797c47a207361743235c54`; plan
 `75e97e671cba99f6b719acadbe2f1057a841cecc5def384f0e409b71ef7892a0`.
-**Reviewed ThorChainKit design head:** `45ca84599df07501d20f701cb2fcde466c4bca87`
+**Reviewed ThorChainKit design head:** `eb43754d21d0b99ec1c0fd525222f5f987a36bc0`
 (spec-only branch; implementation remains prohibited).
 
 ## Identity
