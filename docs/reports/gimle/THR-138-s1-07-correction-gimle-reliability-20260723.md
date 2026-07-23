@@ -3,7 +3,7 @@
 - Task: THR-138
 - Workflow/phase: `analog_change` / adversarial review, design revision 4
 - Repository branch: `docs/s1-07-unstoppable-rune-surface-v050`
-- Reviewed design revision commit: pending revision-4 spec commit
+- Reviewed design revision commit: `10ca4d84b1daaf526efceca94054842f269c44da`
 - Report provenance update commit: this report's containing commit
 - The redacted Liquify artifact was introduced at `325212a`; revision-4 design
   inputs are bound in the canonical state and the revision-4 spec commit.
