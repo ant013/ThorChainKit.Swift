@@ -22,7 +22,7 @@ Define one host-neutral API that separates mutable UI input, immutable review da
 - cheap local validation before any network work;
 - deterministic public error descriptions without secrets.
 
-Out of scope: network preflight implementation, protobuf, cryptographic verification, journal, transport, Example UI, and host integration. Later slices implement these behind the API without changing its ownership.
+Out of scope: network preflight implementation, protobuf, cryptographic verification, journal, transport, Example UI, and host integration. S2-01 defines the public pending/retry contracts and an in-memory contract test seam only; S2-05 owns durable journal/runtime/recovery, observation replacement, operation holds, and concrete retry behavior. Later slices implement these behind the API without changing its ownership.
 
 ## Proposed Package Areas
 
@@ -92,9 +92,9 @@ extension Kit {
 
 `Kit` remains the only public behavior facade. No public transaction builder, raw account/sequence override, fee override, gas override, private-key constructor, or arbitrary broadcast method exists.
 
-`quote`, `send`, and `retryBroadcast` require this `Kit` instance's Sprint 1 lifecycle client to be active. A never-started or stopped instance throws `SendError.kitNotStarted` before QuoteStore/journal access, quote-token consumption, signer work, or endpoint I/O. The runtime actor gives every successful `start()` activation a monotonic client lifecycle generation. Quote admission captures that exact generation; every H0 callback, next-request decision, and final QuoteStore insertion must still match it. `stop()` deactivates and advances the generation, resolves any suspended quote-operation waiters with `kitNotStarted`, and invalidates that Kit's already stored unconsumed quotes. A late H0 callback from the old generation is discarded, cannot store/return a quote after a rapid `start()`, and cannot begin another request. `stop()` does not revoke an already admitted financial operation: S2-05 gives each admitted send/retry an operation activity hold which survives client stop until clean finalization or repair.
+`quote`, `send`, and `retryBroadcast` require this `Kit` instance's Sprint 1 lifecycle client to be active. A never-started or stopped instance throws `SendError.kitNotStarted` before QuoteStore/journal access, quote-token consumption, signer work, or endpoint I/O. The runtime actor gives every successful `start()` activation a monotonic client lifecycle generation. Quote admission captures that exact generation; every H0 callback, next-request decision, and final QuoteStore insertion must still match it. `stop()` deactivates and advances the generation, resolves any suspended quote-operation waiters with `kitNotStarted`, and invalidates in-flight quote construction and stored unconsumed quotes. A late H0 callback from the old generation is discarded, cannot store/return a quote after a rapid `start()`, and cannot begin another request. Once QuoteStore atomically admits a send/retry by consuming a quote or retry record, that operation is no longer an unconsumed quote; S2-05 supplies the later operation hold so it can finish or repair after client stop. The S2-01 state contract therefore distinguishes construction, unconsumed, admitted, and terminal states explicitly.
 
-`SendAmount.exact(_:)` immediately copies the caller's `BigUInt` into canonical big-endian magnitude `Data`; `.maximum` stores no magnitude. The public call spelling remains `SendAmount.exact(value)`/`.maximum`, but the value that enters `QuoteStore`, an endpoint task, or an actor is checked `Sendable`. Likewise, `Kit.retryBroadcast(...acceptingNativeFee:)` canonicalizes its optional ergonomic `BigUInt` argument into an internal `Data?` snapshot at the facade boundary before invoking the runtime actor. Neither caller-owned BigInt storage crosses a task or actor boundary.
+`SendAmount.exact(_:)` immediately copies the caller's `BigUInt` into canonical big-endian magnitude `Data`; `.maximum` stores no magnitude. The public call spelling remains `SendAmount.exact(value)`/`.maximum`, but the value that enters `QuoteStore`, an endpoint task, or an actor is checked `Sendable`. Likewise, `Kit.retryBroadcast(...acceptingNativeFee:)` is a non-actor-isolated facade entry point whose first operation canonicalizes its optional ergonomic `BigUInt` argument into an internal `Data?` snapshot before any runtime-actor call; the public argument is never captured by an escaping task. Neither caller-owned BigInt storage crosses a task or actor boundary. The strict-concurrency test invokes the facade from a caller task and proves the snapshot occurs before the first actor hop.
 
 `SendAmount.maximum` is an explicit user intent, not a magic numeric sentinel. S2-02 resolves it inside the same coherent snapshot as the native fee by calculating checked `spendableRune - nativeFee`; the returned quote always contains the actual positive amount the user will sign. `exact` is never silently reduced.
 
@@ -124,11 +124,11 @@ public struct SendQuote: Sendable {
 
 The custom authoritative initializer is internal; private magnitude fields make the synthesized memberwise initializer unavailable outside the type. The three amount accessors reconstruct a fresh `BigUInt` from canonical big-endian `Data` magnitudes using BigInt's nonfailing `BigUInt(Data)` initializer; no `BigUInt` is stored. Zero fee uses empty canonical magnitude, while amount/total remain positive. Strict Swift 5 complete-mode compilation proves every stored field—including Sprint 1's `Address`, the random quote token, `Data`, strings, integers, Bool and Date—is `Sendable`. `internalQuoteToken` is implemented in `SendQuote.swift`, returns the value snapshot, and is the only cross-file access used by `QuoteStore`; it and the initializer remain invisible to an external consumer.
 
-Internal state contains one cryptographically random opaque quote token. `QuoteStore` maps that token to the authoritative wallet/network namespace, lifecycle client ID/generation, sender, requested amount intent, account number, sequence, provider-family lease identity, policy snapshot, and every review field. The insertion occurs only after the runtime actor revalidates the still-active captured generation. A second undefined tamper signature is intentionally not added. The quote:
+Internal state contains one 32-byte opaque quote token generated with the platform secure-random source; a token collision is retried inside the same atomic store operation. `QuoteStore` maps that token to the authoritative wallet/network namespace, lifecycle client ID/generation, sender, requested amount intent, account number, sequence, provider-family lease identity, policy snapshot, and every review field. The insertion occurs only after the runtime actor revalidates the still-active captured generation. A second undefined tamper signature is intentionally not added. The quote:
 
 - is valid only for the originating `Kit` instance/wallet namespace;
-- expires exactly ten seconds after the final coherent quote snapshot has been accepted and stored;
-- can start at most one send attempt;
+- expires exactly ten seconds after the final coherent quote snapshot has been accepted and stored, measured by an injected monotonic clock; `expiresAt` is a wall-clock display projection only;
+- can start at most one send attempt; `QuoteStore.consume` is the atomic linearization point and removes/reserves the token before signer work;
 - cannot be reconstructed from public review values;
 - does not expose endpoint credentials, module addresses, or account metadata.
 
@@ -163,7 +163,13 @@ public struct SigningRequest: Sendable {
 
 The cross-actor representation contains only immutable `Data` and `String` fields. The three monetary summary strings are canonical native-RUNE display values with exactly eight fractional digits, ASCII digits only, one decimal point, no sign/grouping/exponent, and no ticker suffix: for example, `100_000_000` base units is `"1.00000000"`. `amount`, `nativeFee`, and `totalDebit` always mean RUNE at eight decimals; `totalDebit` must be the checked exact sum of the first two both in base units and in this representation. `accountNumber` and `sequence` are canonical unsigned base-10 integers with no leading zero except `"0"`. Sender/recipient are canonical network Bech32 strings and memo is the exact reviewed UTF-8 value. `requestId` is an opaque random public correlation value bound to the quote attempt and contains no wallet identifier or secret.
 
-`SigningRequestFactory` independently decodes its own `serializedSignDoc` before releasing the request and proves that sender, recipient, memo, account number, sequence, literal denom `rune`, and base-unit amount agree with `summary`; it also proves that the quote's pinned native fee and checked total convert exactly to the fixed-eight strings. A mismatch is an internal invariant failure and makes zero signer calls. The SignDoc `Fee.amount` remains empty by THORChain protocol, so `nativeFee` is authorized quote policy rather than a serialized fee coin.
+S2-01's internal `SigningRequest` constructor validates only the immutable
+field shape, fixed-size digest, canonical summary strings, and request-id
+requirements; it does not decode protobuf or release signer bytes. S2-03 owns
+SignDoc construction/decoding and exact byte consistency. S2-04 owns signer
+binding and signature verification. Both later slices must preserve this public
+request shape. The SignDoc `Fee.amount` remains empty by THORChain protocol, so
+`nativeFee` is authorized quote policy rather than a serialized fee coin.
 
 The signer returns only a 64-byte compact signature. It cannot replace body/auth/sign bytes or mutate the quote. `description`, debug output, and errors redact SignDoc bytes and signature.
 
@@ -204,9 +210,7 @@ public enum PendingTransactionsStatus: Sendable {
 
 `PendingTransaction` is created only by the kit through an internal invariant-checking initializer. Amount and fee use the same canonical magnitude rules as `SendQuote`; no public pending value stores `BigUInt`, even though ergonomic computed accessors return newly reconstructed values. The complete pending graph is therefore safe to publish from the dedicated state queue and replay across Combine subscribers without unchecked conformance.
 
-Initialization must successfully migrate/recover the send store and load the first committed snapshot before the send runtime becomes ready; a storage failure at that boundary prevents the runtime from starting. The publisher then replays the current shared-runtime snapshot on subscription. `pendingTransactions` reads the runtime's last successfully committed snapshot synchronously, while one GRDB `ValueObservation` on the runtime's shared writer serializes post-commit emissions on a documented dedicated state queue. Internal `broadcasting` rows remain public as `.unknown` with `.inFlight`; they never disappear while I/O is active. Pending ordering is deterministic: newest `createdAt` first, then hash. Rejected journal rows are not public pending items.
-
-The nonfailing API does not hide storage health. `pendingTransactionsStatus` starts at `.ready`; an observation/read failure keeps the last valid snapshot, changes status to `.degraded`, emits no empty/fabricated list, and starts the generation-scoped observation replacement specified in S2-05. The raw database error is restricted to sanitized internal diagnostics. `.ready` returns only after the first successful initial snapshot from the replacement observation has been published; an isolated reread without an active replacement subscription is insufficient. Sprint 3 may reconcile pending rows with confirmed history without changing the Sprint 2 transaction identity.
+S2-01 defines only the immutable pending value graph, deterministic ordering contract, and nonfailing facade signatures. A local in-memory publisher fixture may replay a supplied snapshot for contract tests; it does not create a journal or claim durable readiness. S2-05 owns migration/recovery, the shared writer, GRDB observation replacement, operation holds, broadcasting-row persistence, degraded health transitions, and concrete retry behavior. No S2-01 test may require GRDB, protobuf, transport, or a durable store.
 
 `checkTxAccepted` is deliberately literal: it means the node accepted CheckTx, not that the transaction was included or confirmed. UI text and tests must use that meaning.
 
@@ -290,13 +294,13 @@ public enum SendError: Error, Equatable, Sendable {
 
 All custom initializers for `QuoteChanges`, `NativeFeeChange`, and `BroadcastRejection` are internal and invariant-checking. `QuoteChanges` rejects an empty set and exposes its read-only nonempty `values`; the public enum case cannot be constructed from a raw or empty set. Fee magnitudes use the same canonical big-endian representation as `SendQuote`; they may be zero but never noncanonical. `BroadcastRejection.code` is nonzero; `codespace` is nil or at most 64 printable ASCII bytes; `sanitizedLog` is nil or valid UTF-8 capped at 256 bytes after control-character replacement. No public case carries an upstream `Error`, URL, response body, arbitrary log, or secret.
 
-`LocalizedError`/debug rendering is deterministic and bounded: `quoteChanged` sorts `QuoteChanges.values` by `QuoteChange.rawValue`, monetary values render canonical base-unit decimal strings, and no description relies on `Set` iteration, upstream error text, or locale. WalletCore maps cases to localized copy; the package error itself does not own UI localization.
+`LocalizedError`/debug rendering is deterministic and bounded: `quoteChanged` sorts `QuoteChanges.values` by `QuoteChange.rawValue`, monetary values render canonical base-unit decimal strings, and no description relies on `Set` iteration, upstream error text, or locale. WalletCore maps cases to localized copy; the package error itself does not own UI localization. `SendQuote`, `SigningRequest`, `PendingTransaction`, and `SendError` provide explicit `CustomDebugStringConvertible` projections that omit quote tokens, digest/sign-doc/signature bytes, public-key bytes, URLs, credentials, wallet identifiers, and upstream response text. The projections use fixed labels and bounded reviewed fields only; synthesized debug output is not permitted for these types.
 
 `SendError` is explicitly checked `Sendable`. Because `Error` values cross concurrency boundaries, no case stores `BigUInt`; computed monetary accessors reconstruct new values. A strict compiler probe for a control `Error` case containing `BigUInt` must fail, while a probe containing this exact graph must compile without suppression.
 
 Once exact signed bytes and a local transaction ID are durable, any uncommitted transition or ambiguous network outcome is always returned as `SendSubmission.state == .unknown`; it is never thrown as an ambiguous `SendError`. A storage error may be thrown only when the initial durable identity was not created. A definitive CheckTx rejection is thrown only after its terminal journal transaction commits; failure to persist a terminal response remains `.unknown`.
 
-Raw URLs, credentials, wallet identifiers, public-key bytes, signatures, SignDoc/TxRaw bytes, and upstream response bodies are excluded from error/debug descriptions.
+Raw URLs, credentials, wallet identifiers, public-key bytes, signatures, SignDoc/TxRaw bytes, and upstream response bodies are excluded from error/debug descriptions. `BroadcastRejection.sanitizedLog` is not a copied upstream log: its internal initializer accepts only a package-owned allowlisted diagnostic category and renders a fixed bounded string; arbitrary node text is discarded. Tests must prove a credential, URL, hash, key-like value, signature, SignDoc/TxRaw marker, and response body never appear in any public error or debug projection.
 
 ## Local Validation Order
 
@@ -310,9 +314,78 @@ After the facade has snapshotted ergonomic values, the first behavioral step is 
 
 Network-dependent module/memo/fee/balance/halt validation is S2-02.
 
-## Analog Delta
+## Ownership and analog delta
 
-The UW EVM/TRON handler split supplies the review→send lifecycle. Unlike those handlers, the host does not build chain-specific fee/transaction data. EvmKit's seed/private-key signer construction is an explicit counterexample: ThorChainKit accepts only a narrow async signer capability after user confirmation.
+The primary ownership spine is current TronKit's Kit-owned send/pending composition. Its raw chain-specific transaction construction is explicitly rejected. The Unstoppable EVM/TRON handler split is a supporting role-specific analog for review→send separation and expiration, not the kit lifecycle or authority owner. The immutable domain and opaque quote capability are a greenfield S2-01 delta informed by both roles. EvmKit's seed/private-key signer construction is an explicit counterexample: ThorChainKit accepts only a narrow async signer capability after user confirmation.
+
+## Repository and evidence binding
+
+This revision is based on the rebased branch `docs/THR-135-s2-01-formalization` at current `origin/main` `937332b2e7020868abcac8681ddd664b6e4bad72`, while preserving the canonical Sprint 2 architecture content from `518835315a65996b9321665213adb0516503df65`. This document is the S2-01 authority for implementation planning; it does not authorize production source changes.
+
+The authorized Unstoppable supporting checkout is `/Users/ant013/Data/AI/unstoppable-wallet-ios-THR-104-v0.50`, branch `local/THR-104-thorchain-lifecycle-v0.50`, at HEAD `8a63bfda028dd8543115b26dd777235a53304311`, remote `horizontalsystems/unstoppable-wallet-ios`. Its working tree is intentionally dirty with local THR-104/THR-139 integration changes and one unrelated pre-existing `Unstoppable/Tests/Modules/MultiSwap/SwapExecutableTests.swift` change. It is read-only supporting evidence; its dirty state is not delivery evidence. The earlier `0e52f5908` identity is invalid and is not used.
+
+Gimle indexed the UW project under a different checkout and commit. That mapping defect is quarantined as evidence metadata, with Serena and targeted `rg` on the authorized checkout as the fallback. Current TronKit and EvmKit indexed commits match their verified local trees. Vultisig raw transaction, raw key-shaped, and raw error-presentation examples are rejected counterevidence and are not copied into ThorChainKit.
+
+## Affected areas
+
+| Area | S2-01 change | Excluded owner |
+| --- | --- | --- |
+| Public send domain | Define immutable `SendAmount`, `SendQuote`, `SigningRequest`, `SendSubmission`, `TransactionID`, and `PendingTransaction` values. | None; later slices must preserve this graph. |
+| Kit facade | Define quote, send, retry, pending snapshot, and publisher contracts with lifecycle admission. | S2-05 owns durable runtime and concrete retry behavior. |
+| Quote capability | Define opaque identity, exact ten-second expiry, one-use consume, generation binding, and local validation. | S2-02 owns network preflight and coherent fee/account snapshot. |
+| Stable errors | Define finite `SendError`, value wrappers, deterministic descriptions, and redacted debug projections. | WalletCore owns localized UI copy; transport owns private provider details. |
+| Package tests | Add contract, strict-concurrency, expiry/consume, validation, and redaction test seams. | No GRDB, protobuf, transport, simulator, or Maestro tests in this slice. |
+
+## Acceptance criteria
+
+1. The public graph compiles on the iOS 13 floor and imports no UIKit or SwiftUI.
+2. Public review, signing-request, submission, pending, and error values are immutable and `Sendable`; no public initializer permits forged quote identity, raw transaction bytes, secret material, or caller-owned `BigUInt` storage across an actor/task boundary.
+3. `SendAmount` and optional retry fee values snapshot canonical magnitudes before the first actor hop; `.maximum` is explicit intent and is not represented by a numeric sentinel.
+4. Quote expiry is exactly ten seconds from the accepted coherent snapshot, uses an injected monotonic clock, and is one-use with atomic consume; stale, consumed, foreign, and generation-invalid quotes fail deterministically.
+5. A never-started or stopped Kit returns `kitNotStarted` before quote storage, token consumption, signer work, or endpoint work.
+6. Local validation order is deterministic, and every public `SendError` case is finite, `Sendable`, equality-testable, sanitized, and bounded without upstream text or sensitive values.
+7. Pending/retry contracts are immutable and honest about `checkTxAccepted` versus `unknown`; durable journal, transport, protobuf, cryptographic verification, and concrete retry behavior remain excluded.
+
+## Verification
+
+Verification is local to the MacBook and applies to the future implementation head, not this documentation-only revision:
+
+1. Run `swift test` for the package after the implementation slice exists; the focused test target must cover each acceptance criterion.
+2. Run a strict Swift 5 complete-concurrency compile probe proving the public graph is `Sendable` without `@unchecked Sendable` or `@preconcurrency` suppression.
+3. Run focused tests for canonical `BigUInt` snapshots, lifecycle admission precedence, quote expiry boundaries, atomic one-use consume, generation invalidation, local validation order, deterministic error/debug projections, and redaction.
+4. Inspect the public symbol surface to prove no transaction builder, raw account/sequence override, fee/gas override, private-key constructor, arbitrary broadcast API, URL, credential, key, signature, SignDoc, TxRaw, or response-body field is exposed.
+5. Confirm the diff contains only S2-01 documentation in this phase. GitHub Actions remain build-only; no CI tests, mutants, simulators, or Maestro are part of S2-01, and no Maestro suite is applied to Unstoppable Wallet.
+
+## Open questions
+
+- S2-02 must define the exact provider-family lease and fee-policy snapshot fields that populate the internal quote record without changing this public graph.
+- S2-03 must define the exact SignDoc encoding and digest construction behind the fixed `SigningRequest` fields.
+- S2-04 must define the host signer binding and compact-signature verification policy behind the `Signer` capability.
+- S2-05 must define durable pending/retry storage, recovery, observation replacement, and operation holds behind the nonfailing facade contracts.
+- The package's Sprint 1 implementation will determine exact source placement; type names, ownership, and dependency direction in this document are fixed.
+
+## Full analog delta matrix
+
+| S2-01 slice | Verified analog evidence | Kept delta | Rejected or deferred behavior | Safety/verification consequence |
+| --- | --- | --- | --- | --- |
+| Immutable send domain | TronKit `TransactionSender`/`Kit` boundary; EvmKit signer boundary; UW handler registration as consumer evidence | Kit-owned immutable values, host-signer capability, opaque quote identity, explicit pending/submission states | Tron/EVM raw transaction construction, UW application lifecycle ownership, durable pending runtime | Public API inspection and strict-concurrency probes must show no raw bytes, secret material, or mutable review state. |
+| One-use quote and expiry | TronKit send sequencing; UW `TronSendHandler` ten-second expiration; EvmKit signer composition | Exact ten-second monotonic expiry, atomic token consume, lifecycle-generation binding, injected-clock tests | Duration-like consumer behavior without identity proof; raw signer/transaction APIs | Boundary, `now == expiresAt`, duplicate consume, foreign Kit, stop/start race, and cancellation tests are mandatory. |
+| Local validation and facade admission | UW `TronSendHandler` validation cases; TronKit Kit composition | `kitNotStarted` precedence, canonical memo, recipient/amount checks before endpoint work, explicit maximum intent | Network-dependent preflight, fee/balance/halt checks, transport | Call-order tests must prove no QuoteStore, signer, or endpoint work occurs before admission and local validation. |
+| Stable sanitized errors | EvmKit typed error boundary; TronKit `SendError`; UW consumer errors | Finite `SendError`, typed value wrappers, deterministic sorted projections, allowlisted bounded diagnostics | Provider error text, URL/credential/response-body propagation, UI localization in the kit | Equality, `Sendable`, deterministic rendering, and sensitive-token redaction tests are mandatory. |
+| Unsafe counterexample | Vultisig raw transaction/key-shaped fixtures and raw error presentation | Explicit rejection recorded in Gimle evidence | No raw key, raw transaction, or unbounded error string in public S2-01 types | Adversarial review must treat any such field or projection as a blocking finding. |
+
+## Test-first implementation plan
+
+1. Write public-surface and strict-concurrency tests first; check that immutable values compile, reject forged construction, snapshot `BigUInt`, and expose no sensitive fields.
+2. Write quote-store contract tests first; check exact ten-second expiry, injected-clock boundaries, atomic one-use consume, quote ownership, lifecycle generation, cancellation, and stop/start invalidation.
+3. Write facade admission and validation tests first; check `kitNotStarted` precedence and the specified amount, recipient, memo, and cancellation order without endpoint calls.
+4. Write error contract tests first; check every `SendError` case, value-wrapper invariants, deterministic descriptions/debug projections, `Sendable`, and redaction of URL, credential, hash, key-like, signature, SignDoc/TxRaw, and response-body markers.
+5. Write pending/submission contract tests first; check deterministic ordering, honest `checkTxAccepted`/`unknown` semantics, publisher snapshot replay, and the non-durable in-memory seam.
+6. Implement only the smallest production code needed to make those tests pass. Stop before preflight, protobuf, signing verification, journal, transport, Example UI, host integration, or S2-02 work.
+
+Kit owns quote/send authority, immutable value invariants, QuoteStore admission, and public error projections. A host adapter owns lifecycle invocation, user confirmation, and secret material; it may call Kit.start/stop but cannot construct quote authority or retain private keys in the kit.
+
+`SigningRequestFactory` is not implemented in S2-01. This slice defines the immutable `SigningRequest` public shape and an internal construction precondition only. Independent SignDoc decoding and byte-level consistency proofs belong to S2-03/S2-04; S2-01 tests verify that an invalid internal construction makes zero signer calls without requiring protobuf.
 
 ## Tests Before Implementation
 
@@ -320,12 +393,12 @@ The UW EVM/TRON handler split supplies the review→send lifecycle. Unlike those
 - `SendAmount`, `SendQuote`, `SendSubmission`, `TransactionID`, `PendingTransaction`, all nested states/status, `QuoteChanges`, `NativeFeeChange`, and `SendError` compile as checked `Sendable` under pinned Swift 5 complete mode with BigInt 5.3.0; a source guard proves no cross-boundary value stores `BigUInt` or uses unchecked/preconcurrency suppression;
 - every exact `SendError` case and supporting payload above is constructed by tests; internal `QuoteChanges(validating:)` rejects an empty set, a public-only consumer cannot initialize `QuoteChanges` or compile `.quoteChanged([])`, `NativeFeeChange` round-trips zero and values above `UInt64`, retry-blocked cases project to matching pending availability, and broadcast diagnostic bounds/redaction are enforced;
 - never-started and after-stop quote/send/retry fail with `kitNotStarted` before behavioral input/quote/row validation, QuoteStore/journal access, consumption, signer, or endpoint work; stopped quote with invalid input, stopped send with a foreign/expired quote, and stopped retry with a missing/terminal ID prove lifecycle error precedence and zero storage-spy calls;
-- suspended H0 → `stop()` → late success, including `start()` again before quote expiry, returns `kitNotStarted`, leaves QuoteStore empty, starts no next request, and cannot return/use an old-generation quote; stop invalidates stored unconsumed quotes while an already admitted send/retry retains its operation activity hold;
+- suspended H0 → `stop()` → late success, including `start()` again before quote expiry, returns `kitNotStarted`, leaves QuoteStore empty, starts no next request, and cannot return/use an old-generation quote; S2-01 proves only the admission boundary, while S2-05 proves the admitted-operation hold and finalization/repair behavior;
 - exact amount and optional retry-fee inputs are copied into canonical `Data` before the first actor/task call; actor-crossing probes and values above `UInt64` prove the original BigUInt object is never retained;
 - quote amount/fee/total round-trip boundaries through canonical magnitude Data, including zero fee, one base unit, values above UInt64, and repeated cross-task reads producing equal independent BigUInt values;
 - the public-only signer reads every `SigningRequest` accessor, while external memberwise construction remains unavailable;
 - fixed-eight native-RUNE summary boundaries, including `1` base unit → `0.00000001`, `100_000_000` → `1.00000000`, zero fee, checked total, and rejection of sign/grouping/exponent/incorrect precision;
-- independent SignDoc decode proves amount/sender/recipient/memo/account/sequence match the summary and pinned fee plus amount equals total before the signer is called;
+- invalid internal SigningRequest construction makes zero signer calls; independent SignDoc decode and byte-level consistency proofs are S2-03/S2-04 tests;
 - memberwise construction unavailable for quote/request/transaction ID;
 - zero amount/self/wrong-network recipient performs zero transport calls;
 - empty memo canonicalizes to nil while nonempty whitespace/multibyte text remains exact through quote, summary, SignDoc and pending projection;
@@ -334,23 +407,34 @@ The UW EVM/TRON handler split supplies the review→send lifecycle. Unlike those
 - one-use state under sequential and concurrent attempts;
 - quote from another kit/wallet rejected;
 - module-level `QuoteStore` can consume `internalQuoteToken`, while a public-only consumer cannot construct a quote or read either token accessor;
-- publisher initial empty replay and deterministic ordering;
-- concurrent snapshot/subscription/update ordering through the GRDB observation queue;
-- internal broadcasting projects continuously as public unknown/in-flight;
-- observation failure retains the last snapshot and publishes degraded status; only a replacement observation's first snapshot returns to ready, and a later independent commit is still observed;
-- every public error description passes a canary redaction test;
+- publisher initial snapshot replay and deterministic ordering through the in-memory contract fixture;
+- durable publisher, broadcasting-row, observation failure, degraded status, and retry tests are S2-05 tests;
+- every public error and explicit debug projection passes credential/URL/key/signature/bytes redaction canaries;
 - strict-concurrency compile gate for `Signer` and actor crossings.
 
 ## Verification
+
+Verification commands apply to the post-implementation PR head, not the
+documentation-only architecture head. The implementation PR must provide an
+executable package/consumer target before running:
 
 ```text
 swift package dump-package
 swift test --filter SendQuoteTests
 swift test --filter QuoteStoreTests
+swift test --filter SendErrorTests
 swift test --filter SendPublicApiTests
 swift test
-temporary iOS consumer xcodebuild with import ThorChainKit only
+xcodebuild -project <temporary-consumer-project> -scheme <consumer-scheme> -destination 'platform=iOS Simulator,id=<approved-udid>' build
 ```
+
+Each focused command must report a nonzero discovered test count. The PR/QA
+evidence must cite one exact head SHA, `git diff --name-only` against the base,
+local test logs, build-only GitHub Actions conclusions, the public import and
+secret/redaction audits, and an explicit QA PASS on that same SHA. Before
+implementation, only documentation/spec hash and current-tree evidence checks
+are expected; package commands are intentionally unrun because the pinned
+architecture head has no `Package.swift`.
 
 ## Acceptance Criteria
 
@@ -359,8 +443,8 @@ temporary iOS consumer xcodebuild with import ThorChainKit only
 - No public initializer can forge an authoritative quote or SigningRequest.
 - No public construction path can create an empty `QuoteChanges` payload.
 - Quote expiry, identity, and one-use semantics are deterministic and tested.
-- Stop invalidates both stored and in-flight old-generation quotes before they can be returned or consumed.
-- No secret-bearing value has a default debug representation.
+- Stop invalidates both stored and in-flight unconsumed old-generation quotes before they can be returned or consumed; an admitted operation is not an unconsumed quote and follows S2-05 finalization/repair rules.
+- No secret-bearing value has synthesized or default debug output; explicit bounded projections are tested.
 
 ## Pinned Decisions
 
