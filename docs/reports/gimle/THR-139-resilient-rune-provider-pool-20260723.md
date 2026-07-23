@@ -5,7 +5,7 @@
 - Trust: **RED**
 - Repository: `$THORCHAINKIT_ROOT`
 - Base HEAD: 6462bec2604db4d3d05b3cfccde1ff5b768c86e0
-- Final HEAD: n/a
+- Final HEAD: 826fa090ca6f35b8972699c056f44ea21e066e4e
 - Gimle runtime: native-dev:0e9cf57c00ff970f584256126b500166580e7a72
 - Indexed commit: 8a63bfda028dd8543115b26dd777235a53304311
 
@@ -136,7 +136,7 @@ the next targeted closure review.
 - D-006@7 REVISE: Repository-derived verifier paths
 - D-007@7 REVISE: Preflight before every Xcode command
 - D-008@7 ACCEPT: Manifest/result digest schemas
-- D-009@5 ACCEPT: Revision 6 docs-only correction is prepared for push and review-bindable
+- D-009@5 ACCEPT: Revision 6 docs-only correction is pushed and review-bindable
 - D-010@2 ACCEPT: Direct identity/height verification coverage
 
 ## Verification and acceptance
