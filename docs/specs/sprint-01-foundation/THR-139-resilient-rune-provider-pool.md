@@ -1,8 +1,8 @@
 # THR-139 — resilient native RUNE provider pool
 
-**Design revision:** 16 — metadata-only successor to the pushed D-022
-correction; discovery 2/2, closure 5/5 remains frozen; targeted
-correction review is pending.
+**Design revision:** 17 — targeted verifier-contract correction successor to
+revision 16; discovery 2/2, closure 5/5 remains frozen; targeted correction
+review is pending.
 **Status:** revised
 design; implementation remains blocked until this exact revision is accepted by
 the adversarial reviewer and explicitly approved by the operator.
@@ -39,8 +39,9 @@ In scope:
 - Exact family ordering, role-bound REST/RPC pairing, fail-closed URL
   validation, and the deterministic three-family live-smoke harness.
 - ThorChainKit simulator tests that prove the existing pool/coordinator
-  behavior, plus the one approved source-gate repair and focused absence-envelope
-  regression test described below.
+  behavior, plus the one approved source-gate repair, the three bounded
+  verifier-contract repairs, and focused absence-envelope regression test
+  described below.
 - Deterministic full-manifest family-selection fixtures in AppTests. They vary
   only scripted Comet heights so Rorcual, IBS, and Keplr are each selected in a
   separate fixture pass.
@@ -109,7 +110,7 @@ credential, query, fragment, foreign host, or cross-family REST/RPC pairing
 fails closed. This preserves the existing manager/descriptor seam and does not
 create another abstraction.
 
-## Approved ThorChainKit gate repair
+## Approved ThorChainKit gate and verifier-contract repair
 
 The reviewed ThorChainKit base has one source-contract failure that prevents
 both `Scripts/verify-s1-04.sh --source-only` and `--fixtures-only`:
@@ -122,6 +123,46 @@ acceptance semantics. Extend or verify the focused
 `testAccountAcceptsOnlyExactObservedAbsenceEnvelope` coverage so malformed
 message tokens remain rejected while the two approved absence messages still
 return `nil`.
+
+The current tree also exposes three existing verifier-contract mismatches. They
+are verification-surface repairs only; they do not add a provider, change
+ThorChainKit runtime behavior, or create a THR-139-specific allowlist/wrapper:
+
+1. `Scripts/verify-s1-02.sh` must retain its exact sorted source comparison and
+   add these already-tracked current sources to the checked-in expected list:
+   `Sources/ThorChainKit/Core/TestingAccountReadSession.swift`,
+   `Sources/ThorChainKit/Network/AccountReadTransport.swift`,
+   `Sources/ThorChainKit/Network/HTTPTransporting.swift`,
+   `Sources/ThorChainKit/Network/LiveThorNodeClient.swift`,
+   `Sources/ThorChainKit/Network/ReadOperationCoordinator.swift`,
+   `Sources/ThorChainKit/Network/RequestBuilder.swift`,
+   `Sources/ThorChainKit/Network/ThorNodeReadError.swift`,
+   `Sources/ThorChainKit/Network/ThorNodeReading.swift`,
+   `Sources/ThorChainKit/State/AccountStateManager.swift`,
+   `Sources/ThorChainKit/State/StatePublishing.swift`,
+   `Sources/ThorChainKit/State/StateSnapshot.swift`,
+   `Sources/ThorChainKit/Storage/AccountStateStorage.swift`,
+   `Sources/ThorChainKit/Storage/GrdbAccountStateStorage.swift`,
+   `Sources/ThorChainKit/Storage/Migrations.swift`,
+   `Sources/ThorChainKit/Storage/StorageRecord.swift`,
+   `Sources/ThorChainKit/Sync/AccountSyncer.swift`,
+   `Sources/ThorChainKit/Sync/AccountSyncing.swift`,
+   `Sources/ThorChainKit/Sync/LifecycleCommandBridge.swift`,
+   `Sources/ThorChainKit/Sync/LifecycleGate.swift`,
+   `Sources/ThorChainKit/Sync/SyncGeneration.swift`,
+   and `Sources/ThorChainKit/Sync/SyncSchedule.swift`. No wildcard or dynamic
+   source discovery may replace the exact closure.
+2. `Scripts/verify-s1-04.sh` must include the existing
+   `Tests/ThorChainKitTests/Fixtures/S1-05-tests.txt` when it derives the full
+   target allowlist. The existing S1-01 through S1-04 fixture inputs and all
+   result count/name/result checks remain unchanged; no new S1-05 test is added.
+3. `Scripts/verify-xcresult.sh` must derive one module prefix from the
+   allowlist, require every expected identifier to use exactly one of the two
+   repository test modules (`ThorChainKitTests` or `ThorChainKitLiveTests`),
+   reject mixed/unknown prefixes, and apply that derived prefix to observed
+   identifiers. It must not accept a caller-supplied arbitrary prefix. This
+   makes the existing live fixture and unit fixture contracts both pass while
+   keeping count, name, failure, and skip rejection fail-closed.
 
 ## Verified analog family
 
@@ -198,9 +239,9 @@ selector is added to Unstoppable or ThorChainKit.
 5. Focused tests prove complete-operation failover and preserve height and
    identity rejection; no request-level retry or check weakening is added.
 6. On the MacBook, the exact ThorChainKit simulator tests (including the
-   behavior-equivalent parser repair), UW `AppTests`, and Development simulator
-   build pass at the reviewed implementation head. Both no-Xcode S1-04 modes
-   pass before Xcode.
+   behavior-equivalent parser repair and the three verifier-contract repairs),
+   UW `AppTests`, and Development simulator build pass at the reviewed
+   implementation head. Both no-Xcode S1-04 modes pass before Xcode.
 7. The deterministic AppTests perform three isolated fixture passes. Each pass
    constructs all three families from the checked-in table, scripts one family
    to have the greatest valid Comet height, and verifies the completed
@@ -235,6 +276,13 @@ selector is added to Unstoppable or ThorChainKit.
    `return try? JSONSerialization.jsonObject(with: token, options:
    [.fragmentsAllowed]) as? String` at `LiveThorNodeClient.swift:358`. Do not
    claim PASS on the unmodified base.
+   After explicit approval and the baseline failure captures, apply only the
+   three verifier-contract repairs above. Verify the S1-02 expected source list
+   equals the current tracked `Sources/ThorChainKit` list, the S1-04 derived
+   allowlist includes the existing S1-05 manifest, and synthetic unit/live
+   module-prefix fixtures reject mixed and unknown prefixes. Then apply the
+   parser repair; no other repository script or product source changes are
+   permitted.
    Author both operator-local verifier files before the initial `before` capture,
    run `python3 -m py_compile` and both self-tests, and then capture `before`.
    Capture `after` only after all approved local edits. Each manifest must record
@@ -308,9 +356,9 @@ selector is added to Unstoppable or ThorChainKit.
    the reviewed simulator UUID. The two raw digests are not the Gimle
    `repository.base_worktree_manifest` composite hashes. After the guard, the
    full exact-head verifier alone receives command-local
-   `status.showUntrackedFiles=no`; no exclude rule or repository script change
-   is permitted. First verify that the approved parser repair
-   makes both `--source-only` and `--fixtures-only` pass. Their repository-derived fixtures and
+   `status.showUntrackedFiles=no`; no exclude rule is permitted. First verify
+   that the three verifier-contract corrections and approved parser repair
+   make both `--source-only` and `--fixtures-only` pass. Their repository-derived fixtures and
    `Scripts/verify-xcresult.sh` invocation must report `PASS`, with zero
    failures, errors, and skips; do not pass an allowlist path. The S1-04 gate's
    internal manifest includes `EndpointPoolTests`,
@@ -521,6 +569,12 @@ Full-manifest stability is proven by the deterministic AppTests,
 which construct and exercise all three families. Adding a second live producer
 or verifier is outside this correction slice.
 
+The shared result verifier derives its expected module from the checked-in
+allowlist: the unit fixture derives `ThorChainKitTests`, and the live fixture
+derives `ThorChainKitLiveTests`. It rejects an empty, mixed, or unknown module
+prefix before comparing observed names, then preserves the existing exact
+count, name, failure, and skip checks.
+
 No raw endpoint responses, credentials, cookies, mnemonics, absolute operator
 paths, or private values may enter committed evidence.
 
@@ -529,11 +583,13 @@ paths, or private values may enter committed evidence.
 The Gimle report is RED because the EvmKit snippet freshness is contradictory
 and semantic searches have coverage gaps. Exact local Serena, targeted `rg`,
 and Git verification are the accepted fallback; the defects remain recorded.
-Revision 16 records the metadata-only successor to the closure-5/5 correction
-set resolved by reusing the existing
+Revision 17 records the targeted verifier-contract successor to revision 16.
+It reuses the existing
 S1-02 and S1-04 repository gates, removing THR-139-specific ThorChainKit
-allowlists/wrappers, and spelling three executable fixed family-to-REST/RPC
-live invocations with every required public runner input. The exact HEAD,
+allowlists/wrappers, repairs the current S1-02 source closure, includes the
+existing S1-05 target manifest, and derives the live/unit result module prefix
+from the checked-in allowlist. It preserves three executable fixed
+family-to-REST/RPC live invocations with every required public runner input. The exact HEAD,
 clean-worktree, origin/main, and ancestry preflight now precedes every
 ThorChainKit PASS-capable command; checked-in shell/static gates and the two
 UW verifier self-tests precede Xcode. The unapproved

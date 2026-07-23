@@ -3,7 +3,7 @@
 - Task: 13b614f7-ca87-4777-9694-15639e12c283
 - Workflow/phase: analog_change / adversarial_review
 - Trust: **RED**
-- Repository: `$THORCHAINKIT_ROOT`
+- Repository: /Users/ant013/Data/AI/thorchain-worktrees/s1-07-unstoppable-rune-surface
 - Base HEAD: 6462bec2604db4d3d05b3cfccde1ff5b768c86e0
 - Final HEAD: n/a
 - Gimle runtime: native-dev:0e9cf57c00ff970f584256126b500166580e7a72
@@ -111,28 +111,28 @@ Bug statuses: {'workaround': 4}
 
 ## Adversarial decisions
 
-- D-001@3 ACCEPT: Host cardinality and allowlist semantics
-- D-002@3 ACCEPT: Exact approved-host equality
-- D-003@3 ACCEPT: REST/RPC family pairing
-- D-004@13 ACCEPT: Fixed three-family live invocations with bounded stored evidence
-- D-005@3 ACCEPT: Test-first execution order
-- D-006@13 ACCEPT: Repository-owned verifier artifacts and executable self-tests
-- D-007@13 ACCEPT: Identity and static preflight precede PASS-capable gates
-- D-008@11 ACCEPT: Existing S1-04 schema only
-- D-009@6 ACCEPT: Revision delivery state
-- D-010@3 ACCEPT: Direct identity/height verification coverage
-- D-011@3 ACCEPT: Local-only UW boundary
-- D-012@3 ACCEPT: Required ThorChainKit gate repair
-- D-013@3 ACCEPT: URL-pair evidence wording
-- D-014@3 ACCEPT: Closure artifact consistency
-- D-015@2 ACCEPT: Approved UW workspace identity
-- D-016@2 ACCEPT: ThorChainKit capture utility ownership
-- D-017@2 ACCEPT: Approved manifest binding
-- D-018@3 ACCEPT: Repair gate ordering
-- D-019@3 ACCEPT: Complete two-manifest verifier coverage
-- D-020@2 ACCEPT: Online family-ownership wording
-- D-021@3 ACCEPT: Revision and review counters
-- D-022@3 ACCEPT: Preserved reports: guard_preserved_reports before every live runner, then command-local status.showUntrackedFiles=no
+- D-001@5 ACCEPT: Host cardinality and allowlist semantics
+- D-002@5 ACCEPT: Exact approved-host equality
+- D-003@5 ACCEPT: REST/RPC family pairing
+- D-004@15 ACCEPT: Fixed three-family live invocations with bounded stored evidence
+- D-005@5 ACCEPT: Test-first execution order
+- D-006@15 ACCEPT: Repository-owned verifier artifacts and executable self-tests
+- D-007@15 ACCEPT: Identity and static preflight precede PASS-capable gates
+- D-008@13 ACCEPT: Existing S1-04 schema with current target manifest
+- D-009@8 ACCEPT: Revision delivery state
+- D-010@5 ACCEPT: Direct identity and height verification coverage
+- D-011@5 ACCEPT: Local-only UW boundary
+- D-012@5 ACCEPT: Required ThorChainKit gate repair
+- D-013@5 ACCEPT: URL-pair evidence wording
+- D-014@5 ACCEPT: Closure artifact consistency
+- D-015@4 ACCEPT: Approved UW workspace identity
+- D-016@4 ACCEPT: ThorChainKit capture utility ownership
+- D-017@4 ACCEPT: Approved manifest binding
+- D-018@5 ACCEPT: Repair gate ordering
+- D-019@5 ACCEPT: Complete two-manifest verifier coverage
+- D-020@4 ACCEPT: Online family-ownership wording
+- D-021@5 ACCEPT: Revision and review counters
+- D-022@5 ACCEPT: Preserved reports and command-local untracked handling
 
 ## Verification and acceptance
 

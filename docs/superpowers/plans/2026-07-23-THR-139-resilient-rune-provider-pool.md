@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool plan
 
-Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 16. Discovery 2/2; closure 5/5 remains frozen; targeted correction review is pending. This is a metadata-only successor to the pushed D-022 correction.
+Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 17. Discovery 2/2; closure 5/5 remains frozen; targeted correction review is pending. This is the bounded verifier-contract successor to revision 16.
 
 No implementation, UW commit, push, PR, CI, Maestro, or remote smoke is
 authorized until the exact spec and this plan are explicitly approved. This
@@ -32,7 +32,7 @@ operator-local verifier paths and before/after manifest binding, role-bound six-
 cross-family pairing, exact repository-schema evidence verification, simulator selectors, and
 docs-only delivery.
 
-### 2. Baseline gates, verifier artifacts, and initial capture
+### 2. Baseline gates, verifier-contract repairs, artifacts, and initial capture
 
 **Owner:** ThorChainSwiftEngineer. **Dependency:** Step 1 review disposition.
 Reuse `Scripts/verify-s1-02.sh`, `Scripts/verify-s1-04.sh`,
@@ -86,6 +86,23 @@ set -euo pipefail
 rg -Fq 'return try? JSONSerialization.jsonObject(with: token, options: [.fragmentsAllowed]) as? String' \
   "$THORCHAINKIT_ROOT/Sources/ThorChainKit/Network/LiveThorNodeClient.swift"
 ```
+
+After explicit approval and the baseline failure captures, repair only the
+three existing ThorChainKit verifier contracts before the parser repair:
+
+- add the 21 already-tracked S1-04/S1-05 production paths named in the spec to
+  the exact `Scripts/verify-s1-02.sh` source manifest;
+- include the existing `Tests/ThorChainKitTests/Fixtures/S1-05-tests.txt` in
+  `Scripts/verify-s1-04.sh`'s derived full-target allowlist; and
+- make `Scripts/verify-xcresult.sh` derive one prefix from the allowlist,
+  accept only `ThorChainKitTests` or `ThorChainKitLiveTests`, and reject empty,
+  mixed, or unknown prefixes before observed-name comparison.
+
+Verify the source manifest against the current tracked source list, verify the
+derived full allowlist includes the existing S1-05 manifest, and run synthetic
+unit/live prefix fixtures proving mixed and unknown prefixes fail closed. These
+are the only repository verifier edits; no THR-139-specific wrapper, caller
+allowlist, or product-source change is permitted.
 
 Before any UW Xcode command, the ThorChainSwiftEngineer authors and owns these
 operator-local verifier files in the exact UW checkout:
@@ -205,7 +222,8 @@ test "$(jq -er '.head' "$THR139_UW_BEFORE_MANIFEST")" = \
 
 **Owner:** ThorChainQAEngineer. **Dependency:** exact implementation head.
 
-First verify that the approved `LiveThorNodeClient.swift:358` repair makes both
+First verify that the three verifier-contract repairs and approved
+`LiveThorNodeClient.swift:358` repair make both
 `Scripts/verify-s1-04.sh --source-only` and `--fixtures-only` pass. Then run the
 preserved-worktree guard for the exact two intentional untracked reports and
 their raw SHA-256 values, followed by the existing `Scripts/verify-s1-02.sh`
