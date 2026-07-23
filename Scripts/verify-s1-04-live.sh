@@ -80,8 +80,31 @@ allowlist="$repository_root/Tests/ThorChainKitLiveTests/Fixtures/S1-04-live-test
 [[ ! -e "$output_dir" ]] || fail "live evidence output already exists"
 mkdir -p "$output_dir"
 
-THORCHAIN_RUN_LIVE=1 \
-THORCHAIN_S1_04_EVIDENCE_PATH="$evidence" \
+test_environment_variables=(
+    THORCHAIN_RUN_LIVE
+    THORCHAIN_S1_04_EXPECTED_HEAD
+    THORCHAIN_S1_04_FAMILY_ID
+    THORCHAIN_S1_04_COSMOS_URL
+    THORCHAIN_S1_04_COMET_URL
+    THORCHAIN_S1_04_EXISTING_ADDRESS
+    THORCHAIN_S1_04_ABSENT_ADDRESS
+    THORCHAIN_S1_04_EVIDENCE_PATH
+)
+clear_test_environment() {
+    for variable in "${test_environment_variables[@]}"; do
+        xcrun simctl spawn "$simulator_udid" launchctl unsetenv "$variable" >/dev/null 2>&1 || true
+    done
+}
+trap clear_test_environment EXIT
+
+xcrun simctl boot "$simulator_udid" >/dev/null 2>&1 || true
+xcrun simctl bootstatus "$simulator_udid" -b
+export THORCHAIN_RUN_LIVE=1
+export THORCHAIN_S1_04_EVIDENCE_PATH="$evidence"
+for variable in "${test_environment_variables[@]}"; do
+    xcrun simctl spawn "$simulator_udid" launchctl setenv "$variable" "${!variable}"
+done
+
 xcodebuild \
     -scheme ThorChainKit \
     -destination "platform=iOS Simulator,id=$simulator_udid" \
