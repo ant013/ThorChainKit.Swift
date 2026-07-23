@@ -1,6 +1,6 @@
 # THR-138 — S1-07 native RUNE sync correction
 
-**Status:** design revision 3; discovery 1/2, closure 0/5. Implementation is blocked pending adversarial re-review and explicit approval of this exact revision.
+**Status:** design revision 4; discovery 1/2, closure 1/5. Implementation is blocked pending adversarial re-review and explicit approval of this exact revision.
 
 ## Goal
 
@@ -48,6 +48,9 @@ Assumptions:
 - The separate provider audit owns provider selection and any additional
   provider family. This correction uses only the already configured official
   Liquify pair.
+- The provider audit must supply a redacted, hash-bound input record naming the
+  exact public Rorcual, IBS, and Keplr family inputs before QA runs them. This
+  slice does not infer or add those inputs.
 - The accepted short message is exactly `account <requested-address> not found`
   after substituting the requested address. Matching is full-string equality;
   containment, prefix, suffix, trimming, normalization, or whitespace
@@ -95,13 +98,15 @@ Out of scope:
 4. The focused ThorChainKit regression test, relevant ThorChainKit and
    WalletCore tests, and the local Development application build pass. No
    GitHub Actions run is used.
-5. Post-fix exact local S1-04 live acceptance passes for the three already
-   audited families Rorcual, IBS, and Keplr. This consumes existing verified
-   family inputs only; it does not add provider configuration to this slice.
-6. The final QA evidence cites the exact local PR head, dirty-input content
-   digests, reproducible simulator launchd injection, and the real
-   device/app/OS/endpoint results without sensitive material. Sprint 2 remains
-   paused until this correction and the separate provider audit are accepted.
+5. Post-fix exact local S1-04 live acceptance passes once per already audited
+   family—Rorcual, IBS, and Keplr—with one unique evidence directory and one
+   family owner for each run. This consumes existing verified family inputs
+   only; it does not add provider configuration to this slice.
+6. The final QA evidence cites the exact local PR head, canonical digest-only
+   input manifests, reproducible simulator launchd injection and cleanup, and
+   the real device/app/OS/endpoint results without sensitive material. THR-139
+   owns the next production provider-pool correction; this slice does not
+   resume Sprint 2 or implement provider selection.
 
 ## Verified analog family
 
@@ -159,44 +164,67 @@ registration changes are proposed.
    height is shown, and no closed/unavailable diagnostic is present. Relaunch
    and offline behavior are separate regression checks.
 6. Run the exact local S1-04 live acceptance three times, once each for
-   Rorcual, IBS, and Keplr, using the family inputs from the attached provider
-   audit. Before each run, inject all public test variables into the simulator
-   launchd environment with `simctl spawn ... launchctl setenv`; clear them in a
-   trap afterward. A shell-only export is not valid evidence. No mnemonic,
-   credential, or private material is recorded.
+   Rorcual, IBS, and Keplr, using only the hash-bound family inputs from the
+   attached provider audit. The runner is invoked once per family with a
+   family-specific output root. A QA wrapper sets every public test variable
+   into simulator launchd with `xcrun simctl spawn "$UDID" launchctl setenv`,
+   exports the same values for the runner's shell contract, and uses a trap to
+   `launchctl unsetenv` every variable after that family exits. Shell-only
+   export is invalid. No mnemonic, credential, or private material is
+   recorded.
 
 ## Verification commands and evidence
 
 - ThorChainKit focused test: `swift test --package-path "$THORCHAINKIT_ROOT" --filter LiveThorNodeClientS1_04Tests/testAccountAcceptsOnlyExactObservedAbsenceEnvelope`
 - ThorChainKit directly affected suite: `swift test --package-path "$THORCHAINKIT_ROOT" --filter LiveThorNodeClientS1_04Tests`
-- Exact UW package/test command: `xcodebuild -workspace "$UW_WORKSPACE" -scheme WalletCore -configuration Debug-Dev -destination 'generic/platform=iOS' -derivedDataPath "$QA_ARTIFACT_ROOT/THR-138-WalletCore-DD" test -resultBundlePath "$QA_ARTIFACT_ROOT/THR-138-WalletCore.xcresult"`
-- Exact UW Development build: `xcodebuild -workspace "$UW_WORKSPACE" -scheme Development -configuration Debug-Dev -destination 'generic/platform=iOS' -derivedDataPath "$QA_ARTIFACT_ROOT/THR-138-Development-DD" build -resultBundlePath "$QA_ARTIFACT_ROOT/THR-138-Development.xcresult"`
-- Exact source roots are symbolic operator inputs: `UW_ROOT`, `MARKETKIT_ROOT`, and
-  `THORCHAINKIT_ROOT`; `UW_WORKSPACE` is `$UW_ROOT/Wallet.xcworkspace`. The UW
-  package manifest must resolve the latter two roots. Do not commit resolved
-  values in repository documents.
-- Before and after every test, build, and smoke run capture each root's
-  `git rev-parse HEAD`, `git status --porcelain=v1 --untracked-files=all`,
-  `git diff --binary`, `git diff --cached --binary`, and SHA-256 manifest of
-  intentionally dirty or untracked in-scope files. Require the ThorChainKit
-  root to equal the exact implementation PR head; require every other digest,
-  status, and local package resolution to be byte-for-byte unchanged. Any
-  mismatch invalidates the evidence and requires a fresh capture.
-- Live-smoke: launch the local Development app on the MacBook with the exact
-  Liquify REST/RPC pair and frozen address above. Record the pre-fix failure,
-  post-fix `.synced`/zero-RUNE/positive-height pass, and separate relaunch and
-  offline regression observations in the operator-selected
-  `QA_ARTIFACT_ROOT` or a QA artifact. Never record mnemonic, private,
-  credential, or cookie material.
+- Exact UW AppTests command (the `Development` scheme's `AppTests` testable):
+  `xcodebuild -project "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj" -scheme Development -configuration Debug-Dev -destination "platform=iOS Simulator,id=$THR138_SIMULATOR_UDID" -derivedDataPath "$QA_ARTIFACT_ROOT/THR-138-AppTests-DD" test -only-testing:AppTests -resultBundlePath "$QA_ARTIFACT_ROOT/THR-138-AppTests.xcresult"`
+- Exact UW Development build: `xcodebuild -project "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj" -scheme Development -configuration Debug-Dev -destination 'generic/platform=iOS' -derivedDataPath "$QA_ARTIFACT_ROOT/THR-138-Development-DD" build`
+- Exact source roots are symbolic operator inputs: `UW_ROOT`, `MARKETKIT_ROOT`,
+  and `THORCHAINKIT_ROOT`; the UW project is
+  `$UW_ROOT/Unstoppable/Unstoppable.xcodeproj`. The UW package manifest must
+  resolve the latter two roots. Do not commit resolved values in repository
+  documents.
+- Before and after every test, build, and smoke run, invoke the planned
+  digest-only input-manifest helper for each root. Its canonical JSON schema is
+  `{"schemaVersion":1,"rootLabel":"...","head":"<40-hex>","statusSha256":"<64-hex>","files":[{"path":"<JSON-escaped UTF-8 relative path>","state":"present|deleted|symlink-rejected","size":<integer>,"sha256":"<64-hex>"}]}`.
+  Membership is the bytewise-UTF-8 sorted union of `git ls-files -c -o
+  --exclude-standard -z`; tracked deletions are retained as `deleted`, regular
+  files are hashed from their working-tree bytes, and symlinks fail closed.
+  JSON uses UTF-8, `ensure_ascii=true`, sorted keys, compact separators, and one
+  final newline. `statusSha256` is the SHA-256 of the raw NUL-delimited
+  `git status --porcelain=v1 --untracked-files=all -z` bytes; the status bytes
+  and all patches are discarded and never written to evidence. The helper
+  separately records the SHA-256 of each resolved local package path. Require
+  ThorChainKit's `head` to equal the exact implementation PR head and require
+  every other manifest, status digest, and package-resolution digest to be
+  identical before and after each run. Any mismatch invalidates that run.
+- Family live-smoke: the runner accepts a required family label and unique
+  evidence root, so the exact invocations are
+  `THORCHAIN_S1_04_FAMILY_ID=Rorcual THORCHAIN_S1_04_EVIDENCE_ROOT="$QA_ARTIFACT_ROOT/THR-138-live/Rorcual" Scripts/verify-s1-04-live.sh`, then the same command with `IBS` and `Keplr`. The wrapper injects the provider-audit public variables into simulator launchd before each invocation and removes them in its exit trap. Each evidence record owns only its family label, result bundle, input-manifest digests, and redacted heights/classes; no mnemonic, private, credential, cookie, raw status, or patch material is recorded.
+- Development-app smoke: after the `Development` build, install
+  `$QA_ARTIFACT_ROOT/THR-138-Development-DD/Build/Products/Debug-Dev-iphonesimulator/Unstoppable.app`
+  with `xcrun simctl install "$THR138_SIMULATOR_UDID" "$QA_ARTIFACT_ROOT/THR-138-Development-DD/Build/Products/Debug-Dev-iphonesimulator/Unstoppable.app"`, then launch bundle
+  `io.horizontalsystems.bank-wallet.dev` with
+  `xcrun simctl launch "$THR138_SIMULATOR_UDID" io.horizontalsystems.bank-wallet.dev`.
+  Using the pre-provisioned public no-funds account fixture, QA records: the
+  pre-fix short-404 and closed/unavailable result; post-fix online `.synced`,
+  absent account, exactly zero native RUNE, and positive accepted height;
+  terminate/relaunch with the same address and values; then offline relaunch
+  with unchanged address and an explicit unavailable/stale state followed by
+  online recovery. Screenshot or structured observation files go under
+  `$QA_ARTIFACT_ROOT/THR-138-development-smoke/`; secrets are excluded.
 
 ## Open gates
 
 - Adversarial review must confirm the short-form matcher remains address-bound
   and does not alter balance or generic HTTP error semantics; it must also
   confirm duplicate-key rejection and height validation precede absence.
-- QA must pass the exact local Rorcual, IBS, and Keplr live acceptance and show
-  the simulator launchd injection was used and cleaned up.
+- QA must pass three distinct exact local runs—Rorcual, IBS, and Keplr—with
+  family-owned evidence, prove simulator launchd injection and cleanup, and
+  attach the provider-audit input manifest.
 - Explicit user approval is required for this design revision before any
   implementation edit.
-- The separate provider evidence audit must be attached before Sprint 2 or
-  final acceptance resumes.
+- THR-139 is the required next production provider-pool correction after this
+  slice. Sprint 2 remains paused, and the provider evidence audit must be
+  attached before either issue is accepted as the Sprint 1 correction gate.

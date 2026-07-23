@@ -1,16 +1,16 @@
 # THR-138 Gimle reliability report
 
 - Task: THR-138
-- Workflow/phase: `analog_change` / adversarial review, design revision 3
+- Workflow/phase: `analog_change` / adversarial review, design revision 4
 - Repository branch: `docs/s1-07-unstoppable-rune-surface-v050`
-- Reviewed design revision commit: `4a1d707`
-- Report provenance update commit: `031fb10`
-- The redacted Liquify artifact was introduced at `325212a`; the revision-3
-  design inputs are contained by `4a1d707`.
+- Reviewed design revision commit: pending revision-4 spec commit
+- Report provenance update commit: this report's containing commit
+- The redacted Liquify artifact was introduced at `325212a`; revision-4 design
+  inputs are bound in the canonical state and the revision-4 spec commit.
 - Canonical state: `audit/runs/THR-138-s1-07-correction-20260723/state.json`
 - Trust: **RED for Gimle/Palace evidence; current-tree and live fallbacks are usable**
 
-The revision-3 artifact hash manifest is recorded in the canonical state and
+The revision-4 artifact hash manifest is recorded in the canonical state and
 the exact Paperclip handoff. It covers the spec, plan, this report, and the
 redacted response artifact; the report digest is captured externally to avoid
 self-reference.
@@ -54,7 +54,7 @@ consumer evidence. `LiveThorNodeClient.balances` is a rejected counterexample:
 its non-2xx behavior must remain unchanged. Composition is explicitly waived
 because the correction adds no factory or registration behavior.
 
-The verified design revision 2 is to preserve code `5`, empty details, and
+The verified design delta is to preserve code `5`, empty details, and
 full-string address-specific semantics while admitting both the existing long
 message and the observed short message. Prefix, suffix, whitespace-mutated,
 generic, malformed, foreign-address, wrong-code, non-404, and
@@ -65,12 +65,14 @@ balance-operation errors remain fail-closed.
 - UW v0.50: symbolic operator input `$UW_ROOT`
 - MarketKit: symbolic operator input `$MARKETKIT_ROOT`
 - ThorChainKit: symbolic operator input `$THORCHAINKIT_ROOT`
-- UW workspace/scheme/configuration/destination: `$UW_WORKSPACE`,
-  `Development`, `Debug-Dev`, `generic/platform=iOS`
-- Before and after every verification run, capture each root's SHA, full
-  porcelain status, binary tracked-diff digests, intentionally dirty/untracked
-  in-scope file manifest, and local package-path resolution. ThorChainKit must
-  equal the exact implementation PR head; any other change invalidates the
+- UW project/scheme/configuration/destination: `$UW_ROOT/Unstoppable/Unstoppable.xcodeproj`,
+  `Development`, `Debug-Dev`, `generic/platform=iOS` or the named simulator
+  for AppTests
+- Before and after every verification run, capture each root's SHA, a
+  canonical digest-only manifest of the sorted tracked/untracked path union,
+  a SHA-256 of the NUL-delimited porcelain status, and local package-path
+  resolution. Raw status bytes and binary patches are discarded. ThorChainKit
+  must equal the exact implementation PR head; any other change invalidates the
   result.
 
 ## Limitations
@@ -85,11 +87,13 @@ balance-operation errors remain fail-closed.
   implementation. QA must bind them to the implementation PR head before
   accepting live-smoke evidence.
 - The current account reader classifies a matching 404 before leased-height
-  validation; revision 3 therefore requires height validation first and
+  validation; revision 4 therefore requires height validation first and
   duplicate-key rejection before absence classification. These are unrun until
   explicit design approval.
-- The finalized provider audit requires post-fix exact local S1-04 live
-  acceptance for Rorcual, IBS, and Keplr, plus simulator launchd environment
-  injection and cleanup. Provider configuration remains out of scope here.
+- The finalized provider audit requires three distinct post-fix exact local
+  S1-04 runs for Rorcual, IBS, and Keplr, each with family-owned evidence,
+  simulator launchd environment injection and cleanup. Provider configuration
+  remains out of scope here; THR-139 owns the next production provider-pool
+  correction.
 - Local app build/live-smoke after implementation is intentionally unrun until
   the written design receives explicit approval.
