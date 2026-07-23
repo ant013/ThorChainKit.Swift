@@ -38,7 +38,7 @@ The UW working copy is intentionally dirty with local THR-104/THR-139 integratio
 - Implementation-plan digest: `b675aec67ed5ce1f0f71e7b98fb2b5d9e5740bd0941365e5d5959f3b33b55a8d`.
 - Analog-family digest: `7279cec526c0cd6a2b67407049080de263eddb2680077abb6083c8493eac626d`.
 - Consolidated-test-plan digest: `efb853fd65011a24331606434794d0c59cc9d7d62c1490da0c2f7e22a4a0a0c6`.
-- Committed evidence manifest digest: `f682cfdb7503b5295ba40b605aa063d57c4cf0fb16408eb4ee47f8af97fd2ce8` (`THR-135-s2-01-evidence-r4.json`).
+- Committed evidence manifest digest: `91873109f8646808dc553ceb6d475f7c9476fcf8ea788e63fb40068fa4d6ff63` (`THR-135-s2-01-evidence-r4.json`).
 - The repository report and manifest are the immutable sanitized evidence
   binding for this revision; no mutable external audit root is required to
   reconstruct the selected claims, candidate IDs, decision IDs, or artifact
