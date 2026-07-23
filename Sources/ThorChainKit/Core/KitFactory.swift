@@ -40,6 +40,7 @@ public extension Kit {
             storage: storage,
             publishing: publishing
         )
+        let sendRuntime = SendRuntime(address: address)
         let syncer = AccountSyncer(
             address: address,
             storageKey: key,
@@ -47,11 +48,12 @@ public extension Kit {
             storage: storage,
             gate: gate
         )
-        let bridge = LifecycleCommandBridge(syncer: syncer, gate: gate)
+        let bridge = LifecycleCommandBridge(syncer: syncer, gate: gate, sendRuntime: sendRuntime)
         return Kit(
             address: address,
             dependencies: KitDependencies(
-                lifecycle: bridge
+                lifecycle: bridge,
+                sendRuntime: sendRuntime
             ),
             persistenceNamespace: namespace,
             facadeDispatcher: facadeDispatcher,
@@ -103,6 +105,7 @@ public extension Kit {
             storage: storage,
             publishing: publishing
         )
+        let sendRuntime = SendRuntime(address: address)
         let syncer = AccountSyncer(
             address: address,
             storageKey: key,
@@ -112,7 +115,10 @@ public extension Kit {
         )
         return Kit(
             address: address,
-            dependencies: KitDependencies(lifecycle: LifecycleCommandBridge(syncer: syncer, gate: gate)),
+            dependencies: KitDependencies(
+                lifecycle: LifecycleCommandBridge(syncer: syncer, gate: gate, sendRuntime: sendRuntime),
+                sendRuntime: sendRuntime
+            ),
             persistenceNamespace: namespace,
             facadeDispatcher: facadeDispatcher,
             publishing: publishing

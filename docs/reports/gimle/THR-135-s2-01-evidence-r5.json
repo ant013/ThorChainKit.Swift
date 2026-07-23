@@ -1,0 +1,38 @@
+{
+  "schema": "THR-135-s2-01-evidence-r5",
+  "run": "THR-135-s2-01-20260724-r5",
+  "phase": "adversarial_review",
+  "repository": {
+    "branch": "docs/THR-135-s2-01-formalization",
+    "reviewed_predecessor_head": "b33d2ae696e72109410fe008d197507f2fd14cb9",
+    "superseded_head": "b33d2ae696e72109410fe008d197507f2fd14cb9",
+    "handoff_head_contract": "Paperclip handoff names the eventual candidate HEAD externally; the reviewer must verify local HEAD == origin branch == handoff SHA before returning a verdict.",
+    "integration_head": "937332b2e7020868abcac8681ddd664b6e4bad72"
+  },
+  "artifacts": {
+    "spec_delta_matrix_test_plan": "c8153756f11627e855b30fe9926fa349ff62358c7b7ce5f3912080b44915c7d0",
+    "implementation_plan": "24296888ec34cdbbaa40d142ce17a5c9f90611afb0297d6f854a7c3e90b2c330",
+    "analog_family": "7279cec526c0cd6a2b67407049080de263eddb2680077abb6083c8493eac626d",
+    "consolidated_test_plan": "efb853fd65011a24331606434794d0c59cc9d7d62c1490da0c2f7e22a4a0a0c6",
+    "canonical_sprint_report": "48a549be1279aa57263466c5bc56534089b459a9e72c9667d8af081eb1c7913d"
+  },
+  "analog": {
+    "primary": "C-S201-HANDLER",
+    "supporting": ["C-S201-COMPOSITION", "current ThorChainKit Kit/LifecycleGate seam"],
+    "rejected": ["C-S201-PRIVATEKEY-COUNTER"],
+    "claims": ["F-S201-HANDLER", "F-S201-COMPOSITION", "F-S201-BIGINT-CURRENT"]
+  },
+  "decisions": {
+    "deferred_facade": "operationUnavailable only after lifecycle admission and valid local input; zero side effects",
+    "lifecycle_composition": "KitDependencies.SendRuntime + Kit.instance/Kit.fixture in Core/KitFactory.swift + LifecycleCommandBridge retained-generation take/clear and idempotent invalidation on close success/failure before either syncer branch",
+    "authority_identity": "fresh per-Kit QuoteAuthorityClientID is separate from wallet persistence namespace",
+    "quote_record": "one canonical immutable QuoteAuthorityRecord binds authority, intent, preflight identity, policy, and every review field; store equality is required before consume",
+    "generation_error": "SendQuote private authority record survives store cleanup; private client ID -> lifecycle generation -> monotonic deadline -> active/consumed lookup; missing own unexpired record is operationUnavailable",
+    "secure_random": "exactly eight token-generation attempts before operationUnavailable",
+    "broadcast_codespace": "private raw value projected to sdk/thorchain/other",
+    "reflection": "CustomDebugStringConvertible + CustomReflectable fixed redacted mirror, exercised through Mirror, String(reflecting:), and dump",
+    "verification": "local MacBook tests plus an implementation-head iOS 13 deployment-floor/import guard, explicit external-surface negatives, and concurrency/floor harnesses; CI build-only"
+  },
+  "gimle_trust": "RED",
+  "trust_reason": "Gimle mapping/session defects remain quarantined; every load-bearing selected claim is independently verified with current-tree rg/Git evidence."
+}

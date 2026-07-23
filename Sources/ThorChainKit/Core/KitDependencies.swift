@@ -7,9 +7,11 @@ protocol KitLifecycle: AnyObject {
 
 struct KitDependencies {
     let lifecycle: any KitLifecycle
+    let sendRuntime: SendRuntime
 
-    init(lifecycle: any KitLifecycle) {
+    init(lifecycle: any KitLifecycle, sendRuntime: SendRuntime = SendRuntime()) {
         self.lifecycle = lifecycle
+        self.sendRuntime = sendRuntime
     }
 }
 
