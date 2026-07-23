@@ -20,7 +20,12 @@ run_simulator_tests() {
     local label=$1 selector=$2 allowlist=$3
     local derived_data result_bundle
     local -a selection=()
-    [[ -z "$selector" ]] || selection=("-only-testing:ThorChainKitTests/$selector")
+    while IFS= read -r test_id; do
+        [[ "$test_id" == "ThorChainKitTests.${selector}/"* ]] \
+            || fail "$label allowlist contains a test outside $selector"
+        selection+=("-only-testing:${test_id/./\/}")
+    done < "$allowlist"
+    ((${#selection[@]} > 0)) || fail "$label allowlist contains no tests"
     require_simulator
     derived_data=$(mktemp -d)
     result_bundle=$(mktemp -d)/"$label.xcresult"
