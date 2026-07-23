@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool plan
 
-Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 13. Discovery 2/2; closure 5/5 remains frozen; targeted correction review is pending.
+Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 14. Discovery 2/2; closure 5/5 remains frozen; targeted correction review is pending.
 
 No implementation, UW commit, push, PR, CI, Maestro, or remote smoke is
 authorized until the exact spec and this plan are explicitly approved. This
@@ -22,8 +22,8 @@ local and finish under an operator-controlled commit gate.
 
 ### 1. Fresh bounded design review
 
-**Owner:** ThorChainCodeReviewer. **Dependencies:** pushed revision-13 spec,
-plan, and Gimle report. Recheck only the frozen D-001 through D-017 allowlist,
+**Owner:** ThorChainCodeReviewer. **Dependencies:** pushed revision-14 spec,
+plan, and Gimle report. Recheck only the frozen D-001 through D-021 allowlist,
 discovery 2/2, closure 5/5. Verify that no UW acceptance transport, launch-
 argument branch, adapter sink, or production observation callback is introduced;
 verify deterministic full-manifest fixtures, reuse of the existing S1-04 family
@@ -44,8 +44,9 @@ repository root, create fresh result bundles, and reject stale bundles.
 Before approval, verify only the exact expected HEAD, clean worktree,
 `origin/main` equality, base ancestry, and `bash -n`. Then reproduce both known
 no-Xcode failures with the existing `--source-only` and `--fixtures-only` modes;
-both must exit nonzero at the `LiveThorNodeClient.swift:358` `try?` source
-contract. Do not claim PASS on the unmodified base.
+both must exit 1 and emit the generic verifier failure. Bind the reproduced
+cause separately to the exact source line. Do not claim PASS on the unmodified
+base.
 
 ```text
 set -euo pipefail
@@ -57,16 +58,21 @@ set -euo pipefail
   test "$(git rev-parse refs/remotes/origin/main)" = "$THR139_EXPECTED_BASE" && \
   git merge-base --is-ancestor "$THR139_EXPECTED_BASE" "$THR139_EXPECTED_HEAD" && \
   bash -n Scripts/verify-s1-02.sh Scripts/verify-s1-04.sh Scripts/verify-s1-04-live.sh)
-set +e
-Scripts/verify-s1-04.sh --source-only > "$THR139_SOURCE_LOG" 2>&1
-source_status=$?
-Scripts/verify-s1-04.sh --fixtures-only > "$THR139_FIXTURE_LOG" 2>&1
-fixture_status=$?
-set -e
-test "$source_status" -ne 0
-test "$fixture_status" -ne 0
-rg -q 'LiveThorNodeClient.swift:358|try[?] JSONSerialization' "$THR139_SOURCE_LOG"
-rg -q 'LiveThorNodeClient.swift:358|try[?] JSONSerialization' "$THR139_FIXTURE_LOG"
+(
+  cd "$THORCHAINKIT_ROOT"
+  set +e
+  Scripts/verify-s1-04.sh --source-only > "$THR139_SOURCE_LOG" 2>&1
+  source_status=$?
+  Scripts/verify-s1-04.sh --fixtures-only > "$THR139_FIXTURE_LOG" 2>&1
+  fixture_status=$?
+  set -e
+  test "$source_status" -eq 1
+  test "$fixture_status" -eq 1
+  rg -Fq 'FAIL verify-s1-04: source, SPI, Example, or fixture contract differs' "$THR139_SOURCE_LOG"
+  rg -Fq 'FAIL verify-s1-04: source, SPI, Example, or fixture contract differs' "$THR139_FIXTURE_LOG"
+)
+rg -Fq 'return try? JSONSerialization.jsonObject(with: token, options: [.fragmentsAllowed]) as? String' \
+  "$THORCHAINKIT_ROOT/Sources/ThorChainKit/Network/LiveThorNodeClient.swift"
 ```
 
 Before any UW Xcode command, the ThorChainSwiftEngineer authors and owns these
@@ -84,14 +90,11 @@ temporary mutants and return nonzero if any mutant passes. Author both files,
 then run `python3 -m py_compile` and both self-tests before the initial `before`
 capture. QA invokes these exact local paths; no inline replacement verifier or
 caller-supplied allowlist is permitted. Invoke the established ThorChainKit
-utility twice, with the `before` capture immediately after these self-tests and
-the `after` capture after all approved local edits:
+utility for the initial `before` capture immediately after these self-tests:
 
 ```text
 python3 "$THORCHAINKIT_ROOT/Scripts/capture-s1-07-inputs.py" \
   --root "$UW_ROOT" --root-label before > "$THR139_UW_BEFORE_MANIFEST"
-python3 "$THORCHAINKIT_ROOT/Scripts/capture-s1-07-inputs.py" \
-  --root "$UW_ROOT" --root-label after > "$THR139_UW_AFTER_MANIFEST"
 ```
 
 Each manifest must record schema 1, UW `HEAD`, a lowercase 64-character
@@ -101,35 +104,6 @@ must have equal `HEAD` values. Do not copy these artifacts into this repository
 or commit/push them from this branch. If the ThorChainKit capture utility is
 absent, stop before implementation; do not replace it with an ad hoc manifest
 command.
-
-The check is executable and fail-closed, not a prose assertion:
-
-```text
-set -euo pipefail
-expected_head=8a63bfda028dd8543115b26dd777235a53304311
-scheme_path=Scripts/verify-thr-139-scheme.py
-tests_path=Scripts/verify-thr-139-uw-tests.py
-for manifest in "$THR139_UW_BEFORE_MANIFEST" "$THR139_UW_AFTER_MANIFEST"; do
-  jq -e --arg expected_head "$expected_head" \
-    --arg scheme_path "$scheme_path" --arg tests_path "$tests_path" '
-    .schemaVersion == 1
-    and (.head == $expected_head)
-    and ((.statusSha256 | type) == "string")
-    and (.statusSha256 | test("^[0-9a-f]{64}$"))
-    and ((.files | type) == "array" and (.files | length) > 0)
-    and all(.files[];
-      ((.path | type) == "string")
-      and (.state == "present" or .state == "deleted")
-      and ((.size | type) == "number" and .size >= 0)
-      and ((.sha256 | type) == "string")
-      and (.sha256 | test("^[0-9a-f]{64}$")))
-    and ([.files[] | select(.path == $scheme_path and .state == "present" and (.sha256 | test("^[0-9a-f]{64}$")))] | length == 1)
-    and ([.files[] | select(.path == $tests_path and .state == "present" and (.sha256 | test("^[0-9a-f]{64}$")))] | length == 1)
-  ' "$manifest"
-done
-test "$(jq -er '.head' "$THR139_UW_BEFORE_MANIFEST")" = \
-  "$(jq -er '.head' "$THR139_UW_AFTER_MANIFEST")"
-```
 
 ```text
 set -euo pipefail
@@ -175,6 +149,45 @@ provider and its existing manager/descriptor validation seam if required. Do
 not introduce an abstraction or edit the multichain swap provider. The exact
 six role-bound records must be compared for equality; no membership-only
 allowlist or silent deduplication is acceptable.
+
+Only after all approved local edits, capture `after` and run this exact
+fail-closed validator against the canonical capture manifests:
+
+```text
+set -euo pipefail
+python3 "$THORCHAINKIT_ROOT/Scripts/capture-s1-07-inputs.py" \
+  --root "$UW_ROOT" --root-label after > "$THR139_UW_AFTER_MANIFEST"
+expected_head=8a63bfda028dd8543115b26dd777235a53304311
+scheme_path=Scripts/verify-thr-139-scheme.py
+tests_path=Scripts/verify-thr-139-uw-tests.py
+validate_manifest() {
+  manifest="$1"
+  expected_root_label="$2"
+  jq -e --arg expected_head "$expected_head" \
+    --arg expected_root_label "$expected_root_label" \
+    --arg scheme_path "$scheme_path" --arg tests_path "$tests_path" '
+    .schemaVersion == 1
+    and (.rootLabel == $expected_root_label)
+    and (.head == $expected_head)
+    and ((.statusSha256 | type) == "string")
+    and (.statusSha256 | test("^[0-9a-f]{64}$"))
+    and ((.files | type) == "array" and (.files | length) > 0)
+    and (([.files[].path] | length) == ([.files[].path] | unique | length))
+    and all(.files[];
+      ((.path | type) == "string")
+      and (.state == "present" or .state == "deleted")
+      and ((.size | type) == "number" and (.size | floor) == .size and .size >= 0)
+      and ((.sha256 | type) == "string")
+      and (.sha256 | test("^[0-9a-f]{64}$")))
+    and ([.files[] | select(.path == $scheme_path and .state == "present" and (.sha256 | test("^[0-9a-f]{64}$")))] | length == 1)
+    and ([.files[] | select(.path == $tests_path and .state == "present" and (.sha256 | test("^[0-9a-f]{64}$")))] | length == 1)
+  ' "$manifest"
+}
+validate_manifest "$THR139_UW_BEFORE_MANIFEST" before
+validate_manifest "$THR139_UW_AFTER_MANIFEST" after
+test "$(jq -er '.head' "$THR139_UW_BEFORE_MANIFEST")" = \
+  "$(jq -er '.head' "$THR139_UW_AFTER_MANIFEST")"
+```
 
 ### 5. ThorChainKit simulator invariants
 

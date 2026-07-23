@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool
 
-**Design revision:** 13 — discovery 2/2, closure 5/5 remains frozen; targeted
+**Design revision:** 14 — discovery 2/2, closure 5/5 remains frozen; targeted
 correction review is pending.
 **Status:** revised
 design; implementation remains blocked until this exact revision is accepted by
@@ -46,10 +46,11 @@ In scope:
 - Operator-local UW verification artifacts: `$UW_ROOT/Scripts/verify-thr-139-scheme.py`
   and `$UW_ROOT/Scripts/verify-thr-139-uw-tests.py`, plus the established
   ThorChainKit utility `$THORCHAINKIT_ROOT/Scripts/capture-s1-07-inputs.py`.
-  Invoke that utility twice with `--root "$UW_ROOT"` and
-  `--root-label before|after`. The implementation
+  Invoke that utility twice with `--root "$UW_ROOT"`, once with
+  `--root-label before` immediately after verifier self-tests and once with
+  `--root-label after` only after all approved local edits. The implementation
   owner authors and negatively verifies the two verifier scripts in the exact
-  UW checkout before the first Xcode command. Before and after local work, the
+  UW checkout before the initial `before` capture. Before and after local work, the
   capture contract records UW `HEAD`, `statusSha256`, and per-file SHA-256
   records; each manifest must bind `head` to
   `8a63bfda028dd8543115b26dd777235a53304311`, and the two snapshots must bind
@@ -227,8 +228,12 @@ selector is added to Unstoppable or ThorChainKit.
    allowlists, result-bundle wrappers, or allowlist arguments. Before approval,
    perform the exact expected-HEAD, clean-worktree, `origin/main` equality, base
    ancestry, and `bash -n` preflight, then reproduce both known no-Xcode
-   failures with `--source-only` and `--fixtures-only`; both must exit nonzero
-   at `LiveThorNodeClient.swift:358`. Do not claim PASS on the unmodified base.
+   failures with `--source-only` and `--fixtures-only`; each must exit 1 and
+   emit the generic `FAIL verify-s1-04: source, SPI, Example, or fixture
+   contract differs` line. Separately require the fixed-string source check
+   `return try? JSONSerialization.jsonObject(with: token, options:
+   [.fragmentsAllowed]) as? String` at `LiveThorNodeClient.swift:358`. Do not
+   claim PASS on the unmodified base.
    Author both operator-local verifier files before the initial `before` capture,
    run `python3 -m py_compile` and both self-tests, and then capture `before`.
    Capture `after` only after all approved local edits. Each manifest must record
@@ -245,24 +250,31 @@ selector is added to Unstoppable or ThorChainKit.
    expected_head=8a63bfda028dd8543115b26dd777235a53304311
    scheme_path=Scripts/verify-thr-139-scheme.py
    tests_path=Scripts/verify-thr-139-uw-tests.py
-   for manifest in "$THR139_UW_BEFORE_MANIFEST" "$THR139_UW_AFTER_MANIFEST"; do
+   validate_manifest() {
+     manifest="$1"
+     expected_root_label="$2"
      jq -e --arg expected_head "$expected_head" \
+       --arg expected_root_label "$expected_root_label" \
        --arg scheme_path "$scheme_path" --arg tests_path "$tests_path" '
        .schemaVersion == 1
+       and (.rootLabel == $expected_root_label)
        and (.head == $expected_head)
        and ((.statusSha256 | type) == "string")
        and (.statusSha256 | test("^[0-9a-f]{64}$"))
        and ((.files | type) == "array" and (.files | length) > 0)
+       and (([.files[].path] | length) == ([.files[].path] | unique | length))
        and all(.files[];
          ((.path | type) == "string")
          and (.state == "present" or .state == "deleted")
-         and ((.size | type) == "number" and .size >= 0)
+         and ((.size | type) == "number" and (.size | floor) == .size and .size >= 0)
          and ((.sha256 | type) == "string")
          and (.sha256 | test("^[0-9a-f]{64}$")))
        and ([.files[] | select(.path == $scheme_path and .state == "present" and (.sha256 | test("^[0-9a-f]{64}$")))] | length == 1)
        and ([.files[] | select(.path == $tests_path and .state == "present" and (.sha256 | test("^[0-9a-f]{64}$")))] | length == 1)
      ' "$manifest"
-   done
+   }
+   validate_manifest "$THR139_UW_BEFORE_MANIFEST" before
+   validate_manifest "$THR139_UW_AFTER_MANIFEST" after
    test "$(jq -er '.head' "$THR139_UW_BEFORE_MANIFEST")" = \
      "$(jq -er '.head' "$THR139_UW_AFTER_MANIFEST")"
    ```
@@ -477,7 +489,7 @@ paths, or private values may enter committed evidence.
 The Gimle report is RED because the EvmKit snippet freshness is contradictory
 and semantic searches have coverage gaps. Exact local Serena, targeted `rg`,
 and Git verification are the accepted fallback; the defects remain recorded.
-Revision 13 resolves the closure-5/5 correction set by reusing the existing
+Revision 14 resolves the closure-5/5 correction set by reusing the existing
 S1-02 and S1-04 repository gates, removing THR-139-specific ThorChainKit
 allowlists/wrappers, and spelling three executable fixed family-to-REST/RPC
 live invocations with every required public runner input. The exact HEAD,
