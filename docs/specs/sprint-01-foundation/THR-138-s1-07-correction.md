@@ -1,6 +1,6 @@
 # THR-138 — S1-07 native RUNE sync correction
 
-**Status:** design revision 1; implementation is blocked pending adversarial review and explicit approval of this exact revision.
+**Status:** design revision 2; discovery 1/2, closure 0/5. Implementation is blocked pending adversarial re-review and explicit approval of this exact revision.
 
 ## Goal
 
@@ -11,14 +11,22 @@ handling.
 
 ## Observed failure
 
-On 2026-07-23, the official Liquify Cosmos REST endpoint returned this response
-for the frozen non-secret test address:
+On 2026-07-23T03:29:05Z, an exact read-only `GET` of the official Liquify
+Cosmos REST path returned this response for the frozen public no-funds test
+address `thor1le9eykyndunax8k24w8fykd8ndx35w2h27c008`:
+
+`GET https://gateway.liquify.com/chain/thorchain_api/cosmos/auth/v1beta1/accounts/thor1le9eykyndunax8k24w8fykd8ndx35w2h27c008`
 
 - HTTP status: `404`
 - body code: `5`
 - message: `account <requested-address> not found`
 - details: `[]`
 - Cosmos height header: present (`27120711` in the reproduction)
+
+The redacted response artifact is
+[`THR-138-liquify-account-404-20260723.json`](../../reports/gimle/THR-138-liquify-account-404-20260723.json).
+Its SHA-256 is recorded in the Gimle report and must be captured again if the
+provider observation is repeated.
 
 The current `LiveThorNodeClient.isExactAbsence` accepts only the older,
 long-form address-specific message ending in `key not found`. The current
@@ -35,8 +43,10 @@ Assumptions:
 - The separate provider audit owns provider selection and any additional
   provider family. This correction uses only the already configured official
   Liquify pair.
-- The exact short message is address-specific: the requested address must be
-  present in the message. Generic or foreign-address messages are not absence.
+- The accepted short message is exactly `account <requested-address> not found`
+  after substituting the requested address. Matching is full-string equality;
+  containment, prefix, suffix, trimming, normalization, or whitespace
+  tolerance is forbidden. Generic or foreign-address messages are not absence.
 - The existing long-form response remains valid and must continue to be
   accepted.
 
@@ -61,10 +71,13 @@ Out of scope:
    live-smoke reproduces the short Liquify response before the correction and
    completes the no-funds native RUNE sync after the correction.
 2. Account absence is returned only for HTTP 404 with code `5`, empty details,
-   and either the verified long-form message or the verified short-form
-   message containing the requested address.
-3. Generic, malformed, foreign-address, non-404, and balance-operation errors
-   retain their existing typed error behavior.
+   and full-string equality with either
+   `rpc error: code = NotFound desc = account <requested-address> not found: key not found`
+   or `account <requested-address> not found`.
+3. Prefix, suffix, leading/trailing/internal-whitespace, foreign-address,
+   wrong-code, nonempty-details, malformed-JSON, exact-body-under-non-404, and
+   balance-404-with-the-same-body cases retain typed fail-closed errors. The
+   balance case remains `.httpStatus(.balances, 404)`.
 4. The focused ThorChainKit regression test, relevant ThorChainKit and
    WalletCore tests, and the local Development application build pass. No
    GitHub Actions run is used.
@@ -88,6 +101,11 @@ Supporting roles:
 - UW `ThorChainAdapter` current consumer: maps kit `notSynced` states to the
   existing closed adapter diagnostics and does not fabricate a zero balance.
 
+- Vertical state roles: `ReadOperationCoordinator` owns the account-read
+  completion, `StorageRecord` carries the persisted account/balance boundary,
+  `LifecycleGate` validates the active identity before publication, and
+  `StateSnapshot` exposes `.synced` with the zero native RUNE projection.
+
 Rejected counterexample: `LiveThorNodeClient.balances`. It treats every
 non-2xx response as a balances HTTP error and must not inherit account-absence
 special handling. No composition analog is required because no factory or
@@ -97,36 +115,42 @@ registration changes are proposed.
 
 | Area | Preserve | Required difference | Rejected difference | Failure mode | Test / verification |
 |---|---|---|---|---|---|
-| Account 404 classifier | code `5`, empty details, address binding, typed errors | Accept the verified short message in addition to the verified long message | Accept any `404`, generic text, or foreign address | A malformed/foreign response could be treated as an absent account | Focused long + short + generic + foreign-address cases |
+| Account 404 classifier | code `5`, empty details, address binding, typed errors | Accept the two verified messages by full-string equality only | `contains`, prefix/suffix matching, whitespace normalization, any `404`, generic text, or foreign address | A malformed/foreign response could be treated as an absent account | Focused exact long/short positives plus prefix/suffix/whitespace/foreign negatives |
 | Account consumer | `nil` absent account and existing adapter lifecycle | No consumer API or lifecycle change | Add UW-specific fallback or zero-balance behavior | Missing account could mask a real provider failure | Local Development live-smoke and WalletCore tests |
-| Balance/error boundary | All balance non-2xx errors remain typed | None | Reuse account absence matcher for balances | Provider outage could be hidden as empty balance | Existing balances error tests plus changed-line review |
+| Balance/error boundary | All balance non-2xx errors remain typed | None | Reuse account absence matcher for balances | Provider outage could be hidden as empty balance | Focused balances 404 with the same body asserts `.httpStatus(.balances, 404)` |
 
 ## Test-first plan
 
-1. Update the existing account absence test contract to assert that the short
-   address-specific body returns `nil` and that generic and foreign-address
-   bodies still throw the typed 404 error.
+1. Update the existing account absence test contract to assert exact full-string
+   equality for both accepted messages. Add prefix, suffix, leading/trailing/
+   internal-whitespace, foreign-address, wrong-code, nonempty-details,
+   malformed-JSON, exact-body-under-non-404, and balances-404-with-the-same-body
+   cases; the latter must remain `.httpStatus(.balances, 404)`.
 2. Run the focused ThorChainKit test and capture the pre-fix failure against
    the short form.
 3. Implement the smallest predicate-only correction.
 4. Re-run the focused test, the directly affected ThorChainKit suite, relevant
-   WalletCore/ThorChain tests, and the local Development build.
-5. Run the real local Development live-smoke against the official Liquify REST
-   and RPC pair and record the observed sync state, accepted height, and exact
-   RUNE projection. No mnemonic or private material is recorded.
+   WalletCore tests, and the exact local Development build command in the plan.
+5. Run the real local Development live-smoke against the exact Liquify REST/RPC
+   pair. The pre-fix run must capture the short 404 and old unavailable/closed
+   result. The post-fix pass is only valid when the app is online and `.synced`,
+   the account is absent, native RUNE is exactly zero, a positive accepted
+   height is shown, and no closed/unavailable diagnostic is present. Relaunch
+   and offline behavior are separate regression checks. No mnemonic or private
+   material is recorded.
 
 ## Verification commands and evidence
 
-- ThorChainKit focused test: `swift test --filter LiveThorNodeClientS1_04Tests/testAccountAcceptsOnlyExactObservedAbsenceEnvelope`
-- ThorChainKit directly affected suite: `swift test --filter LiveThorNodeClientS1_04Tests`
-- Local UW relevant tests/build: the existing local `Wallet.xcworkspace`
-  Development scheme and ThorChain test target, using local package checkouts;
-  exact command and destination must be recorded by the implementer/QA from
-  the checkout actually used.
+- ThorChainKit focused test: `swift test --package-path /Users/ant013/Data/AI/thorchain --filter LiveThorNodeClientS1_04Tests/testAccountAcceptsOnlyExactObservedAbsenceEnvelope`
+- ThorChainKit directly affected suite: `swift test --package-path /Users/ant013/Data/AI/thorchain --filter LiveThorNodeClientS1_04Tests`
+- Exact UW package/test command: `xcodebuild -workspace /Users/ant013/Data/AI/unstoppable-wallet-ios-THR-104-v0.50/Wallet.xcworkspace -scheme WalletCore -configuration Debug-Dev -destination 'generic/platform=iOS' -derivedDataPath /tmp/THR-138-WalletCore-DD test -resultBundlePath /tmp/THR-138-WalletCore.xcresult`
+- Exact UW Development build: `xcodebuild -workspace /Users/ant013/Data/AI/unstoppable-wallet-ios-THR-104-v0.50/Wallet.xcworkspace -scheme Development -configuration Debug-Dev -destination 'generic/platform=iOS' -derivedDataPath /tmp/THR-138-Development-DD build -resultBundlePath /tmp/THR-138-Development.xcresult`
+- Exact source roots: UW `/Users/ant013/Data/AI/unstoppable-wallet-ios-THR-104-v0.50`, MarketKit `/Users/ant013/Data/AI/MarketKit.Swift-THR-104`, ThorChainKit `/Users/ant013/Data/AI/thorchain`. The UW package manifest must continue to resolve the latter two paths; capture `git rev-parse HEAD`, `git status --porcelain=v1`, and the manifest resolution before and after each run. Any SHA, status, or resolution change invalidates the evidence and requires a fresh capture.
 - Live-smoke: launch the local Development app on the MacBook with the exact
-  Liquify REST/RPC pair, reproduce the short 404 on a no-funds address, then
-  verify native RUNE address, zero balance, synced/unavailable state, and
-  terminate/relaunch restoration as applicable to the existing S1-07 harness.
+  Liquify REST/RPC pair and frozen address above. Record the pre-fix failure,
+  post-fix `.synced`/zero-RUNE/positive-height pass, and separate relaunch and
+  offline regression observations in `/tmp/THR-138-live-smoke.txt` or a QA
+  artifact. Never record mnemonic, private, credential, or cookie material.
 
 ## Open gates
 

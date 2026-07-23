@@ -1,0 +1,20 @@
+{
+  "captured_at": "2026-07-23T03:29:05Z",
+  "request": {
+    "method": "GET",
+    "url": "https://gateway.liquify.com/chain/thorchain_api/cosmos/auth/v1beta1/accounts/thor1le9eykyndunax8k24w8fykd8ndx35w2h27c008",
+    "accept": "application/json"
+  },
+  "response": {
+    "status": 404,
+    "headers": {
+      "cosmos_height": "27120711"
+    },
+    "body": {
+      "code": 5,
+      "details": [],
+      "message": "account thor1le9eykyndunax8k24w8fykd8ndx35w2h27c008 not found"
+    }
+  },
+  "redaction": "The address is a frozen public no-funds test address; credentials, cookies, and response headers unrelated to height are omitted."
+}
