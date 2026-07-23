@@ -1,6 +1,7 @@
 # THR-139 — resilient native RUNE provider pool
 
-**Design revision:** 3 — discovery 2/2, closure 0/5. **Status:** revised
+**Design revision:** 4 — discovery 2/2, closure 2/5 pending targeted review.
+**Status:** revised
 design; implementation remains blocked until this exact revision is accepted by
 the adversarial reviewer and explicitly approved by the operator.
 
@@ -37,6 +38,9 @@ In scope:
 - A test-only owner-observation seam at the existing UW native RUNE composition
   boundary. It must report the family actually used by the completed operation;
   a missing or mismatched observation is unavailable evidence and fails closed.
+- Test-only deterministic family-selection fixtures in AppTests. They retain
+  the complete three-family production manifest and vary only scripted Comet
+  heights so one requested family is selected per fixture pass.
 
 Out of scope:
 
@@ -116,6 +120,29 @@ Rejected counterexamples:
 | Ownership | Native RUNE provider owns native endpoints; multichain owns swaps | Keep Liquify out of native RUNE and leave multichain source untouched | Source diff plus native/multichain composition negatives |
 | Live evidence | Existing iOS simulator/AppTests and public node probes | Add a THR-139 runner that always builds the full three-family manifest, requires an observed selected family equal to `THR139_OWNER_FAMILY`, and binds every probe to its family pair | Manifest equality, owner observation equality, pair ownership, `thorchain-1`, accepted heights, fail-closed drift |
 
+### Owner-observation contract
+
+The existing UW `IThorChainKit` boundary does not expose a selected family, so
+the implementation adds no production-facing family selector. The existing
+test-only `TestingAccountReadSession.providerFamilyId` is the observation
+source. In
+`packages/WalletCore/Sources/WalletCore/Core/Factories/ThorChainKitFactory.swift`,
+the test-only native-RUNE composition path reports that value after a completed
+operation through a test callback/box owned by `ThorChainKitManagerTests`; a
+missing value reports `unavailable` and fails closed. The callback is compiled
+only for tests and cannot alter the production manifest, endpoint order, or
+selection algorithm.
+
+`AppTests/ThorChainKitManagerTests` exercises each family deterministically by
+constructing the same full Rorcual/IBS/Keplr manifest and using the existing
+ThorChainKit test clients to give the requested family the greatest valid Comet
+height while keeping both peers healthy at lower valid heights. The completed
+operation's observed `providerFamilyId` must equal the fixture target. The
+fixture target is not copied into the observation; it only controls scripted
+responses, making a missing or incorrect observer fail. The online runner keeps
+all three real families present and fails closed if the observed owner differs
+from `THR139_OWNER_FAMILY`.
+
 ## Acceptance criteria
 
 1. THR-138 is done and this issue is the sole activated correction slice.
@@ -139,7 +166,8 @@ Rejected counterexamples:
    closed on missing/mismatched owner observation, manifest drift, or pair
    mismatch. The existing injected HTTP 503 coordinator case proves complete-
    operation retry; public online passes provide the three-family ownership
-   evidence.
+   evidence. Deterministic AppTests separately exercise each owner with the
+   complete manifest and scripted height ranking.
 8. CodeReviewer approval, QA pass, CTO merge-gate evidence, and explicit
    operator authorization remain required before any merge. THR-135 and Sprint
    2 remain blocked until then.
@@ -169,16 +197,49 @@ Rejected counterexamples:
    evidence because the documented iOS-only SwiftPM path fails before XCTest on
    the audited toolchain. The retry proof is the existing HTTP 503 case named
    above; height and identity rejection tests remain selected separately.
-4. **UW tests/build (ThorChainQAEngineer).** First inspect the exact shared
-   scheme XML and fail closed unless its `TestAction.Testables` contains an
-   unsuppressed `BlueprintName="AppTests"`; `-showdestinations` is only the
-   simulator availability check. Then run the exact class selector with a
-   result bundle, verify its compact summary and every test node are `Passed`
-   with zero failures/skips using the checked-in `$THR139_UW_ALLOWLIST`, and
-   run the explicit `Debug-Dev` simulator build. Check: the test and build both
-   resolve to `PLATFORM_NAME=iphonesimulator`, `CONFIGURATION=Debug-Dev`, and
-   no `-only-testing:ThorChain` selector is used.
-5. **THR-139 live runner (ThorChainQAEngineer).** Use the exact local
+4. **Verification artifact authoring (ThorChainSwiftEngineer).** Add and
+   commit these artifacts in the owning repositories before QA execution:
+   `$THORCHAINKIT_ROOT/Scripts/allowlists/THR-139-thor.txt`;
+   `$UW_ROOT/Scripts/allowlists/THR-139-uw.txt`;
+   `$UW_ROOT/Scripts/verify-thr-139-uw-tests.py`;
+   `$UW_ROOT/Scripts/verify-thr-139-live.sh`; and
+   `$UW_ROOT/Scripts/verify-thr-139-evidence.py`. The ThorChainKit allowlist
+   contains the exact selected test identifiers consumed by the existing
+   `Scripts/verify-xcresult.sh`. The UW test verifier rejects missing, extra,
+   duplicate, failed, or skipped test nodes. The live/evidence verifiers reject
+   missing or mismatched owner observations, manifest drift, pair swaps,
+   unapproved hosts, wrong chain identity, invalid heights, and digest
+   tampering. Test first with `python3 -m py_compile`, shell syntax checking,
+   and negative fixtures for each rejection; no production code is changed by
+   these verifier tests.
+5. **UW tests/build (ThorChainQAEngineer).** First run this XML-safe preflight
+   against the exact shared scheme, before any test or build command:
+
+   ```text
+   python3 - "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj/xcshareddata/xcschemes/Development.xcscheme" <<'PY'
+   import sys
+   import xml.etree.ElementTree as ET
+   root = ET.parse(sys.argv[1]).getroot()
+   testables = root.find("./TestAction/Testables")
+   matches = [] if testables is None else [
+       ref for ref in testables.findall("TestableReference")
+       if ref.get("skipped", "NO") != "YES"
+       and (ref.find("BuildableReference") is not None)
+       and ref.find("BuildableReference").get("BlueprintName") == "AppTests"
+   ]
+   if len(matches) != 1:
+       raise SystemExit("FAIL: Development scheme lacks exactly one unsuppressed AppTests testable")
+   print("PASS: Development scheme contains one unsuppressed AppTests testable")
+   PY
+   ```
+
+   Only after that preflight, use `-showdestinations` for simulator availability,
+   run the exact class selector with a result bundle, verify its compact summary
+   and every test node are `Passed` with zero failures/skips using the checked-in
+   `$THR139_UW_ALLOWLIST`, and run the explicit `Debug-Dev` simulator build.
+   Check: the test and build both resolve to `PLATFORM_NAME=iphonesimulator`,
+   `CONFIGURATION=Debug-Dev`, and no `-only-testing:ThorChain` selector is used.
+6. **THR-139 live runner (ThorChainQAEngineer).** Use the exact local
    `$UW_ROOT/Scripts/verify-thr-139-live.sh` runner added alongside the UW
    focused tests, then independently run
    `$UW_ROOT/Scripts/verify-thr-139-evidence.py` against the evidence root. Its
@@ -198,7 +259,7 @@ Rejected counterexamples:
    recomputation, `thorchain-1`, and accepted height/identity invariants. Any
    missing field, drift, mismatch, or unapproved record exits non-zero before
    reporting success.
-6. **Handoff (CodeReviewer → QA → CTO).** Each reviewer cites the exact pushed
+7. **Handoff (CodeReviewer → QA → CTO).** Each reviewer cites the exact pushed
    PR head and concrete output. CTO checks CI, conflict-free head, CR approval,
    QA pass, and explicit operator authorization; only CTO merges.
 
@@ -224,6 +285,24 @@ Scripts/verify-xcresult.sh THR-139-thor "$THR139_THOR_RESULT_BUNDLE" \
 The UW test command is:
 
 ```text
+scheme="$UW_ROOT/Unstoppable/Unstoppable.xcodeproj/xcshareddata/xcschemes/Development.xcscheme"
+python3 - "$scheme" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+root = ET.parse(sys.argv[1]).getroot()
+testables = root.find("./TestAction/Testables")
+matches = [] if testables is None else [
+    ref for ref in testables.findall("TestableReference")
+    if ref.get("skipped", "NO") != "YES"
+    and (ref.find("BuildableReference") is not None)
+    and ref.find("BuildableReference").get("BlueprintName") == "AppTests"
+]
+if len(matches) != 1:
+    raise SystemExit("FAIL: Development scheme lacks exactly one unsuppressed AppTests testable")
+print("PASS: Development scheme contains one unsuppressed AppTests testable")
+PY
+xcodebuild -project "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj" \
+  -scheme Development -showdestinations
 xcodebuild test -project "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj" \
   -scheme Development -configuration Debug-Dev \
   -destination "platform=iOS Simulator,id=$THR139_SIMULATOR_UDID" \
@@ -234,9 +313,6 @@ xcrun xcresulttool get test-results summary --path "$THR139_UW_RESULT_BUNDLE" \
 xcrun xcresulttool get test-results tests --path "$THR139_UW_RESULT_BUNDLE" \
   --compact | python3 "$UW_ROOT/Scripts/verify-thr-139-uw-tests.py" "$THR139_UW_ALLOWLIST"
 
-scheme="$UW_ROOT/Unstoppable/Unstoppable.xcodeproj/xcshareddata/xcschemes/Development.xcscheme"
-plutil -extract TestAction.Testables xml1 -o - "$scheme" \
-  | rg -q 'BlueprintName="AppTests"[^>]*skipped="NO"|skipped="NO"[^>]*BlueprintName="AppTests"'
 xcodebuild build -project "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj" \
   -scheme Development -configuration Debug-Dev \
   -destination "platform=iOS Simulator,id=$THR139_SIMULATOR_UDID" \
@@ -252,6 +328,26 @@ done
 python3 "$UW_ROOT/Scripts/verify-thr-139-evidence.py" "$THR139_EVIDENCE_ROOT"
 ```
 
+The XML-safe Python preflight above is run before the `xcodebuild test` block;
+the command block is shown compactly here only after its preflight has passed.
+
+### Canonical digest domains
+
+`manifestSha256` is the lowercase SHA-256 of the UTF-8 bytes of canonical JSON
+for `{"families":[six role-bound records]}`, with recursively sorted object
+keys, compact separators, and no trailing newline. `resultSha256` is the
+lowercase SHA-256 of the UTF-8 bytes of canonical JSON for the result object
+with the `resultSha256` field omitted:
+
+```json
+{"chainId":"thorchain-1","height":0,"manifestSha256":"…","observedFamily":"…","ownerFamily":"…","rest":{},"rpc":{},"schemaVersion":1}
+```
+
+The ellipses represent values, not literal data. The independent verifier
+reconstructs both preimages, rejects any extra or missing field, and compares
+the resulting digests before reporting success. No digest is computed over an
+object containing itself.
+
 No raw endpoint responses, credentials, cookies, mnemonics, absolute operator
 paths, or private values may enter committed evidence.
 
@@ -260,10 +356,11 @@ paths, or private values may enter committed evidence.
 The Gimle report is RED because the EvmKit snippet freshness is contradictory
 and semantic searches have coverage gaps. Exact local Serena, targeted `rg`,
 and Git verification are the accepted fallback; the defects remain recorded.
-The revised report records D-001 through D-010 as resolved design decisions
-only after the exact docs revision is pushed. D-008 remains a medium
-reproducibility limitation until the runner artifacts exist, but it is no longer
-a design blocker. A fresh bounded adversarial review
+Revision 4 resolves the prior high blockers in the written design by naming the
+owner-observation seam and deterministic fixture path, assigning every verifier
+artifact to an implementer, moving XML preflight before all build/test commands,
+and defining the non-self-referential result digest. A fresh bounded
+adversarial review at closure 2/5
 must recheck those allowlisted IDs and direct regressions; it must not reopen
 broad discovery. Explicit operator approval of this exact pushed spec and plan
 is required before implementation.

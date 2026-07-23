@@ -1,4 +1,4 @@
-# Gimle reliability report: THR-139-resilient-rune-provider-pool-20260723-r2
+# Gimle reliability report: THR-139-resilient-rune-provider-pool-20260723-r3
 
 - Task: 13b614f7-ca87-4777-9694-15639e12c283
 - Workflow/phase: analog_change / adversarial_review
@@ -23,34 +23,39 @@
 - Bugs: 4
 - Analog slices/candidates: 1/5
 
-## Revision 2 review correction
+## Revision 3 targeted correction
 
-The prior bounded review found four high verification gaps and one medium
-operability gap. Revision 3 of the spec and plan resolves the high findings as
-follows:
+The prior bounded review was closure 1/5 and found four high verification gaps.
+Revision 4 of the spec and plan records the concrete corrections for the next
+targeted pass at closure 2/5:
 
-- D-004/D-008: `THR139_OWNER_FAMILY` is now a required owner-observation
-  contract. The test-only app seam must emit the selected family ID; missing or
-  mismatched observation fails closed, so height/order selection cannot be
-  misreported as three-family coverage.
+- D-004/D-008: the existing ThorChainKit testing SPI
+  `TestingAccountReadSession.providerFamilyId` is the owner-observation source.
+  The UW factory's test-only callback reports the completed operation's value,
+  with missing observation unavailable and fail-closed. AppTests retain all
+  three production families and use scripted valid Comet heights to make each
+  family highest in a separate deterministic fixture; the expected label is
+  never copied into the observation.
 - D-005/D-010: the failover proof now names the existing
   `testRetryRepeatsTheCompleteOperationOnTheNextFamily` seam and its injected
   HTTP 503 (`ThorNodeReadError.httpStatus`, code 503). No unimplemented
   transport-failure seam is claimed.
-- D-006: the ThorChainKit command now names `$THR139_THOR_ALLOWLIST`, writes
-  `$THR139_THOR_RESULT_BUNDLE`, and invokes `Scripts/verify-xcresult.sh`; the
-  allowlist verifier requires exact test names and zero skips.
-- D-007: UW validation now inspects the shared Development scheme for an
-  unsuppressed `AppTests` testable, writes a UW result bundle, checks its exact
-  test nodes/summary, and gives an explicit `Debug-Dev` simulator build.
-- D-008 (medium): the live runner now has an exact three-pass invocation,
-  canonical JSON field schema, lowercase SHA-256 over canonical JSON, and an
-  independent evidence-verifier command. Reproducibility remains a medium
-  implementation follow-up until those scripts exist; it is not a design gate.
+- D-006/D-008: the plan now assigns the verification artifact authoring to
+  ThorChainSwiftEngineer and pins all five paths: ThorChainKit
+  `Scripts/allowlists/THR-139-thor.txt`; UW
+  `Scripts/allowlists/THR-139-uw.txt`, `Scripts/verify-thr-139-uw-tests.py`,
+  `Scripts/verify-thr-139-live.sh`, and `Scripts/verify-thr-139-evidence.py`.
+  It also requires Python/shell syntax checks and bounded negative fixtures
+  before QA execution.
+- D-007: the invalid `plutil` command is removed. An ElementTree XML preflight
+  checks exactly one unsuppressed `AppTests` testable before
+  `-showdestinations`, `xcodebuild test`, or `xcodebuild build`.
+- D-008: `resultSha256` is defined as SHA-256 over canonical UTF-8 JSON with
+  the `resultSha256` field omitted; the independent verifier reconstructs that
+  exact preimage. The result schema and manifest digest domain are explicit.
 
-Discovery remains frozen at 2/2 and closure remains 0/5. No implementation is
-authorized until this docs-only revision is freshly adversarially reviewed and
-explicitly approved.
+Discovery remains frozen at 2/2. Closure 2/5 is the next bounded review; no
+implementation or operator-approval gate is opened by this docs-only revision.
 
 ### Calls by tool
 
@@ -143,20 +148,24 @@ Bug statuses: {'workaround': 4}
 - D-001@2 ACCEPT: Host cardinality and allowlist semantics
 - D-002@2 ACCEPT: Exact approved-host equality
 - D-003@2 ACCEPT: REST/RPC family pairing
-- D-004@3 ACCEPT: Owner-selection observation is fail-closed
+- D-004@3 REVISE: Owner-selection observation was not deterministic or owned
 - D-005@3 ACCEPT: Existing HTTP 503 retry seam is named exactly
-- D-006@3 ACCEPT: ThorChainKit result verifier and allowlist are explicit
-- D-007@3 ACCEPT: UW scheme testable, result bundle, and build checks are explicit
-- D-008@3 ACCEPT: Live-smoke invocation and artifact verification are reproducible
+- D-006@3 REVISE: Result verifier and allowlist artifacts lacked authoring owner/paths
+- D-007@3 REVISE: UW scheme preflight was non-executable and ordered too late
+- D-008@3 REVISE: Result digest domain was self-referential; artifact ownership was incomplete
 - D-009@3 ACCEPT: Revision delivery state
 - D-010@2 ACCEPT: Direct identity/height verification coverage
 
+Revision 4 disposition for D-004/D-006/D-007/D-008 is pending the targeted
+closure 2/5 pass; discovery is not reopened.
+
 ## Verification and acceptance
 
-- Docs-only revision check: pending push; verify `git diff --name-only` contains
-  only the spec, plan, and this report.
+- Docs-only revision check: this report, the revision-4 spec, and revision-4
+  plan are the only intended tracked changes; verify with `git diff --name-only`
+  after preserving unrelated pre-existing worktree files.
 - Adversarial review state: fresh bounded review required after push; discovery
-  2/2, closure 0/5.
+  2/2, closure 2/5.
 - Implementation, simulator, UW, and live checks: intentionally unrun pending
   explicit operator approval.
 
