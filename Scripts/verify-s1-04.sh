@@ -284,6 +284,7 @@ cat Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt \
     Tests/ThorChainKitTests/Fixtures/S1-02-tests.txt \
     Tests/ThorChainKitTests/Fixtures/S1-03-tests.txt \
     Tests/ThorChainKitTests/Fixtures/S1-04-tests.txt \
+    Tests/ThorChainKitTests/Fixtures/S1-05-tests.txt \
     | sort -u > "$allowlist"
 
 xcodebuild \
