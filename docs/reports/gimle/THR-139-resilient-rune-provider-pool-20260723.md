@@ -111,28 +111,28 @@ Bug statuses: {'workaround': 4}
 
 ## Adversarial decisions
 
-- D-001@2 ACCEPT: Host cardinality and allowlist semantics
-- D-002@2 ACCEPT: Exact approved-host equality
-- D-003@2 ACCEPT: REST/RPC family pairing
-- D-004@12 ACCEPT: Fixed three-family live invocations with bounded stored evidence
-- D-005@2 ACCEPT: Test-first execution order
-- D-006@12 ACCEPT: Repository-owned verifier artifacts and executable self-tests
-- D-007@12 ACCEPT: Identity and static preflight precede PASS-capable gates
-- D-008@10 ACCEPT: Existing S1-04 schema only
-- D-009@5 ACCEPT: Revision delivery state
-- D-010@2 ACCEPT: Direct identity/height verification coverage
-- D-011@2 ACCEPT: Local-only UW boundary
-- D-012@2 ACCEPT: Required ThorChainKit gate repair
-- D-013@2 ACCEPT: URL-pair evidence wording
-- D-014@2 ACCEPT: Closure artifact consistency
-- D-015@1 ACCEPT: Approved UW workspace identity
-- D-016@1 ACCEPT: ThorChainKit capture utility ownership
-- D-017@1 ACCEPT: Approved manifest binding
-- D-018@2 ACCEPT: Repair gate ordering
-- D-019@2 ACCEPT: Complete two-manifest verifier coverage
-- D-020@1 ACCEPT: Online family-ownership wording
-- D-021@2 ACCEPT: Revision and review counters
-- D-022@1 ACCEPT: Preserved assigned-worktree reports
+- D-001@3 ACCEPT: Host cardinality and allowlist semantics
+- D-002@3 ACCEPT: Exact approved-host equality
+- D-003@3 ACCEPT: REST/RPC family pairing
+- D-004@13 ACCEPT: Fixed three-family live invocations with bounded stored evidence
+- D-005@3 ACCEPT: Test-first execution order
+- D-006@13 ACCEPT: Repository-owned verifier artifacts and executable self-tests
+- D-007@13 ACCEPT: Identity and static preflight precede PASS-capable gates
+- D-008@11 ACCEPT: Existing S1-04 schema only
+- D-009@6 ACCEPT: Revision delivery state
+- D-010@3 ACCEPT: Direct identity/height verification coverage
+- D-011@3 ACCEPT: Local-only UW boundary
+- D-012@3 ACCEPT: Required ThorChainKit gate repair
+- D-013@3 ACCEPT: URL-pair evidence wording
+- D-014@3 ACCEPT: Closure artifact consistency
+- D-015@2 ACCEPT: Approved UW workspace identity
+- D-016@2 ACCEPT: ThorChainKit capture utility ownership
+- D-017@2 ACCEPT: Approved manifest binding
+- D-018@3 ACCEPT: Repair gate ordering
+- D-019@3 ACCEPT: Complete two-manifest verifier coverage
+- D-020@2 ACCEPT: Online family-ownership wording
+- D-021@3 ACCEPT: Revision and review counters
+- D-022@3 ACCEPT: Preserved reports: guard_preserved_reports before every live runner, then command-local status.showUntrackedFiles=no
 
 ## Verification and acceptance
 
