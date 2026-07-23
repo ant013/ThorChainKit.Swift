@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool
 
-**Design revision:** 4 — discovery 2/2, closure 2/5 pending targeted review.
+**Design revision:** 5 — discovery 2/2, closure 2/5 pending targeted review.
 **Status:** revised
 design; implementation remains blocked until this exact revision is accepted by
 the adversarial reviewer and explicitly approved by the operator.
@@ -35,12 +35,12 @@ In scope:
   validation, and the deterministic three-family live-smoke harness.
 - ThorChainKit simulator tests that prove the existing pool/coordinator
   behavior without changing ThorChainKit.
-- A test-only owner-observation seam at the existing UW native RUNE composition
-  boundary. It must report the family actually used by the completed operation;
-  a missing or mismatched observation is unavailable evidence and fails closed.
-- Test-only deterministic family-selection fixtures in AppTests. They retain
-  the complete three-family production manifest and vary only scripted Comet
-  heights so one requested family is selected per fixture pass.
+- Deterministic full-manifest family-selection fixtures in AppTests. They vary
+  only scripted Comet heights so Rorcual, IBS, and Keplr are each selected in a
+  separate fixture pass.
+- Live actual-owner observation through the launched kit's existing
+  `accountState?.providerFamilyId` boundary. A missing or unapproved observed
+  family fails closed; live input does not request or force a family.
 
 Out of scope:
 
@@ -118,30 +118,27 @@ Rejected counterexamples:
 | URL trust boundary | Existing HTTPS and URL-component validation | Compare exactly six role-bound records; reject subset/superset and cross-family pairs | Duplicate, foreign, superset, HTTP, credential/query/fragment, and pair-swap negatives |
 | Failover lifecycle | EndpointPool health/selection and ReadOperationCoordinator complete-operation retry | Supply all three families; do not alter ThorChainKit | Use the existing `testRetryRepeatsTheCompleteOperationOnTheNextFamily` proof, whose injected first-family `ThorNodeReadError.httpStatus(... code: 503 ...)` causes one complete retry; assert unchanged height/identity checks |
 | Ownership | Native RUNE provider owns native endpoints; multichain owns swaps | Keep Liquify out of native RUNE and leave multichain source untouched | Source diff plus native/multichain composition negatives |
-| Live evidence | Existing iOS simulator/AppTests and public node probes | Add a THR-139 runner that always builds the full three-family manifest, requires an observed selected family equal to `THR139_OWNER_FAMILY`, and binds every probe to its family pair | Manifest equality, owner observation equality, pair ownership, `thorchain-1`, accepted heights, fail-closed drift |
+| Live evidence | Existing iOS simulator/AppTests and public node probes | Add a THR-139 runner that always builds the full three-family manifest, records the launched kit's actual `accountState?.providerFamilyId`, and binds every probe to that observed family pair | Manifest equality, observed-family membership, pair ownership, `thorchain-1`, accepted heights, fail-closed drift |
 
 ### Owner-observation contract
 
-The existing UW `IThorChainKit` boundary does not expose a selected family, so
-the implementation adds no production-facing family selector. The existing
-test-only `TestingAccountReadSession.providerFamilyId` is the observation
-source. In
-`packages/WalletCore/Sources/WalletCore/Core/Factories/ThorChainKitFactory.swift`,
-the test-only native-RUNE composition path reports that value after a completed
-operation through a test callback/box owned by `ThorChainKitManagerTests`; a
-missing value reports `unavailable` and fails closed. The callback is compiled
-only for tests and cannot alter the production manifest, endpoint order, or
-selection algorithm.
+The deterministic AppTests and the online runner have different proof duties.
+AppTests use the existing ThorChainKit testing transport to retain the complete
+three-family manifest and script valid Comet heights so one family is highest in
+each fixture. They assert the completed read projection's
+`TestingAccountReadSession.read().providerFamilyId` equals the family selected
+by the scripted heights. The fixture target is never copied into the
+observation; it only controls responses.
 
-`AppTests/ThorChainKitManagerTests` exercises each family deterministically by
-constructing the same full Rorcual/IBS/Keplr manifest and using the existing
-ThorChainKit test clients to give the requested family the greatest valid Comet
-height while keeping both peers healthy at lower valid heights. The completed
-operation's observed `providerFamilyId` must equal the fixture target. The
-fixture target is not copied into the observation; it only controls scripted
-responses, making a missing or incorrect observer fail. The online runner keeps
-all three real families present and fails closed if the observed owner differs
-from `THR139_OWNER_FAMILY`.
+The online runner does not accept a caller-supplied owner and cannot force a
+selection. It observes the actual launched kit instance after its completed
+operation through the existing `accountState?.providerFamilyId` boundary. The
+runner records that value as `observedFamily` and fails closed when it is
+missing, outside the three-family manifest, or inconsistent with the REST/RPC
+pair used for the same operation. This is the only live owner claim; the
+deterministic AppTests are the proof that each family can be selected with the
+full manifest. No callback/box is added to the production factory seam, and no
+production selector or EndpointPool behavior changes.
 
 ## Acceptance criteria
 
@@ -157,17 +154,18 @@ from `THR139_OWNER_FAMILY`.
    identity rejection; no request-level retry or check weakening is added.
 6. On the MacBook, the exact ThorChainKit simulator tests, UW `AppTests`, and
    Development simulator build pass at the reviewed implementation head.
-7. The THR-139 live runner performs three isolated passes. Each pass constructs
-   all three families from the checked-in table, records a digest-only manifest,
-   requires the app's test-only owner observation to equal the requested
-   `THR139_OWNER_FAMILY` (`rorcual-mainnet`, then `ibs-mainnet`, then
-   `keplr-mainnet`), binds REST and RPC observations to that same family ID,
-   verifies `thorchain-1` and accepted height/identity invariants, and fails
-   closed on missing/mismatched owner observation, manifest drift, or pair
-   mismatch. The existing injected HTTP 503 coordinator case proves complete-
-   operation retry; public online passes provide the three-family ownership
-   evidence. Deterministic AppTests separately exercise each owner with the
-   complete manifest and scripted height ranking.
+7. The deterministic AppTests perform three isolated fixture passes. Each pass
+   constructs all three families from the checked-in table, scripts one family
+   to have the greatest valid Comet height, and verifies the completed
+   projection's `providerFamilyId` equals the actually selected family. The
+   online runner performs three isolated real-node passes with the same full
+   manifest, observes the launched kit's actual
+   `accountState?.providerFamilyId`, binds REST and RPC observations to that
+   observed family, verifies `thorchain-1` and accepted height/identity
+   invariants, and fails closed on missing/unapproved observation, manifest
+   drift, or pair mismatch. It does not accept a caller-supplied expected owner
+   or claim that three online passes forced one pass per family. The existing
+   injected HTTP 503 coordinator case proves complete-operation retry.
 8. CodeReviewer approval, QA pass, CTO merge-gate evidence, and explicit
    operator authorization remain required before any merge. THR-135 and Sprint
    2 remain blocked until then.
@@ -198,42 +196,38 @@ from `THR139_OWNER_FAMILY`.
    the audited toolchain. The retry proof is the existing HTTP 503 case named
    above; height and identity rejection tests remain selected separately.
 4. **Verification artifact authoring (ThorChainSwiftEngineer).** Add and
-   commit these artifacts in the owning repositories before QA execution:
+   commit these repository-owned artifacts before any consumer command runs:
    `$THORCHAINKIT_ROOT/Scripts/allowlists/THR-139-thor.txt`;
    `$UW_ROOT/Scripts/allowlists/THR-139-uw.txt`;
+   `$UW_ROOT/Scripts/allowlists/THR-139-family-manifest.json`;
+   `$UW_ROOT/Scripts/verify-thr-139-scheme.py`;
    `$UW_ROOT/Scripts/verify-thr-139-uw-tests.py`;
    `$UW_ROOT/Scripts/verify-thr-139-live.sh`; and
    `$UW_ROOT/Scripts/verify-thr-139-evidence.py`. The ThorChainKit allowlist
    contains the exact selected test identifiers consumed by the existing
    `Scripts/verify-xcresult.sh`. The UW test verifier rejects missing, extra,
    duplicate, failed, or skipped test nodes. The live/evidence verifiers reject
-   missing or mismatched owner observations, manifest drift, pair swaps,
+   missing or unapproved owner observations, manifest drift, pair swaps,
    unapproved hosts, wrong chain identity, invalid heights, and digest
-   tampering. Test first with `python3 -m py_compile`, shell syntax checking,
-   and negative fixtures for each rejection; no production code is changed by
-   these verifier tests.
+   tampering. Each consumer resolves its allowlist, manifest, and verifier by
+   fixed paths relative to its checked-out repository; caller-supplied paths
+   and caller-supplied expected-family values are rejected. Only result and
+   evidence output directories, simulator identity, and the two repository
+   roots are runtime inputs. Test first with `python3 -m py_compile`, shell
+   syntax checking, scheme/XML negative fixtures, and negative fixtures for
+   each rejection; no production code is changed by these verifier tests.
 5. **UW tests/build (ThorChainQAEngineer).** First run this XML-safe preflight
    against the exact shared scheme, before any test or build command:
 
    ```text
-   python3 - "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj/xcshareddata/xcschemes/Development.xcscheme" <<'PY'
-   import sys
-   import xml.etree.ElementTree as ET
-   root = ET.parse(sys.argv[1]).getroot()
-   testables = root.find("./TestAction/Testables")
-   matches = [] if testables is None else [
-       ref for ref in testables.findall("TestableReference")
-       if ref.get("skipped", "NO") != "YES"
-       and (ref.find("BuildableReference") is not None)
-       and ref.find("BuildableReference").get("BlueprintName") == "AppTests"
-   ]
-   if len(matches) != 1:
-       raise SystemExit("FAIL: Development scheme lacks exactly one unsuppressed AppTests testable")
-   print("PASS: Development scheme contains one unsuppressed AppTests testable")
-   PY
+   set -euo pipefail
+   python3 "$UW_ROOT/Scripts/verify-thr-139-scheme.py" \
+     "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj/xcshareddata/xcschemes/Development.xcscheme"
    ```
 
-   Only after that preflight, use `-showdestinations` for simulator availability,
+   The `set -euo pipefail` wrapper is mandatory: a non-zero XML check stops the
+   shell before any Xcode command. Only after that preflight, use
+   `-showdestinations` for simulator availability,
    run the exact class selector with a result bundle, verify its compact summary
    and every test node are `Passed` with zero failures/skips using the checked-in
    `$THR139_UW_ALLOWLIST`, and run the explicit `Debug-Dev` simulator build.
@@ -243,16 +237,17 @@ from `THR139_OWNER_FAMILY`.
    `$UW_ROOT/Scripts/verify-thr-139-live.sh` runner added alongside the UW
    focused tests, then independently run
    `$UW_ROOT/Scripts/verify-thr-139-evidence.py` against the evidence root. Its
-   required mapping is `THR139_FAMILY_TABLE` (the six checked-in records),
-   `THR139_SIMULATOR_UDID`, `THR139_EVIDENCE_ROOT`, and
-   `THR139_OWNER_FAMILY`; the app test-only seam must emit the selected family
-   ID, and the runner must reject missing or mismatched observations. It
+   required mapping is the fixed repository-owned
+   `Scripts/allowlists/THR-139-family-manifest.json`,
+   `THR139_SIMULATOR_UDID`, and `THR139_EVIDENCE_ROOT`; the launched kit must
+   emit its actual selected family through `accountState?.providerFamilyId`,
+   and the runner must reject missing or unapproved observations. It
    launches the Development app, injects only public values into simulator
-   launchd, and unsets them in a trap. It runs once for each owner label with
-   all three families present, uses unique evidence directories, compares
+   launchd, and unsets them in a trap. It runs three isolated passes with all
+   three families present, uses unique evidence directories, compares
    before/after canonical manifests, and writes only the following canonical
-   JSON fields: `schemaVersion`, `ownerFamily`, `observedFamily`,
-   `manifestSha256`, `rest`, `rpc`, `chainId`, `height`, and `resultSha256`.
+   JSON fields: `schemaVersion`, `observedFamily`, `manifestSha256`, `rest`,
+   `rpc`, `chainId`, `height`, and `resultSha256`.
    `manifestSha256` and `resultSha256` are lowercase SHA-256 digests of
    canonical JSON (sorted keys, UTF-8, no trailing newline). The independent
    verifier checks schema version, family equality, six-record equality, digest
@@ -286,21 +281,8 @@ The UW test command is:
 
 ```text
 scheme="$UW_ROOT/Unstoppable/Unstoppable.xcodeproj/xcshareddata/xcschemes/Development.xcscheme"
-python3 - "$scheme" <<'PY'
-import sys
-import xml.etree.ElementTree as ET
-root = ET.parse(sys.argv[1]).getroot()
-testables = root.find("./TestAction/Testables")
-matches = [] if testables is None else [
-    ref for ref in testables.findall("TestableReference")
-    if ref.get("skipped", "NO") != "YES"
-    and (ref.find("BuildableReference") is not None)
-    and ref.find("BuildableReference").get("BlueprintName") == "AppTests"
-]
-if len(matches) != 1:
-    raise SystemExit("FAIL: Development scheme lacks exactly one unsuppressed AppTests testable")
-print("PASS: Development scheme contains one unsuppressed AppTests testable")
-PY
+set -euo pipefail
+python3 "$UW_ROOT/Scripts/verify-thr-139-scheme.py" "$scheme"
 xcodebuild -project "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj" \
   -scheme Development -showdestinations
 xcodebuild test -project "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj" \
@@ -318,10 +300,8 @@ xcodebuild build -project "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj" \
   -destination "platform=iOS Simulator,id=$THR139_SIMULATOR_UDID" \
   -derivedDataPath "$THR139_UW_DERIVED_DATA" CODE_SIGNING_ALLOWED=NO
 
-for family in rorcual-mainnet ibs-mainnet keplr-mainnet; do
-  THR139_OWNER_FAMILY="$family" \
-    THR139_FAMILY_TABLE="$THR139_FAMILY_TABLE" \
-    THR139_SIMULATOR_UDID="$THR139_SIMULATOR_UDID" \
+for family in pass-1 pass-2 pass-3; do
+  THR139_SIMULATOR_UDID="$THR139_SIMULATOR_UDID" \
     THR139_EVIDENCE_ROOT="$THR139_EVIDENCE_ROOT/$family" \
     "$UW_ROOT/Scripts/verify-thr-139-live.sh"
 done
@@ -334,19 +314,27 @@ the command block is shown compactly here only after its preflight has passed.
 ### Canonical digest domains
 
 `manifestSha256` is the lowercase SHA-256 of the UTF-8 bytes of canonical JSON
-for `{"families":[six role-bound records]}`, with recursively sorted object
-keys, compact separators, and no trailing newline. `resultSha256` is the
-lowercase SHA-256 of the UTF-8 bytes of canonical JSON for the result object
-with the `resultSha256` field omitted:
+for the checked-in manifest object `{"families":[six role-bound records]}`,
+with recursively sorted object keys, compact separators, and no trailing
+newline. Every manifest record has exactly the keys `basePath`, `family`,
+`host`, `port`, `role`, and `scheme`. `resultSha256` is the lowercase SHA-256
+of the same canonical encoding for the result object with the `resultSha256`
+field omitted. `rest` and `rpc` each have exactly the six record keys plus
+`chainId` and `height`; the top-level result has exactly `chainId`, `height`,
+`manifestSha256`, `observedFamily`, `rest`, `rpc`, and `schemaVersion` before
+`resultSha256` is added:
 
 ```json
-{"chainId":"thorchain-1","height":0,"manifestSha256":"…","observedFamily":"…","ownerFamily":"…","rest":{},"rpc":{},"schemaVersion":1}
+{"chainId":"thorchain-1","height":12345678,"manifestSha256":"2b103c56a8e8020e210d9e589150420618de663b2184c39e0a1140000c5d712b","observedFamily":"rorcual-mainnet","rest":{"basePath":"/","chainId":"thorchain-1","family":"rorcual-mainnet","height":12345678,"host":"api-thorchain.rorcual.xyz","port":443,"role":"rest","scheme":"https"},"rpc":{"basePath":"/","chainId":"thorchain-1","family":"rorcual-mainnet","height":12345678,"host":"rpc-thorchain.rorcual.xyz","port":443,"role":"rpc","scheme":"https"},"schemaVersion":1}
 ```
 
-The ellipses represent values, not literal data. The independent verifier
-reconstructs both preimages, rejects any extra or missing field, and compares
-the resulting digests before reporting success. No digest is computed over an
-object containing itself.
+For that fixed fixture, the manifest digest is
+`2b103c56a8e8020e210d9e589150420618de663b2184c39e0a1140000c5d712b` and the
+result digest is
+`356b6fe7d87d023a26cd4422da72dac1df226ed055508821b104717180d2a22c`.
+The independent verifier reconstructs both preimages, rejects any extra or
+missing field, and compares the resulting digests before reporting success. No
+digest is computed over an object containing itself.
 
 No raw endpoint responses, credentials, cookies, mnemonics, absolute operator
 paths, or private values may enter committed evidence.
@@ -356,10 +344,11 @@ paths, or private values may enter committed evidence.
 The Gimle report is RED because the EvmKit snippet freshness is contradictory
 and semantic searches have coverage gaps. Exact local Serena, targeted `rg`,
 and Git verification are the accepted fallback; the defects remain recorded.
-Revision 4 resolves the prior high blockers in the written design by naming the
-owner-observation seam and deterministic fixture path, assigning every verifier
-artifact to an implementer, moving XML preflight before all build/test commands,
-and defining the non-self-referential result digest. A fresh bounded
+Revision 5 resolves the closure-2/5 corrections by separating deterministic
+full-manifest AppTests from live actual-owner evidence at
+`accountState?.providerFamilyId`, binding verifier inputs to repository-owned
+paths, making the XML preflight shell-fail-closed before every Xcode command,
+and defining complete manifest/result schemas with valid digest vectors. A fresh bounded
 adversarial review at closure 2/5
 must recheck those allowlisted IDs and direct regressions; it must not reopen
 broad discovery. Explicit operator approval of this exact pushed spec and plan
