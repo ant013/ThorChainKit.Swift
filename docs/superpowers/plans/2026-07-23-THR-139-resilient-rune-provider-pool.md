@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool plan
 
-Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 15. Discovery 2/2; closure 5/5 remains frozen; targeted correction review is pending.
+Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 16. Discovery 2/2; closure 5/5 remains frozen; targeted correction review is pending. This is a metadata-only successor to the pushed D-022 correction.
 
 No implementation, UW commit, push, PR, CI, Maestro, or remote smoke is
 authorized until the exact spec and this plan are explicitly approved. This
@@ -22,7 +22,7 @@ local and finish under an operator-controlled commit gate.
 
 ### 1. Fresh bounded design review
 
-**Owner:** ThorChainCodeReviewer. **Dependencies:** pushed revision-15 spec,
+**Owner:** ThorChainCodeReviewer. **Dependencies:** pushed revision-16 spec,
 plan, and Gimle report. Recheck only the frozen D-001 through D-022 allowlist,
 discovery 2/2, closure 5/5. Verify that no UW acceptance transport, launch-
 argument branch, adapter sink, or production observation callback is introduced;

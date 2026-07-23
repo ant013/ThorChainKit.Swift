@@ -1,6 +1,7 @@
 # THR-139 — resilient native RUNE provider pool
 
-**Design revision:** 15 — discovery 2/2, closure 5/5 remains frozen; targeted
+**Design revision:** 16 — metadata-only successor to the pushed D-022
+correction; discovery 2/2, closure 5/5 remains frozen; targeted
 correction review is pending.
 **Status:** revised
 design; implementation remains blocked until this exact revision is accepted by
@@ -528,7 +529,8 @@ paths, or private values may enter committed evidence.
 The Gimle report is RED because the EvmKit snippet freshness is contradictory
 and semantic searches have coverage gaps. Exact local Serena, targeted `rg`,
 and Git verification are the accepted fallback; the defects remain recorded.
-Revision 15 resolves the closure-5/5 correction set by reusing the existing
+Revision 16 records the metadata-only successor to the closure-5/5 correction
+set resolved by reusing the existing
 S1-02 and S1-04 repository gates, removing THR-139-specific ThorChainKit
 allowlists/wrappers, and spelling three executable fixed family-to-REST/RPC
 live invocations with every required public runner input. The exact HEAD,
