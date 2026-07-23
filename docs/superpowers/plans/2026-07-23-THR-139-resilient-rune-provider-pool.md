@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool plan
 
-Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 6. Discovery 2/2; closure 2/5 pending targeted review.
+Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 7. Discovery 2/2; closure 3/5 pending targeted review.
 
 No implementation, UW commit, push, PR, CI, Maestro, or remote smoke is
 authorized until the exact spec and this plan are explicitly approved.
@@ -18,13 +18,15 @@ authorized until the exact spec and this plan are explicitly approved.
 
 ### 1. Fresh bounded design review
 
-**Owner:** ThorChainCodeReviewer. **Dependencies:** pushed revision-6 spec,
+**Owner:** ThorChainCodeReviewer. **Dependencies:** pushed revision-7 spec,
 plan, and Gimle report. Recheck only the frozen D-001 through D-010 allowlist,
-discovery 2/2, closure 2/5. Verify the concrete fresh `.synced` owner-
-observation seam and cached-family negative fixture, deterministic full-manifest fixtures,
-XML-safe preflight ordering, non-self-referential digest domain, role-bound
-six-record equality, cross-family pairing, exact result verification, simulator
-selectors, and docs-only delivery.
+discovery 2/2, closure 3/5. Verify that no UW acceptance transport, launch-
+argument branch, adapter sink, or production observation callback is introduced;
+verify deterministic full-manifest fixtures, reuse of the existing S1-04 family
+live-smoke runner, XML-safe preflight ordering, fresh result-bundle binding,
+repository-derived verifier paths, role-bound six-record equality,
+cross-family pairing, exact result verification, simulator selectors, and
+docs-only delivery.
 
 ### 2. Verification artifact authoring
 
@@ -33,20 +35,22 @@ Create and commit these exact repository-owned files before any Xcode or
 consumer command runs:
 
 - ThorChainKit: `Scripts/allowlists/THR-139-thor.txt`.
+- ThorChainKit: `Scripts/verify-thr-139-thor.sh`.
 - UW: `Scripts/allowlists/THR-139-uw.txt`,
   `Scripts/allowlists/THR-139-family-manifest.json`,
-  `Scripts/verify-thr-139-scheme.py`, `Scripts/verify-thr-139-uw-tests.py`,
-  `Scripts/verify-thr-139-live.sh`, and `Scripts/verify-thr-139-evidence.py`.
+  `Scripts/verify-thr-139-scheme.py`, and
+  `Scripts/verify-thr-139-uw-tests.py`.
 
-Every consumer derives these paths from its own repository root or script
-directory. The allowlist, manifest, verifier, and expected-family value cannot
-be overridden by caller environment variables or arguments. Only simulator
-identity, repository roots, and output directories are runtime inputs. Test
-first with `python3 -m py_compile` for the three Python verifiers, `bash -n`
-for the shell runner, and bounded negative fixtures for missing/extra/
-duplicate/failed/skipped test nodes, absent or mismatched owner observations,
-manifest drift, pair swaps, invalid chain/height, and tampered digests. The
-result verifier must recompute `resultSha256` from canonical JSON with
+Every verifier derives fixed allowlist/manifest paths from its own repository
+root or script directory and rejects caller-supplied replacements. The
+ThorChainKit wrapper accepts only a newly-created result-bundle path; the UW
+XCTest verifier reads only stdin; the scheme verifier accepts only the exact
+scheme path. Only simulator identity, repository roots, result bundles, and
+output directories are runtime inputs. Test first with `python3 -m py_compile`
+for the Python verifiers, `bash -n` for the shell wrapper, and bounded negative
+fixtures for missing/extra/duplicate/failed/skipped nodes, path override
+arguments, pair swaps, invalid chain/height, and tampered digests. The result
+verifier must recompute `resultSha256` from canonical JSON with
 `resultSha256` omitted; it must never hash an object containing its own digest.
 
 ### 3. Test-first UW contract
@@ -110,9 +114,9 @@ command. It must parse the exact `Development.xcscheme` as XML and fail closed u
 `BuildableReference[BlueprintName="AppTests"]`. This preflight must run before
 `xcodebuild -showdestinations`, `xcodebuild test`, or `xcodebuild build`;
 `-showdestinations` only verifies simulator availability. Then run
-`-only-testing:AppTests/ThorChainKitManagerTests` with a result bundle, verify
-the compact summary and exact test nodes against the repository-derived
-`$UW_ROOT/Scripts/allowlists/THR-139-uw.txt`, and
+`-only-testing:AppTests/ThorChainKitManagerTests` with a newly-created result
+bundle, verify the compact summary and exact test nodes against the verifier's
+repository-derived allowlist, and
 run a `Debug-Dev` simulator build. Reject `-only-testing:ThorChain`, device
 artifacts, missing result bundles, failed/skipped nodes, or non-simulator build
 settings.
@@ -121,30 +125,16 @@ settings.
 
 **Owner:** ThorChainQAEngineer. **Dependency:** Steps 4–6.
 
-Run the exact `$UW_ROOT/Scripts/verify-thr-139-live.sh` harness three times with
-all three families in every manifest. The exact live emission boundary is the
-existing `IThorChainKit.syncStatePublisher` subscription in
-`packages/WalletCore/Sources/WalletCore/Core/Adapters/ThorChain/ThorChainAdapter.swift`;
-the test-only `THR139_LIVE_EVIDENCE` sink writes an atomic
-`Documents/THR139/live-state.json` record only for `.synced(AccountState)`. The
-runner resolves the launched app container with `xcrun simctl get_app_container`,
-removes the prior record before launch, and accepts only a new record observed
-after launch. `.idle(cached: true)` and `.notSynced(..., cached: ...)` never
-produce an owner record. A cached-family negative fixture preloads family A,
-then requires a fresh `.synced` record for family B; cached A alone times out
-and fails closed. The runner binds REST/RPC observations to that fresh family
-record, verifies `thorchain-1`, accepted heights and identity, stores canonical
-digest-only JSON, compares pre/post manifests, and unsets simulator launchd
-variables. It does not accept a caller-supplied expected family. The script
-derives its manifest and verifier paths from its own repository directory. Run
-the independent `$UW_ROOT/Scripts/verify-thr-139-evidence.py` verifier afterward.
-The injected HTTP 503 test is the failover proof; deterministic AppTests are
-the three-family selection proof; online passes are actual-owner/pair evidence.
-Each pass writes only `schemaVersion`, `observedFamily`, `manifestSha256`,
-`rest`, `rpc`, `chainId`, `height`, and `resultSha256`. `manifestSha256` hashes
-the canonical six-record manifest. `resultSha256` hashes the canonical result
-object with `resultSha256` omitted, using sorted keys, compact separators,
-UTF-8, and no trailing newline.
+Run the existing `$THORCHAINKIT_ROOT/Scripts/verify-s1-04-live.sh` runner once
+for each approved family (`Rorcual`, `IBS`, `Keplr`) with unique evidence roots
+and the already audited public inputs. Independently verify each fresh
+digest-only result with the existing S1-04 evidence verifier. This proves
+REST/RPC pair ownership, `thorchain-1`, accepted height/identity invariants,
+and evidence freshness; deterministic AppTests prove provider-pool selection
+with the complete three-family manifest. No Unstoppable acceptance transport,
+launch argument, adapter sink, or new live runner is added. The injected HTTP
+503 test is the failover proof; online passes are network identity/pair
+evidence, not a caller-selected owner oracle.
 
 ### 8. Review and merge gate
 

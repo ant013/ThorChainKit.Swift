@@ -3,9 +3,9 @@
 - Task: 13b614f7-ca87-4777-9694-15639e12c283
 - Workflow/phase: analog_change / adversarial_review
 - Trust: **RED**
-- Repository: `$THORCHAINKIT_ROOT`
+- Repository: /Users/ant013/Data/AI/thorchain-worktrees/s1-07-unstoppable-rune-surface
 - Base HEAD: 6462bec2604db4d3d05b3cfccde1ff5b768c86e0
-- Final HEAD: 826fa090ca6f35b8972699c056f44ea21e066e4e
+- Final HEAD: n/a
 - Gimle runtime: native-dev:0e9cf57c00ff970f584256126b500166580e7a72
 - Indexed commit: 8a63bfda028dd8543115b26dd777235a53304311
 
@@ -39,23 +39,6 @@
 Bug classes: {'stale_index': 1, 'coverage_gap': 3}
 Bug severities: {'high': 1, 'medium': 3}
 Bug statuses: {'workaround': 4}
-
-## Revision 6 targeted correction
-
-Closure 2/5 remains bounded to D-004, D-006, D-007, and D-008; discovery is
-frozen at 2/2. D-004 now names the exact
-`packages/WalletCore/Sources/WalletCore/Core/Adapters/ThorChain/ThorChainAdapter.swift`
-`IThorChainKit.syncStatePublisher` boundary, the test-only atomic
-`Documents/THR139/live-state.json` handoff, post-launch freshness, and a
-cached-family negative fixture that accepts only `.synced(AccountState)`.
-D-006 now derives allowlists and verifiers from repository roots or script
-directories and removes caller-overridable allowlist variables. D-007 now
-authors the scheme verifier before the pre-edit UW Xcode test and requires the
-preflight before every later Xcode command. D-008 remains accepted unchanged.
-
-The three docs are rehashed in the canonical state checkpoint. This is a
-docs-only revision; implementation and operator approval remain gated pending
-the next targeted closure review.
 
 ## Gimle calls
 
@@ -131,12 +114,12 @@ the next targeted closure review.
 - D-001@2 ACCEPT: Host cardinality and allowlist semantics
 - D-002@2 ACCEPT: Exact approved-host equality
 - D-003@2 ACCEPT: REST/RPC family pairing
-- D-004@7 REVISE: Fresh live owner observation
+- D-004@9 ACCEPT: Approved Unstoppable live-smoke boundary
 - D-005@2 ACCEPT: Test-first execution order
-- D-006@7 REVISE: Repository-derived verifier paths
-- D-007@7 REVISE: Preflight before every Xcode command
+- D-006@9 ACCEPT: Fixed verifier and allowlist paths
+- D-007@9 ACCEPT: Fresh fail-closed result-bundle gate
 - D-008@7 ACCEPT: Manifest/result digest schemas
-- D-009@5 ACCEPT: Revision 6 docs-only correction is pushed and review-bindable
+- D-009@5 ACCEPT: Revision delivery state
 - D-010@2 ACCEPT: Direct identity/height verification coverage
 
 ## Verification and acceptance
