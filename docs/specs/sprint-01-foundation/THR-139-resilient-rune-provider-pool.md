@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool
 
-**Design revision:** 7 — discovery 2/2, closure 3/5 pending targeted review.
+**Design revision:** 8 — discovery 2/2, closure 4/5 pending targeted review.
 **Status:** revised
 design; implementation remains blocked until this exact revision is accepted by
 the adversarial reviewer and explicitly approved by the operator.
@@ -174,15 +174,14 @@ selector is added to Unstoppable or ThorChainKit.
 
 ## Test-first implementation and verification plan
 
-1. **Verification artifact authoring (ThorChainSwiftEngineer).** Add and
-   commit the repository-owned allowlists, manifest, scheme/test verifiers,
-   and the ThorChainKit result-bundle wrapper before any Xcode or consumer
-   command. Every verifier derives fixed allowlist/manifest paths from its own
-   repository root or script directory and rejects caller-supplied replacements.
-   Only repository roots, simulator identity, result bundles, and output
-   directories are runtime inputs. Run `python3 -m py_compile` for the Python
-   verifiers, `bash -n` for the shell wrappers, and bounded negative fixtures
-   for every declared rejection.
+1. **Existing verification gates (ThorChainSwiftEngineer).** Reuse the
+   existing repository-owned `Scripts/verify-s1-02.sh`, `Scripts/verify-s1-04.sh`,
+   `Scripts/verify-xcresult.sh`, and `Scripts/verify-s1-04-live.sh` contracts.
+   Do not add THR-139 ThorChainKit allowlists, result-bundle wrappers, or
+   allowlist arguments. Those scripts use `set -euo pipefail`, derive their
+   checked-in fixtures from the repository root, create fresh result bundles,
+   and reject stale bundles internally. Run their existing shell syntax and
+   negative-fixture checks; no caller-supplied allowlist path is permitted.
 2. **Pre-edit contract tests (ThorChainSwiftEngineer).** In the exact UW
    checkout, run the repository-owned scheme preflight before this first Xcode
    command, then replace the old one-Liquify expectation with exact order, URL,
@@ -196,17 +195,17 @@ selector is added to Unstoppable or ThorChainKit.
    touch ThorChainKit, or touch the multichain provider. Check: focused tests
    pass and `git diff --name-only` is limited to the approved UW paths.
 4. **ThorChainKit invariants (ThorChainQAEngineer).** From
-   `$THORCHAINKIT_ROOT`, run one iOS Simulator `xcodebuild` test with these
-   exact selectors: `ThorChainKitTests/EndpointPoolTests`,
-   `ThorChainKitTests/ReadOperationCoordinatorS1_04Tests`,
-   `ThorChainKitTests/LiveNodeProbeTests`, and
-   `ThorChainKitTests/LiveThorNodeClientS1_04Tests`. Write the result bundle to
-   `$THR139_THOR_RESULT_BUNDLE`; the repository-owned wrapper derives its
-   checked-in exact test-name file internally and must report `PASS`, with zero
-   failures, errors, and skips. `swift test` is not
-   evidence because the documented iOS-only SwiftPM path fails before XCTest on
-   the audited toolchain. The retry proof is the existing HTTP 503 case named
-   above; height and identity rejection tests remain selected separately.
+   `$THORCHAINKIT_ROOT`, run the existing `Scripts/verify-s1-02.sh` and
+   `Scripts/verify-s1-04.sh --expected-base ... --expected-head ...` gates with
+   the reviewed simulator UUID. Their repository-derived fixtures and
+   `Scripts/verify-xcresult.sh` invocation must report `PASS`, with zero
+   failures, errors, and skips; do not pass an allowlist path. The S1-04 gate's
+   internal manifest includes `EndpointPoolTests`,
+   `ReadOperationCoordinatorS1_04Tests`, `LiveNodeProbeTests`, and
+   `LiveThorNodeClientS1_04Tests`. `swift test` is not evidence because the
+   documented iOS-only SwiftPM path fails before XCTest on the audited
+   toolchain. The retry proof is the existing HTTP 503 case named above;
+   height and identity rejection tests remain selected separately.
 5. **UW tests/build (ThorChainQAEngineer).** First run this XML-safe preflight
    against the exact shared scheme, before any test or build command:
 
@@ -242,21 +241,16 @@ The ThorChainKit test command is a simulator Xcode command, not `swift test`:
 
 ```text
 set -euo pipefail
-thor_result_root="$(mktemp -d)"
-THR139_THOR_RESULT_BUNDLE="$thor_result_root/THR-139-thor.xcresult"
-test ! -e "$THR139_THOR_RESULT_BUNDLE"
-(cd "$THORCHAINKIT_ROOT" && xcodebuild -scheme ThorChainKit \
-  -destination "platform=iOS Simulator,id=$THR139_SIMULATOR_UDID" \
-  -derivedDataPath "$THR139_THOR_DERIVED_DATA" \
-  -resultBundlePath "$THR139_THOR_RESULT_BUNDLE" \
-  -only-testing:ThorChainKitTests/EndpointPoolTests \
-  -only-testing:ThorChainKitTests/ReadOperationCoordinatorS1_04Tests \
-  -only-testing:ThorChainKitTests/LiveNodeProbeTests \
-  -only-testing:ThorChainKitTests/LiveThorNodeClientS1_04Tests \
-  SWIFT_VERSION=5 SWIFT_STRICT_CONCURRENCY=complete \
-  SWIFT_SUPPRESS_WARNINGS=NO CODE_SIGNING_ALLOWED=NO test)
-test -d "$THR139_THOR_RESULT_BUNDLE"
-"$THORCHAINKIT_ROOT/Scripts/verify-thr-139-thor.sh" "$THR139_THOR_RESULT_BUNDLE"
+: "${THR139_EXPECTED_BASE:?set to the reviewed 40-character origin/main SHA}"
+: "${THR139_EXPECTED_HEAD:?set once to the reviewed 40-character ThorChainKit HEAD}"
+(cd "$THORCHAINKIT_ROOT" && \
+  THORCHAIN_SIMULATOR_UDID="$THR139_SIMULATOR_UDID" \
+  Scripts/verify-s1-02.sh)
+(cd "$THORCHAINKIT_ROOT" && \
+  THORCHAIN_SIMULATOR_UDID="$THR139_SIMULATOR_UDID" \
+  Scripts/verify-s1-04.sh \
+    --expected-base "$THR139_EXPECTED_BASE" \
+    --expected-head "$THR139_EXPECTED_HEAD")
 ```
 
 The UW test command is:
@@ -286,15 +280,51 @@ xcodebuild build -project "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj" \
   -destination "platform=iOS Simulator,id=$THR139_SIMULATOR_UDID" \
   -derivedDataPath "$THR139_UW_DERIVED_DATA" CODE_SIGNING_ALLOWED=NO
 
-for family in Rorcual IBS Keplr; do
-  THORCHAIN_S1_04_FAMILY_ID="$family" \
-    THORCHAIN_S1_04_EVIDENCE_ROOT="$THR139_EVIDENCE_ROOT/$family" \
-    "$THORCHAINKIT_ROOT/Scripts/verify-s1-04-live.sh"
-done
+: "${THR139_EXISTING_ADDRESS:?set to the audited public existing thor1 address}"
+: "${THR139_ABSENT_ADDRESS:?set to the audited public absent thor1 address}"
+: "${THR139_SIMULATOR_UDID:?set to the approved iOS 26.2 simulator UUID}"
+
+THORCHAIN_S1_04_LIVE=1 \
+THORCHAIN_S1_04_EXPECTED_HEAD="$THR139_EXPECTED_HEAD" \
+THORCHAIN_S1_04_FAMILY_ID="rorcual-mainnet" \
+THORCHAIN_S1_04_EVIDENCE_ROOT="$THR139_EVIDENCE_ROOT/rorcual-mainnet" \
+THORCHAIN_S1_04_COSMOS_URL="https://api-thorchain.rorcual.xyz" \
+THORCHAIN_S1_04_COMET_URL="https://rpc-thorchain.rorcual.xyz" \
+THORCHAIN_S1_04_EXISTING_ADDRESS="$THR139_EXISTING_ADDRESS" \
+THORCHAIN_S1_04_ABSENT_ADDRESS="$THR139_ABSENT_ADDRESS" \
+THORCHAIN_SIMULATOR_UDID="$THR139_SIMULATOR_UDID" \
+"$THORCHAINKIT_ROOT/Scripts/verify-s1-04-live.sh"
+
+THORCHAIN_S1_04_LIVE=1 \
+THORCHAIN_S1_04_EXPECTED_HEAD="$THR139_EXPECTED_HEAD" \
+THORCHAIN_S1_04_FAMILY_ID="ibs-mainnet" \
+THORCHAIN_S1_04_EVIDENCE_ROOT="$THR139_EVIDENCE_ROOT/ibs-mainnet" \
+THORCHAIN_S1_04_COSMOS_URL="https://thorchain.ibs.team/api" \
+THORCHAIN_S1_04_COMET_URL="https://thorchain.ibs.team/rpc" \
+THORCHAIN_S1_04_EXISTING_ADDRESS="$THR139_EXISTING_ADDRESS" \
+THORCHAIN_S1_04_ABSENT_ADDRESS="$THR139_ABSENT_ADDRESS" \
+THORCHAIN_SIMULATOR_UDID="$THR139_SIMULATOR_UDID" \
+"$THORCHAINKIT_ROOT/Scripts/verify-s1-04-live.sh"
+
+THORCHAIN_S1_04_LIVE=1 \
+THORCHAIN_S1_04_EXPECTED_HEAD="$THR139_EXPECTED_HEAD" \
+THORCHAIN_S1_04_FAMILY_ID="keplr-mainnet" \
+THORCHAIN_S1_04_EVIDENCE_ROOT="$THR139_EVIDENCE_ROOT/keplr-mainnet" \
+THORCHAIN_S1_04_COSMOS_URL="https://lcd-thorchain.keplr.app" \
+THORCHAIN_S1_04_COMET_URL="https://rpc-thorchain.keplr.app" \
+THORCHAIN_S1_04_EXISTING_ADDRESS="$THR139_EXISTING_ADDRESS" \
+THORCHAIN_S1_04_ABSENT_ADDRESS="$THR139_ABSENT_ADDRESS" \
+THORCHAIN_SIMULATOR_UDID="$THR139_SIMULATOR_UDID" \
+"$THORCHAINKIT_ROOT/Scripts/verify-s1-04-live.sh"
 ```
 
 The XML-safe Python preflight above is run before the `xcodebuild test` block;
 the command block is shown compactly here only after its preflight has passed.
+The three live invocations are intentionally explicit: the family ID and both
+URLs are fixed literals, while the expected HEAD, public addresses, simulator
+UUID, and evidence root are required inputs shared across the isolated passes.
+The expected HEAD is captured once from the clean exact checkout and is
+not recomputed between families.
 
 ### Canonical digest domains
 
@@ -329,10 +359,11 @@ paths, or private values may enter committed evidence.
 The Gimle report is RED because the EvmKit snippet freshness is contradictory
 and semantic searches have coverage gaps. Exact local Serena, targeted `rg`,
 and Git verification are the accepted fallback; the defects remain recorded.
-Revision 7 resolves closure 3/5 by removing the unapproved Unstoppable live
-evidence sink/adapter branch, reusing the existing S1-04 family live-smoke
-boundary, deriving verifier/allowlist paths internally, and binding the
-ThorChainKit verifier to a newly-created result bundle under `set -e
-pipefail`. Discovery remains frozen at 2/2; closure remains bounded to the
-frozen IDs and direct regressions. Explicit operator approval of this exact
-pushed spec and plan is required before implementation.
+Revision 8 resolves the board's closure 4/5 correction by reusing the existing
+S1-02 and S1-04 repository gates, removing THR-139-specific ThorChainKit
+allowlists/wrappers, and spelling three executable fixed family-to-REST/RPC
+live invocations with every required public runner input. The unapproved
+Unstoppable live evidence sink/adapter branch remains removed. Discovery
+remains frozen at 2/2; closure remains bounded to the frozen IDs and direct
+regressions. Explicit operator approval of this exact pushed spec and plan is
+required before implementation.

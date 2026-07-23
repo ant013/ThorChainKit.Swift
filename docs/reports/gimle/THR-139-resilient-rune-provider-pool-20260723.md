@@ -3,7 +3,7 @@
 - Task: 13b614f7-ca87-4777-9694-15639e12c283
 - Workflow/phase: analog_change / adversarial_review
 - Trust: **RED**
-- Repository: /Users/ant013/Data/AI/thorchain-worktrees/s1-07-unstoppable-rune-surface
+- Repository: `$THORCHAINKIT_ROOT`
 - Base HEAD: 6462bec2604db4d3d05b3cfccde1ff5b768c86e0
 - Final HEAD: n/a
 - Gimle runtime: native-dev:0e9cf57c00ff970f584256126b500166580e7a72
@@ -114,15 +114,29 @@ Bug statuses: {'workaround': 4}
 - D-001@2 ACCEPT: Host cardinality and allowlist semantics
 - D-002@2 ACCEPT: Exact approved-host equality
 - D-003@2 ACCEPT: REST/RPC family pairing
-- D-004@9 ACCEPT: Approved Unstoppable live-smoke boundary
+- D-004@10 REVISE: Executable three-family live-smoke boundary
 - D-005@2 ACCEPT: Test-first execution order
-- D-006@9 ACCEPT: Fixed verifier and allowlist paths
-- D-007@9 ACCEPT: Fresh fail-closed result-bundle gate
-- D-008@7 ACCEPT: Manifest/result digest schemas
+- D-006@10 REVISE: Repository-owned deterministic verification paths
+- D-007@10 REVISE: Fresh fail-closed result-bundle gate
+- D-008@8 ACCEPT: Manifest and result digest schemas
 - D-009@5 ACCEPT: Revision delivery state
 - D-010@2 ACCEPT: Direct identity/height verification coverage
 
 ## Verification and acceptance
+
+### Revision 8 targeted correction
+
+- Existing ThorChainKit `Scripts/verify-s1-02.sh`, `Scripts/verify-s1-04.sh`,
+  `Scripts/verify-xcresult.sh`, and `Scripts/verify-s1-04-live.sh` are the
+  verification boundary. No THR-139 ThorChainKit allowlist, wrapper, or
+  caller-supplied result allowlist is added.
+- The live contract is executable as three isolated fixed invocations for
+  `rorcual-mainnet`, `ibs-mainnet`, and `keplr-mainnet`; each binds its exact
+  REST/RPC URL pair and all required runner inputs, including one shared clean
+  expected HEAD, audited public addresses, simulator UUID, and unique evidence
+  root.
+- D-008 remains accepted unchanged. Closure 4/5 is limited to D-004, D-006,
+  and D-007 and must verify these direct corrections only.
 
 
 ## Bugs and limitations

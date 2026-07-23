@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool plan
 
-Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 7. Discovery 2/2; closure 3/5 pending targeted review.
+Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 8. Discovery 2/2; closure 4/5 pending targeted review.
 
 No implementation, UW commit, push, PR, CI, Maestro, or remote smoke is
 authorized until the exact spec and this plan are explicitly approved.
@@ -18,9 +18,9 @@ authorized until the exact spec and this plan are explicitly approved.
 
 ### 1. Fresh bounded design review
 
-**Owner:** ThorChainCodeReviewer. **Dependencies:** pushed revision-7 spec,
+**Owner:** ThorChainCodeReviewer. **Dependencies:** pushed revision-8 spec,
 plan, and Gimle report. Recheck only the frozen D-001 through D-010 allowlist,
-discovery 2/2, closure 3/5. Verify that no UW acceptance transport, launch-
+discovery 2/2, closure 4/5. Verify that no UW acceptance transport, launch-
 argument branch, adapter sink, or production observation callback is introduced;
 verify deterministic full-manifest fixtures, reuse of the existing S1-04 family
 live-smoke runner, XML-safe preflight ordering, fresh result-bundle binding,
@@ -28,34 +28,21 @@ repository-derived verifier paths, role-bound six-record equality,
 cross-family pairing, exact result verification, simulator selectors, and
 docs-only delivery.
 
-### 2. Verification artifact authoring
+### 2. Existing verification gates
 
 **Owner:** ThorChainSwiftEngineer. **Dependency:** Step 1 review disposition.
-Create and commit these exact repository-owned files before any Xcode or
-consumer command runs:
-
-- ThorChainKit: `Scripts/allowlists/THR-139-thor.txt`.
-- ThorChainKit: `Scripts/verify-thr-139-thor.sh`.
-- UW: `Scripts/allowlists/THR-139-uw.txt`,
-  `Scripts/allowlists/THR-139-family-manifest.json`,
-  `Scripts/verify-thr-139-scheme.py`, and
-  `Scripts/verify-thr-139-uw-tests.py`.
-
-Every verifier derives fixed allowlist/manifest paths from its own repository
-root or script directory and rejects caller-supplied replacements. The
-ThorChainKit wrapper accepts only a newly-created result-bundle path; the UW
-XCTest verifier reads only stdin; the scheme verifier accepts only the exact
-scheme path. Only simulator identity, repository roots, result bundles, and
-output directories are runtime inputs. Test first with `python3 -m py_compile`
-for the Python verifiers, `bash -n` for the shell wrapper, and bounded negative
-fixtures for missing/extra/duplicate/failed/skipped nodes, path override
-arguments, pair swaps, invalid chain/height, and tampered digests. The result
-verifier must recompute `resultSha256` from canonical JSON with
-`resultSha256` omitted; it must never hash an object containing its own digest.
+Reuse `Scripts/verify-s1-02.sh`, `Scripts/verify-s1-04.sh`,
+`Scripts/verify-xcresult.sh`, and `Scripts/verify-s1-04-live.sh` from the
+ThorChainKit checkout. Do not create THR-139 ThorChainKit allowlists or
+wrappers, and never pass a caller-supplied allowlist path. The existing
+scripts use `set -euo pipefail`, derive checked-in fixtures from their own
+repository root, create fresh result bundles, and reject stale bundles.
+Verify their checked-in shell syntax and existing negative fixtures before any
+consumer command.
 
 ### 3. Test-first UW contract
 
-**Owner:** ThorChainSwiftEngineer. **Dependency:** Step 2 artifacts and their
+**Owner:** ThorChainSwiftEngineer. **Dependency:** Step 2 gate checks and their
 static/negative checks. **Paths:** existing native RUNE provider, existing
 manager/descriptor validation seam if required by the failing exact equality
 tests, and `AppTests/ThorChainKitManagerTests`.
@@ -88,7 +75,11 @@ allowlist or silent deduplication is acceptable.
 
 **Owner:** ThorChainQAEngineer. **Dependency:** exact implementation head.
 
-Run simulator `xcodebuild` selectors:
+Run the existing `Scripts/verify-s1-02.sh` gate, then
+`Scripts/verify-s1-04.sh --expected-base <40-char SHA> --expected-head
+<40-char SHA>` with `THORCHAIN_SIMULATOR_UDID` set to the approved simulator.
+The S1-04 gate internally derives its complete checked-in test manifest and
+result-bundle verifier; it includes these required selectors:
 
 ```text
 ThorChainKitTests/EndpointPoolTests
@@ -97,8 +88,7 @@ ThorChainKitTests/LiveNodeProbeTests
 ThorChainKitTests/LiveThorNodeClientS1_04Tests
 ```
 
-Use the repository result-bundle allowlist/verifier. The complete-operation
-retry test is the existing
+Do not pass an allowlist path. The complete-operation retry test is the existing
 `testRetryRepeatsTheCompleteOperationOnTheNextFamily` case with an injected
 HTTP 503 from the first family; it preserves height/identity rejection.
 `swift test` is explicitly not a verification command for this iOS-only
@@ -125,10 +115,13 @@ settings.
 
 **Owner:** ThorChainQAEngineer. **Dependency:** Steps 4–6.
 
-Run the existing `$THORCHAINKIT_ROOT/Scripts/verify-s1-04-live.sh` runner once
-for each approved family (`Rorcual`, `IBS`, `Keplr`) with unique evidence roots
-and the already audited public inputs. Independently verify each fresh
-digest-only result with the existing S1-04 evidence verifier. This proves
+Run the existing `$THORCHAINKIT_ROOT/Scripts/verify-s1-04-live.sh` runner in
+three explicit invocations, one each for `rorcual-mainnet`, `ibs-mainnet`, and
+`keplr-mainnet`. Each invocation must set the exact fixed family ID, its fixed
+REST and RPC URL pair from the spec, the same reviewed expected HEAD, audited
+public existing/absent addresses, simulator UUID, and a unique evidence root.
+Independently verify each fresh digest-only result with the existing S1-04
+evidence verifier. This proves
 REST/RPC pair ownership, `thorchain-1`, accepted height/identity invariants,
 and evidence freshness; deterministic AppTests prove provider-pool selection
 with the complete three-family manifest. No Unstoppable acceptance transport,
