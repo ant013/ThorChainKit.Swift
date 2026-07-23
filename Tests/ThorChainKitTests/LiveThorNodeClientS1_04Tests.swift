@@ -63,20 +63,86 @@ final class LiveThorNodeClientS1_04Tests: XCTestCase {
     func testAccountAcceptsOnlyExactObservedAbsenceEnvelope() async throws {
         let requestedAddress = address()
         let exactMessage = "rpc error: code = NotFound desc = account \(requestedAddress.raw) not found: key not found"
-        let absent = S1_04HTTPTransport(responses: [
-            .status(404, body: #"{"code":5,"message":"\#(exactMessage)","details":[]}"#),
-        ])
-        let client = LiveThorNodeClient(transport: absent, maximumBalancePageCount: 4)
+        let shortMessage = "account \(requestedAddress.raw) not found"
+        let acceptedBodies = [
+            #"{"code":5,"message":"\#(exactMessage)","details":[]}"#,
+            #"{"code":5,"message":"\#(shortMessage)","details":[]}"#,
+        ]
+        for body in acceptedBodies {
+            let transport = S1_04HTTPTransport(responses: [
+                .status(404, body: body, height: "12345678"),
+            ])
+            let account = try await LiveThorNodeClient(
+                transport: transport,
+                maximumBalancePageCount: 4
+            ).account(address: requestedAddress, using: try endpointLease())
+            XCTAssertNil(account)
+        }
 
-        let account = try await client.account(address: requestedAddress, using: try endpointLease())
-        XCTAssertNil(account)
+        let rejectedBodies = [
+            #"{"code":5,"message":"account not found","details":[]}"#,
+            #"{"code":5,"message":"\#(shortMessage) extra","details":[]}"#,
+            #"{"code":5,"message":" \#(shortMessage)","details":[]}"#,
+            #"{"code":5,"message":"account \#(requestedAddress.raw)  not found","details":[]}"#,
+            #"{"code":5,"message":"\#(shortMessage)","details":[{}]}"#,
+            #"{"code":4,"message":"\#(shortMessage)","details":[]}"#,
+            #"{"code":5,"message":"account thor1foreign not found","details":[]}"#,
+            #"{"code":5,"message":"\#(shortMessage)","details":[],"message":"other"}"#,
+            #"{"code":5,"message":"\#(shortMessage)","details":[],"code":5}"#,
+            #"{"code":5,"message":"\#(shortMessage)","details":[]"#,
+        ]
+        for body in rejectedBodies {
+            let transport = S1_04HTTPTransport(responses: [
+                .status(404, body: body, height: "12345678"),
+            ])
+            await XCTAssertThrowsThorNodeError(.httpStatus(operation: .account, code: 404, retryAfterSeconds: nil)) {
+                try await LiveThorNodeClient(
+                    transport: transport,
+                    maximumBalancePageCount: 4
+                ).account(address: requestedAddress, using: try endpointLease())
+            }
+        }
 
-        let changed = S1_04HTTPTransport(responses: [
-            .status(404, body: #"{"code":5,"message":"account not found","details":[]}"#),
+        let heightMismatch = S1_04HTTPTransport(responses: [
+            .status(404, body: #"{"code":5,"message":"\#(shortMessage)","details":[]}"#, height: "12345677"),
         ])
-        let changedClient = LiveThorNodeClient(transport: changed, maximumBalancePageCount: 4)
-        await XCTAssertThrowsThorNodeError(.httpStatus(operation: .account, code: 404, retryAfterSeconds: nil)) {
-            try await changedClient.account(address: requestedAddress, using: try endpointLease())
+        await XCTAssertThrowsThorNodeError(.heightMismatch(expected: 12_345_678, actual: "12345677")) {
+            try await LiveThorNodeClient(
+                transport: heightMismatch,
+                maximumBalancePageCount: 4
+            ).account(address: requestedAddress, using: try endpointLease())
+        }
+
+        for height in [nil, "not-a-height"] {
+            let missingHeight = S1_04HTTPTransport(responses: [
+                .status(404, body: #"{"code":5,"message":"\#(shortMessage)","details":[]}"#, height: height),
+            ])
+            await XCTAssertThrowsThorNodeError(.heightMismatch(expected: 12_345_678, actual: height)) {
+                try await LiveThorNodeClient(
+                    transport: missingHeight,
+                    maximumBalancePageCount: 4
+                ).account(address: requestedAddress, using: try endpointLease())
+            }
+        }
+
+        let non404 = S1_04HTTPTransport(responses: [
+            .json(#"{"code":5,"message":"\#(shortMessage)","details":[]}"#, height: "12345678"),
+        ])
+        await XCTAssertThrowsThorNodeError(.malformedResponse(operation: .account)) {
+            try await LiveThorNodeClient(
+                transport: non404,
+                maximumBalancePageCount: 4
+            ).account(address: requestedAddress, using: try endpointLease())
+        }
+
+        let balances = S1_04HTTPTransport(responses: [
+            .status(404, body: #"{"code":5,"message":"\#(shortMessage)","details":[]}"#, height: "12345678"),
+        ])
+        await XCTAssertThrowsThorNodeError(.httpStatus(operation: .balances, code: 404, retryAfterSeconds: nil)) {
+            try await LiveThorNodeClient(
+                transport: balances,
+                maximumBalancePageCount: 4
+            ).balances(address: requestedAddress, using: try endpointLease())
         }
     }
 
@@ -274,7 +340,7 @@ private actor S1_04StartGate {
 private actor S1_04HTTPTransport: HTTPTransporting {
     enum Response: Sendable {
         case json(String, height: String?)
-        case status(Int, body: String, retryAfter: String? = nil)
+        case status(Int, body: String, height: String? = nil, retryAfter: String? = nil)
     }
 
     private var responses: [Response]
@@ -296,9 +362,10 @@ private actor S1_04HTTPTransport: HTTPTransporting {
             status = 200
             body = value
             if let height { headers["Grpc-Metadata-X-Cosmos-Block-Height"] = height }
-        case let .status(code, value, retryAfter):
+        case let .status(code, value, height, retryAfter):
             status = code
             body = value
+            if let height { headers["Grpc-Metadata-X-Cosmos-Block-Height"] = height }
             if let retryAfter { headers["Retry-After"] = retryAfter }
         }
         return (

@@ -29,8 +29,11 @@ struct LiveThorNodeClient: ThorNodeReading {
         )
         let (data, response) = try await send(request)
         guard (200..<300).contains(response.statusCode) else {
-            if response.statusCode == 404, isExactAbsence(data, address: address) {
-                return nil
+            if response.statusCode == 404 {
+                try requireHeight(response, expected: lease.cosmosReadHeight)
+                if isExactAbsence(data, address: address) {
+                    return nil
+                }
             }
             throw statusError(response, operation: .account)
         }
@@ -151,6 +154,9 @@ struct LiveThorNodeClient: ThorNodeReading {
     }
 
     private func isExactAbsence(_ data: Data, address: Address) -> Bool {
+        var scanner = JSONDuplicateKeyScanner(data: data)
+        guard scanner.containsDuplicateKeys() == false else { return false }
+
         let envelope: AbsenceEnvelope
         do {
             envelope = try JSONDecoder().decode(AbsenceEnvelope.self, from: data)
@@ -159,7 +165,10 @@ struct LiveThorNodeClient: ThorNodeReading {
         }
         return envelope.code == 5
             && envelope.details?.isEmpty == true
-            && envelope.message == "rpc error: code = NotFound desc = account \(address.raw) not found: key not found"
+            && [
+                "rpc error: code = NotFound desc = account \(address.raw) not found: key not found",
+                "account \(address.raw) not found",
+            ].contains(envelope.message)
     }
 
     private static func retryAfter(_ value: String?) -> Int? {
@@ -265,5 +274,113 @@ private indirect enum JSONValue: Decodable {
         do { self = .bool(try container.decode(Bool.self)); return } catch { }
         do { self = .object(try container.decode([String: JSONValue].self)); return } catch { }
         self = .array(try container.decode([JSONValue].self))
+    }
+}
+
+private struct JSONDuplicateKeyScanner {
+    private let bytes: [UInt8]
+    private var index = 0
+
+    init(data: Data) {
+        bytes = Array(data)
+    }
+
+    mutating func containsDuplicateKeys() -> Bool {
+        guard parseValue() == false else { return true }
+        skipWhitespace()
+        return index != bytes.count
+    }
+
+    private mutating func parseValue() -> Bool {
+        skipWhitespace()
+        guard let byte = peek else { return true }
+        switch byte {
+        case 0x7B: return parseObject()
+        case 0x5B: return parseArray()
+        case 0x22: return readString() == nil
+        default: return parseLiteral()
+        }
+    }
+
+    private mutating func parseObject() -> Bool {
+        guard consume(0x7B) else { return true }
+        skipWhitespace()
+        if consume(0x7D) { return false }
+
+        var keys = Set<String>()
+        while true {
+            skipWhitespace()
+            guard let key = readString() else { return true }
+            guard keys.insert(key).inserted else { return true }
+            skipWhitespace()
+            guard consume(0x3A), parseValue() == false else { return true }
+            skipWhitespace()
+            if consume(0x7D) { return false }
+            guard consume(0x2C) else { return true }
+        }
+    }
+
+    private mutating func parseArray() -> Bool {
+        guard consume(0x5B) else { return true }
+        skipWhitespace()
+        if consume(0x5D) { return false }
+
+        while true {
+            guard parseValue() == false else { return true }
+            skipWhitespace()
+            if consume(0x5D) { return false }
+            guard consume(0x2C) else { return true }
+        }
+    }
+
+    private mutating func parseLiteral() -> Bool {
+        let start = index
+        while let byte = peek, !isDelimiter(byte) {
+            index += 1
+        }
+        return index == start
+    }
+
+    private mutating func readString() -> String? {
+        guard consume(0x22) else { return nil }
+        let start = index
+        var escaped = false
+        while let byte = peek {
+            index += 1
+            if escaped {
+                escaped = false
+            } else if byte == 0x5C {
+                escaped = true
+            } else if byte == 0x22 {
+                var token = Data([0x22])
+                token.append(contentsOf: bytes[start..<(index - 1)])
+                token.append(0x22)
+                return try? JSONSerialization.jsonObject(with: token, options: [.fragmentsAllowed]) as? String
+            } else if byte < 0x20 {
+                return nil
+            }
+        }
+        return nil
+    }
+
+    private var peek: UInt8? {
+        index < bytes.count ? bytes[index] : nil
+    }
+
+    private mutating func consume(_ byte: UInt8) -> Bool {
+        guard peek == byte else { return false }
+        index += 1
+        return true
+    }
+
+    private mutating func skipWhitespace() {
+        while let byte = peek, byte == 0x09 || byte == 0x0A || byte == 0x0D || byte == 0x20 {
+            index += 1
+        }
+    }
+
+    private func isDelimiter(_ byte: UInt8) -> Bool {
+        byte == 0x09 || byte == 0x0A || byte == 0x0D || byte == 0x20
+            || byte == 0x2C || byte == 0x5D || byte == 0x7D
     }
 }

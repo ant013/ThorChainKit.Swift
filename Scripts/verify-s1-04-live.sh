@@ -16,6 +16,7 @@ fail() {
 required_variables=(
     THORCHAIN_S1_04_EXPECTED_HEAD
     THORCHAIN_S1_04_FAMILY_ID
+    THORCHAIN_S1_04_EVIDENCE_ROOT
     THORCHAIN_S1_04_COSMOS_URL
     THORCHAIN_S1_04_COMET_URL
     THORCHAIN_S1_04_EXISTING_ADDRESS
@@ -70,7 +71,7 @@ assert len(matches) == 1
 assert matches[0].get("state") in {"Shutdown", "Booted"}
 PY
 
-output_dir="$repository_root/build/s1-04-live/$expected_head"
+output_dir="$THORCHAIN_S1_04_EVIDENCE_ROOT/$expected_head"
 evidence="$output_dir/evidence.json"
 result_bundle="$output_dir/ThorChainKitLiveTests.xcresult"
 derived_data="$output_dir/DerivedData"
@@ -124,4 +125,4 @@ serialized = json.dumps(data, sort_keys=True)
 assert not re.search(r"(?i)(url|address|mnemonic|seed phrase|private key|api.?key|bearer)", serialized)
 PY
 
-echo "PASS verify-s1-04-live head=$expected_head evidence=build/s1-04-live/$expected_head/evidence.json"
+echo "PASS verify-s1-04-live head=$expected_head evidence=$evidence"
