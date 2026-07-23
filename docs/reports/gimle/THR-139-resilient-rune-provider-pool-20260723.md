@@ -5,7 +5,7 @@
 - Trust: **RED**
 - Repository: `$THORCHAINKIT_ROOT`
 - Base HEAD: 6462bec2604db4d3d05b3cfccde1ff5b768c86e0
-- Final HEAD: 836f563fc29ada2b65263addc7206ee7a3681857
+- Final HEAD: n/a
 - Gimle runtime: native-dev:0e9cf57c00ff970f584256126b500166580e7a72
 - Indexed commit: 8a63bfda028dd8543115b26dd777235a53304311
 
@@ -114,11 +114,11 @@ Bug statuses: {'workaround': 4}
 - D-001@2 ACCEPT: Host cardinality and allowlist semantics
 - D-002@2 ACCEPT: Exact approved-host equality
 - D-003@2 ACCEPT: REST/RPC family pairing
-- D-004@11 ACCEPT: Fixed three-family live invocations with bounded stored evidence
+- D-004@12 ACCEPT: Fixed three-family live invocations with bounded stored evidence
 - D-005@2 ACCEPT: Test-first execution order
-- D-006@11 ACCEPT: Repository-owned verifier artifacts and executable self-tests
-- D-007@11 ACCEPT: Identity and static preflight precede PASS-capable gates
-- D-008@9 ACCEPT: Existing S1-04 schema only
+- D-006@12 ACCEPT: Repository-owned verifier artifacts and executable self-tests
+- D-007@12 ACCEPT: Identity and static preflight precede PASS-capable gates
+- D-008@10 ACCEPT: Existing S1-04 schema only
 - D-009@5 ACCEPT: Revision delivery state
 - D-010@2 ACCEPT: Direct identity/height verification coverage
 

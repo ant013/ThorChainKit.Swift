@@ -381,7 +381,7 @@ an absent account with no balances. It rejects credential-bearing or URL-like
 strings in the serialized evidence and binds the fresh result bundle to the
 repository-derived S1-04 allowlist.
 
-This contract intentionally does not claim `manifestSha256`, `resultSha256`,
+This contract intentionally does not claim manifest or result digest fields,
 or REST/RPC URL records because the existing runner does not emit them. The
 three command invocations above are the source of the fixed URL-pair binding;
 the live result proves the supplied pair's family, chain, height, and account
