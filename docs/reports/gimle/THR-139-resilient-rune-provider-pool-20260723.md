@@ -5,7 +5,7 @@
 - Trust: **RED**
 - Repository: `$THORCHAINKIT_ROOT`
 - Base HEAD: 6462bec2604db4d3d05b3cfccde1ff5b768c86e0
-- Final HEAD: n/a
+- Final HEAD: 9a21c259867effeda362318bc8f690d2c9782f96
 - Gimle runtime: native-dev:0e9cf57c00ff970f584256126b500166580e7a72
 - Indexed commit: 8a63bfda028dd8543115b26dd777235a53304311
 
@@ -35,7 +35,8 @@ and evidence verifier to checked-in repository-relative paths; makes the XML
 preflight run under `set -euo pipefail` before every Xcode command; and defines
 exact manifest/REST/RPC/result schemas with reproducible digest vectors.
 
-Implementation and operator approval remain gated pending the next targeted
+The docs-only revision is pushed as commit `9a21c259867effeda362318bc8f690d2c9782f96`
+on the review branch. Implementation and operator approval remain gated pending the next targeted
 adversarial review.
 
 ### Calls by tool
