@@ -1,0 +1,40 @@
+{
+  "schema": "THR-135-s2-01-evidence-r4",
+  "run": "THR-135-s2-01-20260723-r4",
+  "phase": "adversarial_review",
+  "repository": {
+    "branch": "docs/THR-135-s2-01-formalization",
+    "superseded_head": "299a8ea7ff3ad7a93580ede5b39bd8872b015193",
+    "integration_head": "937332b2e7020868abcac8681ddd664b6e4bad72"
+  },
+  "artifacts": {
+    "spec_delta_matrix_test_plan": "639e8da5bbb329ff07e1c7ab4d9b59886afdf3e87e54ddff1474b8d90d937d21",
+    "implementation_plan": "fc34f5c9b5cdcf24e3541b61d3f27d929ed231fecbe327c914b8f7bde8889e75",
+    "analog_family": "7279cec526c0cd6a2b67407049080de263eddb2680077abb6083c8493eac626d",
+    "consolidated_test_plan": "efb853fd65011a24331606434794d0c59cc9d7d62c1490da0c2f7e22a4a0a0c6",
+    "canonical_sprint_report": "2db8faa208bc34abe4c9821124064b6d0897185e1a6e52b7e9a07374f7d3cdf5"
+  },
+  "analog": {
+    "primary": "C-S201-HANDLER",
+    "supporting": ["C-S201-COMPOSITION", "current ThorChainKit Kit/LifecycleGate seam"],
+    "rejected": ["C-S201-PRIVATEKEY-COUNTER"],
+    "claims": ["F-S201-HANDLER", "F-S201-COMPOSITION", "F-S201-BIGINT-CURRENT", "F-S201-ERROR-GRAPH-COMPILE"]
+  },
+  "current_dependency_evidence": {
+    "default_lock": "Package.resolved BigInt 5.7.0",
+    "declared_floor": "Package.swift BigInt from 5.0.0",
+    "floor_gate": "Scripts/verify-bigint-floor.sh",
+    "load_bearing_for": "THR-135",
+    "historical_non_load_bearing": "F-S201-BIGINT-SENDABLE-BOUNDARY revision 1, BigInt 5.3.0 and host-local /tmp compiler probe"
+  },
+  "decisions": {
+    "deferred_facade": "operationUnavailable after lifecycle admission; zero side effects",
+    "lifecycle_composition": "KitDependencies.SendRuntime + KitFactory paths + LifecycleCommandBridge activation/invalidation",
+    "generation_error": "quoteGenerationInvalidated via bounded internal tombstone after rapid restart",
+    "broadcast_codespace": "private raw value projected to sdk/thorchain/other",
+    "reflection": "CustomDebugStringConvertible + CustomReflectable fixed redacted mirror",
+    "verification": "local MacBook tests and explicit compile-negative/concurrency harnesses; CI build-only"
+  },
+  "gimle_trust": "RED",
+  "trust_reason": "Gimle mapping/session defects remain quarantined; every load-bearing selected claim is independently verified with current-tree rg/Git evidence."
+}

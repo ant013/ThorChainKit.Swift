@@ -3,8 +3,8 @@
 ## Scope and phase
 
 - Slice: S2-01 immutable send/quote domain and stable public errors.
-- Run: `THR-135-s2-01-20260723-r3`.
-- Current phase: `adversarial_review` after discovery-1 docs-only rework.
+- Run: `THR-135-s2-01-20260723-r4`.
+- Current phase: `adversarial_review` after supervisor exact-head corrections.
 - Repository branch: `docs/THR-135-s2-01-formalization`.
 - Integration base: `origin/main` at `937332b2e7020868abcac8681ddd664b6e4bad72`.
 - Canonical architecture source preserved from `518835315a65996b9321665213adb0516503df65`.
@@ -35,10 +35,10 @@ The UW working copy is intentionally dirty with local THR-104/THR-139 integratio
 ## Artifact binding
 
 - Spec/delta-matrix/test-plan digest: `639e8da5bbb329ff07e1c7ab4d9b59886afdf3e87e54ddff1474b8d90d937d21`.
-- Implementation-plan digest: `d6590930f8797ccf49622d10bf6a9274315bb00cee93f3cf546f25c899d9ab4e`.
+- Implementation-plan digest: `fc34f5c9b5cdcf24e3541b61d3f27d929ed231fecbe327c914b8f7bde8889e75`.
 - Analog-family digest: `7279cec526c0cd6a2b67407049080de263eddb2680077abb6083c8493eac626d`.
 - Consolidated-test-plan digest: `efb853fd65011a24331606434794d0c59cc9d7d62c1490da0c2f7e22a4a0a0c6`.
-- Committed evidence manifest digest: `e2325dacc2fe6075554e8916ecebb23fe77cf61eee8e5c6695caff6ec76a8bdc`.
+- Committed evidence manifest digest: `07e01a28a91c6348c32cf47a53f5a7845c9e8df72a60cd83bff30a027cb91c35` (`THR-135-s2-01-evidence-r4.json`).
 - The repository report and manifest are the immutable sanitized evidence
   binding for this revision; no mutable external audit root is required to
   reconstruct the selected claims, candidate IDs, decision IDs, or artifact

@@ -261,10 +261,14 @@ deltas.
   - Serena: n/a
   - rg: Exact UW 8a63bfda PreSendView lines 74-79 and 183-194 use direct navigation; SendView lines 69-83 shows generic unexpected error; OpenCryptoPayManager:64 and OpenCryptoPaySendHandlerFactory:14 synchronously call SendHandlerFactory.
   - Anchors: uw-ios-app@8a63bfda:packages/WalletCore/Sources/WalletCore/Modules/SendNew/PreSendView.swift:74, uw-ios-app@8a63bfda:packages/WalletCore/Sources/WalletCore/Modules/SendNew/SendView.swift:69, uw-ios-app@8a63bfda:packages/WalletCore/Sources/WalletCore/Core/OpenCryptoPay/OpenCryptoPayManager.swift:64
-| F-S201-BIGINT-SENDABLE-BOUNDARY | 1 | yes | MATCH | yes | rg | n/a | valid | known_current | BigInt 5.3.0 BigUInt is not Sendable; Data-backed amount/pending/error snapshots compile under Swift 5 complete checking while an Error case storing BigUInt fails. |
+| F-S201-BIGINT-SENDABLE-BOUNDARY | 1 | no | MATCH | no | rg | n/a | valid | historical_superseded | Historical 5.3.0/compiler-probe evidence retained for audit only; it is non-load-bearing for THR-135 and its host-local `/tmp` anchor is not delivery evidence. |
   - Serena: n/a
-  - rg: Pinned BigInt module plus Xcode Swift 6.2.4 probes: revision7 Data-backed SendAmount/PendingTransaction/NativeFeeChange/SendError passes; InvalidSendError(previous: BigUInt,current: BigUInt) fails with the expected Sendable diagnostic.
-  - Anchors: bigint@0ed110f7:Sources/BigUInt.swift:16, compiler-probe:/tmp/thor-s2-sendable.RdvsEf/revision7_probe.swift
+  - rg: Historical pinned-module/compiler-probe result; superseded by the current THR-135 dependency evidence below.
+  - Anchors: bigint@0ed110f7:Sources/BigUInt.swift:16, compiler-probe:/tmp/thor-s2-sendable.RdvsEf/revision7_probe.swift (historical only)
+| F-S201-BIGINT-CURRENT | 2 | yes | MATCH | yes | rg | n/a | valid | known_current | The current THR-135 worktree locks BigInt 5.7.0, declares the compatible 5.0.0 floor, and binds the exact floor verification to the portable THR-135 evidence manifest. |
+  - Serena: n/a (Swift language server unavailable in the exact worktree)
+  - rg: `Package.resolved` pins BigInt 5.7.0; `Package.swift` declares `from: "5.0.0"`; `Scripts/verify-bigint-floor.sh` is the executable floor gate; the THR-135 manifest records these paths as the load-bearing dependency evidence.
+  - Anchors: `thorchain-s2-01@final:Package.resolved:5-10`, `thorchain-s2-01@final:Package.swift:11`, `thorchain-s2-01@final:Scripts/verify-bigint-floor.sh`, `docs/reports/gimle/THR-135-s2-01-evidence-r4.json`
 | F-S202-LIVE-HEIGHT-PROOF | 1 | yes | MATCH | yes | rg | n/a | valid | known_current | A send provider must prove each returned value by its own route-specific height mode; current official Liquify REST strips the Cosmos height response header on required successf... |
   - Serena: n/a
   - rg: Fresh independent live probes at height 27048835 returned HTTP 200 without x-cosmos-block-height for Liquify network, exact-key Mimir and spendable-bank routes; official THOR developer docs list Liquify API and paired RPC roles.
