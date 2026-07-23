@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool
 
-**Design revision:** 10 — discovery 2/2, closure 5/5 pending targeted review.
+**Design revision:** 11 — discovery 2/2, closure 5/5 pending targeted review.
 **Status:** revised
 design; implementation remains blocked until this exact revision is accepted by
 the adversarial reviewer and explicitly approved by the operator.
@@ -17,11 +17,12 @@ contracts.
 - `origin/main` at `6462bec2604db4d3d05b3cfccde1ff5b768c86e0` is the approved
   ThorChainKit documentation-only base. THR-138 is complete and explicitly
   activates this correction as the sole current slice.
-- The exact UW v0.50 Development checkout is the implementation and acceptance
-  substrate. Its current dirty state is evidence-only during design; it will
-  not be edited until this revision is approved. UW edits and evidence remain
-  local to that checkout: this ThorChainKit branch does not commit, push, PR,
-  or merge UW files.
+- The operator-approved exact UW v0.50 Development checkout resolves to
+  `$UW_ROOT`, expected HEAD `8a63bfda028dd8543115b26dd777235a53304311`, and
+  branch `local/THR-104-thorchain-lifecycle-v0.50`. Its intentionally dirty
+  S1-07 state is evidence-only during design; it will not be edited until this
+  revision is approved. UW edits and evidence remain local to that checkout:
+  this ThorChainKit branch does not commit, push, PR, or merge UW files.
 - The six public endpoint entries below were independently verified read-only
   on 2026-07-23. Base paths are significant because ThorChainKit appends request
   paths to the configured URL.
@@ -43,11 +44,15 @@ In scope:
   separate fixture pass.
 - Operator-local UW verification artifacts: `$UW_ROOT/Scripts/verify-thr-139-scheme.py`
   and `$UW_ROOT/Scripts/verify-thr-139-uw-tests.py`, plus the established
-  `$UW_ROOT/Scripts/capture-s1-07-inputs.py` manifest contract. The implementation
+  ThorChainKit utility `$THORCHAINKIT_ROOT/Scripts/capture-s1-07-inputs.py`.
+  Invoke that utility twice with `--root "$UW_ROOT"` and
+  `--root-label before|after`. The implementation
   owner authors and negatively verifies the two verifier scripts in the exact
   UW checkout before the first Xcode command. Before and after local work, the
   capture contract records UW `HEAD`, `statusSha256`, and per-file SHA-256
-  records; the two snapshots must bind all evidence to the same UW `HEAD`.
+  records; each manifest must bind `head` to
+  `8a63bfda028dd8543115b26dd777235a53304311`, and the two snapshots must bind
+  all evidence to the same UW `HEAD`.
   If the established capture script is absent, the local preflight fails closed;
   do not substitute an ad hoc manifest. None of these local artifacts is copied
   into or committed by this repository.
@@ -235,9 +240,11 @@ selector is added to Unstoppable or ThorChainKit.
    mutants, asserts every rejection, and exits nonzero if a mutant passes.
    Run `python3 -m py_compile` and both self-tests before the first Xcode
    command; no prose-only negative claim is accepted. Capture the UW manifest
-   before and after local edits with the established `capture-s1-07-inputs.py`
-   contract and require equal `HEAD` values plus recorded `statusSha256` and
-   per-file SHA-256 maps.
+   before and after local edits with
+   `$THORCHAINKIT_ROOT/Scripts/capture-s1-07-inputs.py --root "$UW_ROOT"`
+   and labels `before` and `after`; require each manifest `head` to equal
+   `8a63bfda028dd8543115b26dd777235a53304311`, equal before/after `HEAD`
+   values, and recorded `statusSha256` and per-file SHA-256 maps.
 2. **Pre-edit contract tests (ThorChainSwiftEngineer).** In the exact UW
    checkout, run the operator-local scheme preflight before this first Xcode
    command, then replace the old one-Liquify expectation with exact order, URL,

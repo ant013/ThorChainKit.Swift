@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool plan
 
-Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 10. Discovery 2/2; closure 5/5 pending targeted review.
+Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 11. Discovery 2/2; closure 5/5 pending targeted review.
 
 No implementation, UW commit, push, PR, CI, Maestro, or remote smoke is
 authorized until the exact spec and this plan are explicitly approved. This
@@ -9,7 +9,9 @@ local and finish under an operator-controlled commit gate.
 
 ## Fixed substrate
 
-- Exact local UW v0.50 Development checkout: `$UW_ROOT`
+- Exact local UW v0.50 Development checkout: `$UW_ROOT`, expected HEAD
+  `8a63bfda028dd8543115b26dd777235a53304311`, branch
+  `local/THR-104-thorchain-lifecycle-v0.50`
 - ThorChainKit checkout: `$THORCHAINKIT_ROOT`
 - UW project/scheme/configuration: `Unstoppable/Unstoppable.xcodeproj`,
   `Development`, `Debug-Dev`
@@ -20,7 +22,7 @@ local and finish under an operator-controlled commit gate.
 
 ### 1. Fresh bounded design review
 
-**Owner:** ThorChainCodeReviewer. **Dependencies:** pushed revision-10 spec,
+**Owner:** ThorChainCodeReviewer. **Dependencies:** pushed revision-11 spec,
 plan, and Gimle report. Recheck only the frozen D-001 through D-010 allowlist,
 discovery 2/2, closure 5/5. Verify that no UW acceptance transport, launch-
 argument branch, adapter sink, or production observation callback is introduced;
@@ -74,13 +76,23 @@ skipped test node. Both expose runnable `--self-test` modes that create bounded
 temporary mutants and return nonzero if any mutant passes. Run
 `python3 -m py_compile` and both self-tests before the first `xcodebuild`
 command. QA invokes these exact local paths; no inline replacement verifier or
-caller-supplied allowlist is permitted. Before and after local edits, run the
-established `Scripts/capture-s1-07-inputs.py` contract. Each manifest must record
-UW `HEAD`, `statusSha256`, and per-file SHA-256 records; the before/after
-manifests must have equal `HEAD` values. Do not copy these artifacts into this
-repository or commit/push them from this branch. If the established capture
-script is absent, stop before implementation; do not replace it with an ad hoc
-manifest command.
+caller-supplied allowlist is permitted. Before and after local edits, invoke
+the established ThorChainKit utility twice:
+
+```text
+python3 "$THORCHAINKIT_ROOT/Scripts/capture-s1-07-inputs.py" \
+  --root "$UW_ROOT" --root-label before > "$THR139_UW_BEFORE_MANIFEST"
+python3 "$THORCHAINKIT_ROOT/Scripts/capture-s1-07-inputs.py" \
+  --root "$UW_ROOT" --root-label after > "$THR139_UW_AFTER_MANIFEST"
+```
+
+Each manifest must record UW `HEAD`, `statusSha256`, and per-file SHA-256
+records; each `head` must equal
+`8a63bfda028dd8543115b26dd777235a53304311`, and the before/after manifests
+must have equal `HEAD` values. Do not copy these artifacts into this repository
+or commit/push them from this branch. If the ThorChainKit capture utility is
+absent, stop before implementation; do not replace it with an ad hoc manifest
+command.
 
 ```text
 set -euo pipefail

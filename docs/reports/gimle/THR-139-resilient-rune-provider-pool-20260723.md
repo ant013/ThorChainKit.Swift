@@ -125,6 +125,9 @@ Bug statuses: {'workaround': 4}
 - D-012@2 ACCEPT: Required ThorChainKit gate repair
 - D-013@2 ACCEPT: URL-pair evidence wording
 - D-014@2 ACCEPT: Closure artifact consistency
+- D-015@1 ACCEPT: Approved UW workspace identity
+- D-016@1 ACCEPT: ThorChainKit capture utility ownership
+- D-017@1 ACCEPT: Approved manifest binding
 
 ## Verification and acceptance
 
