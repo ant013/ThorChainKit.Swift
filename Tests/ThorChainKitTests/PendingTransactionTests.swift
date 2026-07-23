@@ -25,6 +25,18 @@ final class PendingTransactionTests: XCTestCase {
         XCTAssertEqual(sorted.map { $0.transactionId.hash }, [String(repeating: "A", count: 64), String(repeating: "C", count: 64), String(repeating: "B", count: 64)])
     }
 
+    func testPendingRejectsNonCanonicalAmountMagnitudes() {
+        XCTAssertFalse(PendingTransaction.isCanonicalMagnitude(Data(), allowingZero: false))
+        XCTAssertFalse(PendingTransaction.isCanonicalMagnitude(Data([0]), allowingZero: false))
+        XCTAssertFalse(PendingTransaction.isCanonicalMagnitude(Data([0, 100]), allowingZero: false))
+    }
+
+    func testPendingRejectsNonCanonicalFeeMagnitudesButAllowsEmptyZero() {
+        XCTAssertTrue(PendingTransaction.isCanonicalMagnitude(Data(), allowingZero: true))
+        XCTAssertFalse(PendingTransaction.isCanonicalMagnitude(Data([0]), allowingZero: true))
+        XCTAssertFalse(PendingTransaction.isCanonicalMagnitude(Data([0, 2]), allowingZero: true))
+    }
+
     private func pending(id: String, createdAt: TimeInterval, state: PendingTransaction.State) throws -> PendingTransaction {
         PendingTransaction(
             transactionId: try XCTUnwrap(TransactionID(hash: String(repeating: id, count: 64))),

@@ -27,6 +27,10 @@ public struct PendingTransaction: Sendable, CustomDebugStringConvertible, Custom
         retryAvailability: RetryAvailability,
         createdAt: Date
     ) {
+        precondition(
+            Self.isCanonicalMagnitude(amountMagnitude, allowingZero: false)
+                && Self.isCanonicalMagnitude(nativeFeeMagnitude, allowingZero: true)
+        )
         self.transactionId = transactionId
         self.recipient = recipient
         self.amountMagnitude = amountMagnitude
@@ -52,6 +56,13 @@ public struct PendingTransaction: Sendable, CustomDebugStringConvertible, Custom
             "retryAvailability": retryAvailability,
             "createdAt": createdAt
         ], displayStyle: .struct)
+    }
+
+    internal static func isCanonicalMagnitude(_ data: Data, allowingZero: Bool) -> Bool {
+        let value = BigUInt(data)
+        if data.isEmpty { return allowingZero && value == 0 }
+        guard value > 0 else { return false }
+        return value.serialize() == data
     }
 }
 
