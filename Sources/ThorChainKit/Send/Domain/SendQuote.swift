@@ -17,6 +17,7 @@ struct QuoteReviewSnapshot: Equatable, Hashable, Sendable {
     let totalDebitMagnitude: Data
     let memo: String?
     let acceptedHeight: Int64
+    let expiresAt: Date
     let accountNumber: UInt64
     let sequence: UInt64
     let providerFamilyID: String
@@ -41,6 +42,7 @@ public struct SendQuote: Sendable, CustomDebugStringConvertible, CustomReflectab
     private let nativeFeeMagnitude: Data
     private let totalDebitMagnitude: Data
     private let authorityRecord: QuoteAuthorityRecord
+    private let sender: String
 
     internal init(
         recipient: Address,
@@ -51,7 +53,8 @@ public struct SendQuote: Sendable, CustomDebugStringConvertible, CustomReflectab
         memo: String?,
         acceptedHeight: Int64,
         expiresAt: Date,
-        authorityRecord: QuoteAuthorityRecord
+        authorityRecord: QuoteAuthorityRecord,
+        sender: String
     ) {
         self.recipient = recipient
         self.amountMagnitude = amountMagnitude
@@ -62,19 +65,37 @@ public struct SendQuote: Sendable, CustomDebugStringConvertible, CustomReflectab
         self.acceptedHeight = acceptedHeight
         self.expiresAt = expiresAt
         self.authorityRecord = authorityRecord
+        self.sender = sender
     }
 
     internal var internalAuthorityRecord: QuoteAuthorityRecord { authorityRecord }
 
     internal var hasConsistentAuthorityProjection: Bool {
         let snapshot = authorityRecord.snapshot
-        return snapshot.recipient == recipient.raw
+        let amountValue = BigUInt(amountMagnitude)
+        let feeValue = BigUInt(nativeFeeMagnitude)
+        let totalDebitValue = BigUInt(totalDebitMagnitude)
+        return Self.isCanonicalMagnitude(amountMagnitude, value: amountValue, allowingZero: false)
+            && Self.isCanonicalMagnitude(nativeFeeMagnitude, value: feeValue, allowingZero: true)
+            && Self.isCanonicalMagnitude(totalDebitMagnitude, value: totalDebitValue, allowingZero: false)
+            && amountValue + feeValue == totalDebitValue
+            && !sender.isEmpty
+            && !snapshot.providerFamilyID.isEmpty
+            && snapshot.recipient == recipient.raw
+            && snapshot.sender == sender
+            && snapshot.expiresAt == expiresAt
             && snapshot.requestedAmountIsMaximum == isMaximum
             && snapshot.amountMagnitude == amountMagnitude
             && snapshot.nativeFeeMagnitude == nativeFeeMagnitude
             && snapshot.totalDebitMagnitude == totalDebitMagnitude
             && snapshot.memo == memo
             && snapshot.acceptedHeight == acceptedHeight
+    }
+
+    private static func isCanonicalMagnitude(_ data: Data, value: BigUInt, allowingZero: Bool) -> Bool {
+        if data.isEmpty { return allowingZero && value == 0 }
+        guard value > 0 else { return false }
+        return value.serialize() == data
     }
 
     public var debugDescription: String {

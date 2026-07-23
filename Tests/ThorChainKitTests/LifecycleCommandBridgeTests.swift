@@ -81,6 +81,34 @@ final class LifecycleCommandBridgeTests: XCTestCase {
         XCTAssertEqual(failureEvents, ["start", "cancelRefresh:invalidated", "cancelStop"])
     }
 
+    func testStopClosesAdmissionBeforeQueuedCloseWork() async throws {
+        let address = try sendTestAddress()
+        let runtime = SendRuntime(address: address)
+        let gate = LifecycleGate(
+            dispatcher: DispatchQueue(label: "s2-01-admission-gate"),
+            address: address,
+            key: StorageKey(persistenceNamespace: String(repeating: "a", count: 64)),
+            storage: BridgeStorage(),
+            publishing: StatePublishing()
+        )
+        let bridge = LifecycleCommandBridge(
+            syncer: BridgeSyncer(runtime: runtime),
+            gate: gate,
+            sendRuntime: runtime
+        )
+
+        bridge.start(sequence: 1).wait()
+        _ = bridge.stop(sequence: 2)
+
+        let transactionId = try XCTUnwrap(TransactionID(hash: String(repeating: "A", count: 64)))
+        do {
+            _ = try await runtime.retryBroadcast(transactionId: transactionId, acceptingNativeFee: nil)
+            XCTFail("stop must close send admission before queued close work")
+        } catch let error as SendError {
+            XCTAssertEqual(error, .kitNotStarted)
+        }
+    }
+
     func testRapidRestartRejectsLateFailureFromPreviousGeneration() async throws {
         let address = try sendTestAddress()
         let publishing = StatePublishing()

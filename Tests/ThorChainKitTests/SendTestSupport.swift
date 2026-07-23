@@ -36,6 +36,7 @@ func issueTestQuote(
     let nativeFeeMagnitude = SendMagnitude(nativeFee).data
     let totalDebitMagnitude = SendMagnitude(amount + nativeFee).data
     return try store.issue(
+        sender: try sendTestAddress(),
         recipient: try sendTestAddress(),
         amountMagnitude: amountMagnitude,
         isMaximum: false,
@@ -43,7 +44,6 @@ func issueTestQuote(
         totalDebitMagnitude: totalDebitMagnitude,
         memo: memo,
         acceptedHeight: 12,
-        expiresAt: Date(timeIntervalSince1970: 12),
         generation: generation
     )
 }

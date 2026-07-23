@@ -92,7 +92,7 @@ import sys
 
 case = sys.argv[2]
 body = {
-    "SendQuote": "import ThorChainKit\nimport Foundation\nlet _ = SendQuote(recipient: fatalError(), amount: 1, isMaximum: false, nativeFee: 0, totalDebit: 1, memo: nil, acceptedHeight: 1, expiresAt: Date())\n",
+    "SendQuote": "import ThorChainKit\nimport Foundation\nlet _ = SendQuote(recipient: fatalError(), amountMagnitude: Data(), isMaximum: false, nativeFeeMagnitude: Data(), totalDebitMagnitude: Data(), memo: nil, acceptedHeight: 1, expiresAt: Date(), authorityRecord: fatalError(), sender: \"sender\")\n",
     "SigningRequest": "import ThorChainKit\nimport Foundation\nlet _ = SigningRequest(digest: Data(repeating: 0, count: 32), serializedSignDoc: Data(), chainId: \"chain\", requestId: \"id\", summary: fatalError())\n",
     "TransactionID": "import ThorChainKit\nlet _ = TransactionID(hash: String(repeating: \"A\", count: 64))\n",
     "QuoteChanges": "import ThorChainKit\nlet _ = QuoteChanges(validating: [])\n",

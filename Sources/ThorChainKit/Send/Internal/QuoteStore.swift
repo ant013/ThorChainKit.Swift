@@ -1,3 +1,4 @@
+import BigInt
 import Foundation
 
 protocol SendMonotonicClock: Sendable {
@@ -21,6 +22,7 @@ final class QuoteStore: @unchecked Sendable {
     }
 
     func issue(
+        sender: Address,
         recipient: Address,
         amountMagnitude: Data,
         isMaximum: Bool,
@@ -28,7 +30,6 @@ final class QuoteStore: @unchecked Sendable {
         totalDebitMagnitude: Data,
         memo: String?,
         acceptedHeight: Int64,
-        expiresAt: Date,
         generation: UInt64,
         accountNumber: UInt64 = 0,
         sequence: UInt64 = 0,
@@ -37,6 +38,16 @@ final class QuoteStore: @unchecked Sendable {
         var random = SystemRandomNumberGenerator()
         lock.lock(); defer { lock.unlock() }
         purgeExpiredLocked()
+        let amount = BigUInt(amountMagnitude)
+        let fee = BigUInt(nativeFeeMagnitude)
+        let totalDebit = BigUInt(totalDebitMagnitude)
+        guard Self.isCanonicalMagnitude(amountMagnitude, value: amount, allowingZero: false),
+              Self.isCanonicalMagnitude(nativeFeeMagnitude, value: fee, allowingZero: true),
+              Self.isCanonicalMagnitude(totalDebitMagnitude, value: totalDebit, allowingZero: false),
+              amount + fee == totalDebit,
+              !providerFamilyID.isEmpty
+        else { throw SendError.operationUnavailable }
+        let deadlineDate = Date().addingTimeInterval(10)
         let (deadline, overflow) = clock.now.addingReportingOverflow(10_000_000_000)
         guard !overflow else { throw SendError.operationUnavailable }
         for _ in 0..<8 {
@@ -49,7 +60,7 @@ final class QuoteStore: @unchecked Sendable {
                     token: token
                 ),
                 snapshot: QuoteReviewSnapshot(
-                    sender: "",
+                    sender: sender.raw,
                     recipient: recipient.raw,
                     requestedAmountIsMaximum: isMaximum,
                     amountMagnitude: amountMagnitude,
@@ -57,6 +68,7 @@ final class QuoteStore: @unchecked Sendable {
                     totalDebitMagnitude: totalDebitMagnitude,
                     memo: memo,
                     acceptedHeight: acceptedHeight,
+                    expiresAt: deadlineDate,
                     accountNumber: accountNumber,
                     sequence: sequence,
                     providerFamilyID: providerFamilyID
@@ -72,8 +84,9 @@ final class QuoteStore: @unchecked Sendable {
                 totalDebitMagnitude: totalDebitMagnitude,
                 memo: memo,
                 acceptedHeight: acceptedHeight,
-                expiresAt: expiresAt,
-                authorityRecord: record
+                expiresAt: deadlineDate,
+                authorityRecord: record,
+                sender: sender.raw
             )
         }
         throw SendError.operationUnavailable
@@ -131,5 +144,11 @@ final class QuoteStore: @unchecked Sendable {
     private func purgeExpiredLocked() {
         let now = clock.now
         records = records.filter { record, _ in now < record.envelope.deadline }
+    }
+
+    private static func isCanonicalMagnitude(_ data: Data, value: BigUInt, allowingZero: Bool) -> Bool {
+        if data.isEmpty { return allowingZero && value == 0 }
+        guard value > 0 else { return false }
+        return value.serialize() == data
     }
 }

@@ -51,6 +51,9 @@ final class LifecycleCommandBridge: KitLifecycle {
         tail?.cancel()
         let invalidatedGeneration = activeGeneration
         activeGeneration = nil
+        if let invalidatedGeneration {
+            sendRuntime.invalidateImmediately(generation: invalidatedGeneration)
+        }
         switch gate.close() {
         case let .success(generation):
             return enqueue { [syncer, sendRuntime] in

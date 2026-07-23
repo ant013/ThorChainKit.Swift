@@ -17,8 +17,14 @@ final class SendReflectionTests: XCTestCase {
             chainId: "thorchain-1",
             requestId: "opaque",
             summary: SigningRequest.Summary(
-                sender: "sender", recipient: "recipient", amount: "1", nativeFee: "2",
-                totalDebit: "3", memo: nil, accountNumber: "4", sequence: "5"
+                sender: "thor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhudkmnn2",
+                recipient: "thor1tgxm5jw6hrlvslrd6lqpk4jwuu4g29dxytrean",
+                amount: "100.00000000",
+                nativeFee: "0.00000000",
+                totalDebit: "100.00000000",
+                memo: nil,
+                accountNumber: "15",
+                sequence: "5"
             )
         )!
         let pending = PendingTransaction(

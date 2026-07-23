@@ -31,7 +31,8 @@ final class SendQuoteTests: XCTestCase {
             memo: quote.memo,
             acceptedHeight: quote.acceptedHeight,
             expiresAt: quote.expiresAt,
-            authorityRecord: quote.internalAuthorityRecord
+            authorityRecord: quote.internalAuthorityRecord,
+            sender: quote.internalAuthorityRecord.snapshot.sender
         )
 
         XCTAssertFalse(tampered.hasConsistentAuthorityProjection)
