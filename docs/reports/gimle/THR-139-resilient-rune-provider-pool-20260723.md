@@ -3,7 +3,7 @@
 - Task: 13b614f7-ca87-4777-9694-15639e12c283
 - Workflow/phase: analog_change / adversarial_review
 - Trust: **RED**
-- Repository: /Users/ant013/Data/AI/thorchain-worktrees/s1-07-unstoppable-rune-surface
+- Repository: `$THORCHAINKIT_ROOT`
 - Base HEAD: 6462bec2604db4d3d05b3cfccde1ff5b768c86e0
 - Final HEAD: n/a
 - Gimle runtime: native-dev:0e9cf57c00ff970f584256126b500166580e7a72
