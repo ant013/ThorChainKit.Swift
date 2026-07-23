@@ -1,4 +1,4 @@
-# Gimle reliability report: THR-139-resilient-rune-provider-pool-20260723-r1
+# Gimle reliability report: THR-139-resilient-rune-provider-pool-20260723-r2
 
 - Task: 13b614f7-ca87-4777-9694-15639e12c283
 - Workflow/phase: analog_change / adversarial_review
@@ -22,6 +22,35 @@
 - Replacement/fallback claims: 1
 - Bugs: 4
 - Analog slices/candidates: 1/5
+
+## Revision 2 review correction
+
+The prior bounded review found four high verification gaps and one medium
+operability gap. Revision 3 of the spec and plan resolves the high findings as
+follows:
+
+- D-004/D-008: `THR139_OWNER_FAMILY` is now a required owner-observation
+  contract. The test-only app seam must emit the selected family ID; missing or
+  mismatched observation fails closed, so height/order selection cannot be
+  misreported as three-family coverage.
+- D-005/D-010: the failover proof now names the existing
+  `testRetryRepeatsTheCompleteOperationOnTheNextFamily` seam and its injected
+  HTTP 503 (`ThorNodeReadError.httpStatus`, code 503). No unimplemented
+  transport-failure seam is claimed.
+- D-006: the ThorChainKit command now names `$THR139_THOR_ALLOWLIST`, writes
+  `$THR139_THOR_RESULT_BUNDLE`, and invokes `Scripts/verify-xcresult.sh`; the
+  allowlist verifier requires exact test names and zero skips.
+- D-007: UW validation now inspects the shared Development scheme for an
+  unsuppressed `AppTests` testable, writes a UW result bundle, checks its exact
+  test nodes/summary, and gives an explicit `Debug-Dev` simulator build.
+- D-008 (medium): the live runner now has an exact three-pass invocation,
+  canonical JSON field schema, lowercase SHA-256 over canonical JSON, and an
+  independent evidence-verifier command. Reproducibility remains a medium
+  implementation follow-up until those scripts exist; it is not a design gate.
+
+Discovery remains frozen at 2/2 and closure remains 0/5. No implementation is
+authorized until this docs-only revision is freshly adversarially reviewed and
+explicitly approved.
 
 ### Calls by tool
 
@@ -114,15 +143,22 @@ Bug statuses: {'workaround': 4}
 - D-001@2 ACCEPT: Host cardinality and allowlist semantics
 - D-002@2 ACCEPT: Exact approved-host equality
 - D-003@2 ACCEPT: REST/RPC family pairing
-- D-004@2 ACCEPT: Deterministic live-smoke harness
-- D-005@2 ACCEPT: Test-first execution order
-- D-006@2 ACCEPT: ThorChainKit command viability
-- D-007@2 ACCEPT: WalletCore testable selector
-- D-008@2 ACCEPT: Live-smoke operability evidence
+- D-004@3 ACCEPT: Owner-selection observation is fail-closed
+- D-005@3 ACCEPT: Existing HTTP 503 retry seam is named exactly
+- D-006@3 ACCEPT: ThorChainKit result verifier and allowlist are explicit
+- D-007@3 ACCEPT: UW scheme testable, result bundle, and build checks are explicit
+- D-008@3 ACCEPT: Live-smoke invocation and artifact verification are reproducible
 - D-009@3 ACCEPT: Revision delivery state
 - D-010@2 ACCEPT: Direct identity/height verification coverage
 
 ## Verification and acceptance
+
+- Docs-only revision check: pending push; verify `git diff --name-only` contains
+  only the spec, plan, and this report.
+- Adversarial review state: fresh bounded review required after push; discovery
+  2/2, closure 0/5.
+- Implementation, simulator, UW, and live checks: intentionally unrun pending
+  explicit operator approval.
 
 
 ## Bugs and limitations
