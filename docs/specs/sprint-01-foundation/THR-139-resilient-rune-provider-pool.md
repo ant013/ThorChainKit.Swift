@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool
 
-**Design revision:** 5 — discovery 2/2, closure 2/5 pending targeted review.
+**Design revision:** 6 — discovery 2/2, closure 2/5 pending targeted review.
 **Status:** revised
 design; implementation remains blocked until this exact revision is accepted by
 the adversarial reviewer and explicitly approved by the operator.
@@ -39,8 +39,15 @@ In scope:
   only scripted Comet heights so Rorcual, IBS, and Keplr are each selected in a
   separate fixture pass.
 - Live actual-owner observation through the launched kit's existing
-  `accountState?.providerFamilyId` boundary. A missing or unapproved observed
-  family fails closed; live input does not request or force a family.
+  `IThorChainKit.syncStatePublisher` subscription in
+  `packages/WalletCore/Sources/WalletCore/Core/Adapters/ThorChain/ThorChainAdapter.swift`.
+  The
+  permitted `THR139_LIVE_EVIDENCE` test-only sink writes an atomic
+  `Documents/THR139/live-state.json` record only for `.synced(AccountState)`.
+  `.idle(cached: true)` and `.notSynced(..., cached: ...)` are never accepted as
+  live owner evidence. The runner removes the prior container record, launches
+  the app, and accepts only a new post-launch record; missing or unapproved
+  observed family fails closed and live input does not request or force a family.
 
 Out of scope:
 
@@ -118,7 +125,7 @@ Rejected counterexamples:
 | URL trust boundary | Existing HTTPS and URL-component validation | Compare exactly six role-bound records; reject subset/superset and cross-family pairs | Duplicate, foreign, superset, HTTP, credential/query/fragment, and pair-swap negatives |
 | Failover lifecycle | EndpointPool health/selection and ReadOperationCoordinator complete-operation retry | Supply all three families; do not alter ThorChainKit | Use the existing `testRetryRepeatsTheCompleteOperationOnTheNextFamily` proof, whose injected first-family `ThorNodeReadError.httpStatus(... code: 503 ...)` causes one complete retry; assert unchanged height/identity checks |
 | Ownership | Native RUNE provider owns native endpoints; multichain owns swaps | Keep Liquify out of native RUNE and leave multichain source untouched | Source diff plus native/multichain composition negatives |
-| Live evidence | Existing iOS simulator/AppTests and public node probes | Add a THR-139 runner that always builds the full three-family manifest, records the launched kit's actual `accountState?.providerFamilyId`, and binds every probe to that observed family pair | Manifest equality, observed-family membership, pair ownership, `thorchain-1`, accepted heights, fail-closed drift |
+| Live evidence | Existing `IThorChainKit.syncStatePublisher`/`ThorChainAdapter` boundary in `packages/WalletCore/Sources/WalletCore/Core/Adapters/ThorChain/ThorChainAdapter.swift` and public node probes | Add a test-only `THR139_LIVE_EVIDENCE` sink for fresh `.synced(AccountState)` records and a runner that always builds the full three-family manifest, removes the prior simulator-container record, and binds every probe to the new observed family pair | Post-launch file freshness, cached-family negative fixture, manifest equality, observed-family membership, pair ownership, `thorchain-1`, accepted heights, fail-closed drift |
 
 ### Owner-observation contract
 
@@ -131,12 +138,21 @@ by the scripted heights. The fixture target is never copied into the
 observation; it only controls responses.
 
 The online runner does not accept a caller-supplied owner and cannot force a
-selection. It observes the actual launched kit instance after its completed
-operation through the existing `accountState?.providerFamilyId` boundary. The
-runner records that value as `observedFamily` and fails closed when it is
-missing, outside the three-family manifest, or inconsistent with the REST/RPC
-pair used for the same operation. This is the only live owner claim; the
-deterministic AppTests are the proof that each family can be selected with the
+selection. In the exact consumer seam, `IThorChainKit` exposes
+`syncStatePublisher` and `accountStatePublisher` from the Kit, and
+`ThorChainAdapter` already subscribes to both. The permitted test-only sink
+observes only `syncStatePublisher`'s `.synced(AccountState)` value and writes
+the atomic file inside the launched app's data container. ThorChainKit's
+`LifecycleGate.acceptCachedIfCurrent` publishes `.idle(cached: true)`, while
+`acceptIfCurrent` publishes `.synced(AccountState)`; therefore a cached family
+cannot be mistaken for a completed current pass. The runner deletes the prior
+file before launch, requires a new post-launch file, and records its family as
+`observedFamily`. A negative fixture preloads family A and verifies that its
+cached event is ignored until a fresh family B `.synced` event arrives; a
+cached-only run fails closed. The runner also fails closed when the fresh value
+is missing, outside the three-family manifest, or inconsistent with the
+REST/RPC pair used for the same operation. This is the only live owner claim;
+the deterministic AppTests prove that each family can be selected with the
 full manifest. No callback/box is added to the production factory seam, and no
 production selector or EndpointPool behavior changes.
 
@@ -159,63 +175,55 @@ production selector or EndpointPool behavior changes.
    to have the greatest valid Comet height, and verifies the completed
    projection's `providerFamilyId` equals the actually selected family. The
    online runner performs three isolated real-node passes with the same full
-   manifest, observes the launched kit's actual
-   `accountState?.providerFamilyId`, binds REST and RPC observations to that
-   observed family, verifies `thorchain-1` and accepted height/identity
-   invariants, and fails closed on missing/unapproved observation, manifest
-   drift, or pair mismatch. It does not accept a caller-supplied expected owner
-   or claim that three online passes forced one pass per family. The existing
-   injected HTTP 503 coordinator case proves complete-operation retry.
+   manifest, observes a new post-launch `THR139_LIVE_EVIDENCE` file emitted only
+   by the launched kit's `.synced(AccountState)` event, binds REST and RPC
+   observations to that fresh family, verifies `thorchain-1` and accepted
+   height/identity invariants, and fails closed on cached-only/missing/
+   unapproved observation, manifest drift, or pair mismatch. A cached-family
+   negative fixture proves `.idle(cached: true)` cannot satisfy the live gate.
+   It does not accept a caller-supplied expected owner or claim that three
+   online passes forced one pass per family. The existing injected HTTP 503
+   coordinator case proves complete-operation retry.
 8. CodeReviewer approval, QA pass, CTO merge-gate evidence, and explicit
    operator authorization remain required before any merge. THR-135 and Sprint
    2 remain blocked until then.
 
 ## Test-first implementation and verification plan
 
-1. **Pre-edit contract tests (ThorChainSwiftEngineer).** In the exact UW
-   checkout, replace the old one-Liquify expectation with exact order, URL,
+1. **Verification artifact authoring (ThorChainSwiftEngineer).** Add and
+   commit the repository-owned allowlists, manifest, scheme/test/live/evidence
+   verifiers before any Xcode or consumer command. Every consumer derives these
+   paths from its own repository root or script directory; it rejects caller
+   environment variables and arguments for allowlists, manifests, verifiers,
+   and expected-family values. Only repository roots, simulator identity, and
+   output directories are runtime inputs. Run `python3 -m py_compile` for the
+   three Python verifiers, `bash -n` for the shell runner, and bounded negative
+   fixtures for every declared rejection.
+2. **Pre-edit contract tests (ThorChainSwiftEngineer).** In the exact UW
+   checkout, run the repository-owned scheme preflight before this first Xcode
+   command, then replace the old one-Liquify expectation with exact order, URL,
    role-bound record, ownership, duplicate, superset, foreign, and pair-swap
    tests. Run them before editing production; the old provider must fail the
    new contract. Check: `xcodebuild ... -only-testing:AppTests/ThorChainKitManagerTests test`
    returns a real failing XCTest result, not a selector/compilation error.
-2. **Small production edit (ThorChainSwiftEngineer).** Edit only the existing
+3. **Small production edit (ThorChainSwiftEngineer).** Edit only the existing
    native RUNE provider and, if required by the failing exact-equality tests,
    its existing manager/descriptor validation seam. Do not add an abstraction,
    touch ThorChainKit, or touch the multichain provider. Check: focused tests
    pass and `git diff --name-only` is limited to the approved UW paths.
-3. **ThorChainKit invariants (ThorChainQAEngineer).** From
+4. **ThorChainKit invariants (ThorChainQAEngineer).** From
    `$THORCHAINKIT_ROOT`, run one iOS Simulator `xcodebuild` test with these
    exact selectors: `ThorChainKitTests/EndpointPoolTests`,
    `ThorChainKitTests/ReadOperationCoordinatorS1_04Tests`,
    `ThorChainKitTests/LiveNodeProbeTests`, and
    `ThorChainKitTests/LiveThorNodeClientS1_04Tests`. Write the result bundle to
    `$THR139_THOR_RESULT_BUNDLE` and pass the checked-in exact test-name file
-   `$THR139_THOR_ALLOWLIST` to `Scripts/verify-xcresult.sh`; the verifier must
+   `$THORCHAINKIT_ROOT/Scripts/allowlists/THR-139-thor.txt` to
+   `$THORCHAINKIT_ROOT/Scripts/verify-xcresult.sh`; the verifier must
    report `PASS`, with zero failures, errors, and skips. `swift test` is not
    evidence because the documented iOS-only SwiftPM path fails before XCTest on
    the audited toolchain. The retry proof is the existing HTTP 503 case named
    above; height and identity rejection tests remain selected separately.
-4. **Verification artifact authoring (ThorChainSwiftEngineer).** Add and
-   commit these repository-owned artifacts before any consumer command runs:
-   `$THORCHAINKIT_ROOT/Scripts/allowlists/THR-139-thor.txt`;
-   `$UW_ROOT/Scripts/allowlists/THR-139-uw.txt`;
-   `$UW_ROOT/Scripts/allowlists/THR-139-family-manifest.json`;
-   `$UW_ROOT/Scripts/verify-thr-139-scheme.py`;
-   `$UW_ROOT/Scripts/verify-thr-139-uw-tests.py`;
-   `$UW_ROOT/Scripts/verify-thr-139-live.sh`; and
-   `$UW_ROOT/Scripts/verify-thr-139-evidence.py`. The ThorChainKit allowlist
-   contains the exact selected test identifiers consumed by the existing
-   `Scripts/verify-xcresult.sh`. The UW test verifier rejects missing, extra,
-   duplicate, failed, or skipped test nodes. The live/evidence verifiers reject
-   missing or unapproved owner observations, manifest drift, pair swaps,
-   unapproved hosts, wrong chain identity, invalid heights, and digest
-   tampering. Each consumer resolves its allowlist, manifest, and verifier by
-   fixed paths relative to its checked-out repository; caller-supplied paths
-   and caller-supplied expected-family values are rejected. Only result and
-   evidence output directories, simulator identity, and the two repository
-   roots are runtime inputs. Test first with `python3 -m py_compile`, shell
-   syntax checking, scheme/XML negative fixtures, and negative fixtures for
-   each rejection; no production code is changed by these verifier tests.
 5. **UW tests/build (ThorChainQAEngineer).** First run this XML-safe preflight
    against the exact shared scheme, before any test or build command:
 
@@ -230,7 +238,8 @@ production selector or EndpointPool behavior changes.
    `-showdestinations` for simulator availability,
    run the exact class selector with a result bundle, verify its compact summary
    and every test node are `Passed` with zero failures/skips using the checked-in
-   `$THR139_UW_ALLOWLIST`, and run the explicit `Debug-Dev` simulator build.
+   `$UW_ROOT/Scripts/allowlists/THR-139-uw.txt`, and run the explicit `Debug-Dev`
+   simulator build.
    Check: the test and build both resolve to `PLATFORM_NAME=iphonesimulator`,
    `CONFIGURATION=Debug-Dev`, and no `-only-testing:ThorChain` selector is used.
 6. **THR-139 live runner (ThorChainQAEngineer).** Use the exact local
@@ -239,15 +248,23 @@ production selector or EndpointPool behavior changes.
    `$UW_ROOT/Scripts/verify-thr-139-evidence.py` against the evidence root. Its
    required mapping is the fixed repository-owned
    `Scripts/allowlists/THR-139-family-manifest.json`,
-   `THR139_SIMULATOR_UDID`, and `THR139_EVIDENCE_ROOT`; the launched kit must
-   emit its actual selected family through `accountState?.providerFamilyId`,
-   and the runner must reject missing or unapproved observations. It
-   launches the Development app, injects only public values into simulator
-   launchd, and unsets them in a trap. It runs three isolated passes with all
-   three families present, uses unique evidence directories, compares
-   before/after canonical manifests, and writes only the following canonical
-   JSON fields: `schemaVersion`, `observedFamily`, `manifestSha256`, `rest`,
-   `rpc`, `chainId`, `height`, and `resultSha256`.
+   `THR139_SIMULATOR_UDID`, and `THR139_EVIDENCE_ROOT`; the launched kit's
+   existing `IThorChainKit.syncStatePublisher` subscription in
+   `packages/WalletCore/Sources/WalletCore/Core/Adapters/ThorChain/ThorChainAdapter.swift`
+   must emit a fresh `.synced(AccountState)` record through
+   the permitted test-only `THR139_LIVE_EVIDENCE` sink at
+   `Documents/THR139/live-state.json`. The runner removes the prior file using
+   `xcrun simctl get_app_container`, launches the Development app, and accepts
+   only a new post-launch record. `.idle(cached: true)` and
+   `.notSynced(..., cached: ...)` never satisfy the owner gate; a cached-family
+   negative fixture must fail without a fresh `.synced` event. The runner must
+   reject missing or unapproved observations. It launches the Development app,
+   injects only public values into simulator launchd, and unsets them in a
+   trap. It runs three isolated passes with all three families present, uses
+   unique evidence directories, compares before/after canonical manifests, and
+   writes only the following canonical JSON fields: `schemaVersion`,
+   `observedFamily`, `manifestSha256`, `rest`, `rpc`, `chainId`, `height`, and
+   `resultSha256`.
    `manifestSha256` and `resultSha256` are lowercase SHA-256 digests of
    canonical JSON (sorted keys, UTF-8, no trailing newline). The independent
    verifier checks schema version, family equality, six-record equality, digest
@@ -273,8 +290,9 @@ The ThorChainKit test command is a simulator Xcode command, not `swift test`:
   -only-testing:ThorChainKitTests/LiveThorNodeClientS1_04Tests \
   SWIFT_VERSION=5 SWIFT_STRICT_CONCURRENCY=complete \
   SWIFT_SUPPRESS_WARNINGS=NO CODE_SIGNING_ALLOWED=NO test)
-Scripts/verify-xcresult.sh THR-139-thor "$THR139_THOR_RESULT_BUNDLE" \
-  "$THR139_THOR_ALLOWLIST"
+"$THORCHAINKIT_ROOT/Scripts/verify-xcresult.sh" THR-139-thor \
+  "$THR139_THOR_RESULT_BUNDLE" \
+  "$THORCHAINKIT_ROOT/Scripts/allowlists/THR-139-thor.txt"
 ```
 
 The UW test command is:
@@ -293,7 +311,8 @@ xcodebuild test -project "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj" \
 xcrun xcresulttool get test-results summary --path "$THR139_UW_RESULT_BUNDLE" \
   --compact | jq -e '(.result == "Passed") and (.failedTests == 0) and (.skippedTests == 0)'
 xcrun xcresulttool get test-results tests --path "$THR139_UW_RESULT_BUNDLE" \
-  --compact | python3 "$UW_ROOT/Scripts/verify-thr-139-uw-tests.py" "$THR139_UW_ALLOWLIST"
+  --compact | python3 "$UW_ROOT/Scripts/verify-thr-139-uw-tests.py" \
+  "$UW_ROOT/Scripts/allowlists/THR-139-uw.txt"
 
 xcodebuild build -project "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj" \
   -scheme Development -configuration Debug-Dev \
@@ -344,12 +363,13 @@ paths, or private values may enter committed evidence.
 The Gimle report is RED because the EvmKit snippet freshness is contradictory
 and semantic searches have coverage gaps. Exact local Serena, targeted `rg`,
 and Git verification are the accepted fallback; the defects remain recorded.
-Revision 5 resolves the closure-2/5 corrections by separating deterministic
-full-manifest AppTests from live actual-owner evidence at
-`accountState?.providerFamilyId`, binding verifier inputs to repository-owned
-paths, making the XML preflight shell-fail-closed before every Xcode command,
-and defining complete manifest/result schemas with valid digest vectors. A fresh bounded
-adversarial review at closure 2/5
-must recheck those allowlisted IDs and direct regressions; it must not reopen
-broad discovery. Explicit operator approval of this exact pushed spec and plan
-is required before implementation.
+Revision 6 resolves the closure-2/5 corrections by binding live actual-owner
+evidence to the existing `IThorChainKit.syncStatePublisher` `.synced` event,
+defining the simulator-container file handoff and cached-family negative
+fixture, deriving verifier inputs from repository roots without caller-
+overridable allowlist variables, and placing XML preflight before the pre-edit
+and later Xcode commands. The complete manifest/result schemas and valid digest
+vectors remain unchanged. A fresh bounded adversarial review at closure 2/5
+must recheck only those allowlisted IDs and direct regressions; it must not
+reopen broad discovery. Explicit operator approval of this exact pushed spec
+and plan is required before implementation.

@@ -5,7 +5,7 @@
 - Trust: **RED**
 - Repository: `$THORCHAINKIT_ROOT`
 - Base HEAD: 6462bec2604db4d3d05b3cfccde1ff5b768c86e0
-- Final HEAD: 9a21c259867effeda362318bc8f690d2c9782f96
+- Final HEAD: n/a
 - Gimle runtime: native-dev:0e9cf57c00ff970f584256126b500166580e7a72
 - Indexed commit: 8a63bfda028dd8543115b26dd777235a53304311
 
@@ -23,22 +23,6 @@
 - Bugs: 4
 - Analog slices/candidates: 1/5
 
-## Revision 5 targeted correction
-
-Closure 2/5 remains bounded to D-004, D-006, D-007, and D-008; discovery is
-frozen at 2/2. The revision separates deterministic full-manifest AppTests,
-which assert `TestingAccountReadSession.read().providerFamilyId` under scripted
-height fixtures, from live actual-owner evidence, which observes the launched
-kit's `accountState?.providerFamilyId` and never accepts a caller-forced owner.
-It binds the manifest, allowlists, XML preflight, test verifier, live runner,
-and evidence verifier to checked-in repository-relative paths; makes the XML
-preflight run under `set -euo pipefail` before every Xcode command; and defines
-exact manifest/REST/RPC/result schemas with reproducible digest vectors.
-
-The docs-only revision is pushed as commit `9a21c259867effeda362318bc8f690d2c9782f96`
-on the review branch. Implementation and operator approval remain gated pending the next targeted
-adversarial review.
-
 ### Calls by tool
 
 | Tool | Success | Warning | Error | False-success |
@@ -55,6 +39,23 @@ adversarial review.
 Bug classes: {'stale_index': 1, 'coverage_gap': 3}
 Bug severities: {'high': 1, 'medium': 3}
 Bug statuses: {'workaround': 4}
+
+## Revision 6 targeted correction
+
+Closure 2/5 remains bounded to D-004, D-006, D-007, and D-008; discovery is
+frozen at 2/2. D-004 now names the exact
+`packages/WalletCore/Sources/WalletCore/Core/Adapters/ThorChain/ThorChainAdapter.swift`
+`IThorChainKit.syncStatePublisher` boundary, the test-only atomic
+`Documents/THR139/live-state.json` handoff, post-launch freshness, and a
+cached-family negative fixture that accepts only `.synced(AccountState)`.
+D-006 now derives allowlists and verifiers from repository roots or script
+directories and removes caller-overridable allowlist variables. D-007 now
+authors the scheme verifier before the pre-edit UW Xcode test and requires the
+preflight before every later Xcode command. D-008 remains accepted unchanged.
+
+The three docs are rehashed in the canonical state checkpoint. This is a
+docs-only revision; implementation and operator approval remain gated pending
+the next targeted closure review.
 
 ## Gimle calls
 
@@ -130,23 +131,15 @@ Bug statuses: {'workaround': 4}
 - D-001@2 ACCEPT: Host cardinality and allowlist semantics
 - D-002@2 ACCEPT: Exact approved-host equality
 - D-003@2 ACCEPT: REST/RPC family pairing
-- D-004@4 ACCEPT: Deterministic fixture selection is separate from live actual-owner evidence
+- D-004@7 REVISE: Fresh live owner observation
 - D-005@2 ACCEPT: Test-first execution order
-- D-006@4 ACCEPT: Verification artifacts are repository-owned and bound
-- D-007@4 ACCEPT: XML scheme preflight is executable and fail-closed
-- D-008@4 ACCEPT: Manifest/result schemas and digest vectors are complete
-- D-009@3 ACCEPT: Revision delivery state
+- D-006@7 REVISE: Repository-derived verifier paths
+- D-007@7 REVISE: Preflight before every Xcode command
+- D-008@7 ACCEPT: Manifest/result digest schemas
+- D-009@5 ACCEPT: Revision 6 docs-only correction is prepared for push and review-bindable
 - D-010@2 ACCEPT: Direct identity/height verification coverage
 
 ## Verification and acceptance
-
-- Docs-only checks: `git diff --check` passed; only the spec, plan, and report
-  are intended tracked changes. Pre-existing THR-118/THR-138 reports remain
-  untracked and preserved.
-- Revision 5 artifact hashes and accepted D-004/D-006/D-007/D-008 decisions are
-  recorded in the canonical state checkpoint.
-- Implementation, simulator, UW, and live checks: intentionally unrun pending
-  explicit operator approval.
 
 
 ## Bugs and limitations
