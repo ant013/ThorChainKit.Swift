@@ -10,9 +10,18 @@ host integration, or S2-02 behavior.
 
 ## Implementation evidence
 
+- The corrected implementation code is committed at
+  `24e0c92b3019d01b61154fe110a1f4806442fa4c`.
 - Send values snapshot `BigUInt` magnitudes before async/runtime hops.
 - Quote authority is one-use, store-owned, generation-bound, and expires at
   the exclusive ten-second monotonic deadline.
+- Quote creation and public projection both reject noncanonical magnitude
+  encodings, zero amount/total, non-empty zero-fee encoding, unchecked totals,
+  and missing provider-family identity.
+- Signing summaries require canonical lowercase THOR/STHOR/CTHOR addresses,
+  fixed-eight ASCII RUNE amounts with checked totals, and canonical unsigned
+  account/sequence values. Repeated and trailing decimal separators are
+  rejected by preserving empty split subsequences.
 - Consumed and invalidated records remain terminal tombstones through their
   originating deadline, then are cleaned; an own unexpired missing record is
   `operationUnavailable`, while an expired quote remains `quoteExpired`.
@@ -31,12 +40,14 @@ All simulator commands used the approved booted iPhone 17 Pro, iOS 26.2,
 UDID `0A88BC07-1DF9-490A-BCAF-6FA2165F6B17`. Commands preserved their actual
 exit codes.
 
-- Named S2-01 selectors: 31 tests, 0 failures, `TEST SUCCEEDED`.
+- The repeated/trailing-separator regression first failed twice on the old
+  parser, then passed after the two parsing paths preserved empty subsequences.
+- Named S2-01 selectors: 43 tests, 0 failures, `TEST SUCCEEDED`.
   This includes `SendValueTests`, `KitCompositionTests`,
   `LifecycleCommandBridgeTests`, `SendFacadeAdmissionTests`,
   `QuoteStoreTests`, `SendErrorTests`, `SendReflectionTests`,
   `PendingTransactionTests`, `SendPublicApiTests`, and `SendQuoteTests`.
-- Full local non-live `ThorChainKitTests`: 118 tests, 0 failures, with only
+- Full local non-live `ThorChainKitTests`: 130 tests, 0 failures, with only
   the pre-existing `LifecycleInvariantProbeTests` excluded because it
   repeatedly restarts/timeouts; no live network tests were enabled.
 - `Scripts/verify-s2-01-public-surface.sh`: pass, including positive import
