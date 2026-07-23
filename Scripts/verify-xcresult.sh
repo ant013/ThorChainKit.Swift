@@ -35,6 +35,17 @@ expected = [line.strip() for line in Path(allowlist_path).read_text().splitlines
 if not expected:
     raise SystemExit("empty test allowlist")
 
+allowed_prefixes = {"ThorChainKitTests", "ThorChainKitLiveTests"}
+prefixes = set()
+for identifier in expected:
+    prefix, separator, _ = identifier.partition(".")
+    if not separator or prefix not in allowed_prefixes:
+        raise SystemExit("test allowlist contains an unknown or malformed module prefix")
+    prefixes.add(prefix)
+if len(prefixes) != 1:
+    raise SystemExit("test allowlist mixes test module prefixes")
+module_prefix = prefixes.pop()
+
 def cases(node):
     if not isinstance(node, dict):
         return
@@ -52,7 +63,7 @@ for node in observed:
     identifier = node.get("nodeIdentifier")
     if not isinstance(identifier, str) or "/" not in identifier:
         raise SystemExit("test case has no canonical node identifier")
-    observed_names.append("ThorChainKitTests." + identifier.removesuffix("()"))
+    observed_names.append(module_prefix + "." + identifier.removesuffix("()"))
 
 if set(observed_names) != set(expected):
     raise SystemExit(f"test names mismatch: expected {sorted(expected)}, observed {sorted(observed_names)}")

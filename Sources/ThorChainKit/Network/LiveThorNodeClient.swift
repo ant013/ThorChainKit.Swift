@@ -355,7 +355,11 @@ private struct JSONDuplicateKeyScanner {
                 var token = Data([0x22])
                 token.append(contentsOf: bytes[start..<(index - 1)])
                 token.append(0x22)
-                return try? JSONSerialization.jsonObject(with: token, options: [.fragmentsAllowed]) as? String
+                do {
+                    return try JSONSerialization.jsonObject(with: token, options: [.fragmentsAllowed]) as? String
+                } catch {
+                    return nil
+                }
             } else if byte < 0x20 {
                 return nil
             }

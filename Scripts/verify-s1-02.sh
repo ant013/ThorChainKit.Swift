@@ -5,6 +5,7 @@ set -euo pipefail
 repository_root=$(cd "$(dirname "$0")/.." && pwd -P)
 cd "$repository_root"
 simulator_udid=${THORCHAIN_SIMULATOR_UDID:-}
+s102_contract_head=7fd9663442a0e6dcd9c01c4ab04d35f3abd96fc4
 
 fail() {
     echo "FAIL verify-s1-02: $1" >&2
@@ -20,7 +21,12 @@ run_simulator_tests() {
     local label=$1 selector=$2 allowlist=$3
     local derived_data result_bundle
     local -a selection=()
-    [[ -z "$selector" ]] || selection=("-only-testing:ThorChainKitTests/$selector")
+    while IFS= read -r test_id; do
+        [[ "$test_id" == "ThorChainKitTests.${selector}/"* ]] \
+            || fail "$label allowlist contains a test outside $selector"
+        selection+=("-only-testing:${test_id/./\/}")
+    done < "$allowlist"
+    ((${#selection[@]} > 0)) || fail "$label allowlist contains no tests"
     require_simulator
     derived_data=$(mktemp -d)
     result_bundle=$(mktemp -d)/"$label.xcresult"
@@ -149,7 +155,8 @@ actual_symbols=$(mktemp)
 symbol_dir=$(mktemp -d)
 live_tool_dir=$(mktemp -d)
 test_allowlist_dir=$(mktemp -d)
-trap 'rm -f "$expected_sources" "$actual_sources" "$actual_tests" "$actual_symbols"; rm -rf "$symbol_dir" "$live_tool_dir" "$test_allowlist_dir"' EXIT
+inert_factory_dir=$(mktemp -d)
+trap 'rm -f "$expected_sources" "$actual_sources" "$actual_tests" "$actual_symbols"; rm -rf "$symbol_dir" "$live_tool_dir" "$test_allowlist_dir" "$inert_factory_dir"' EXIT
 
 cat > "$expected_sources" <<'EOF'
 Sources/ThorChainKit/Address/AddressCodec.swift
@@ -160,6 +167,7 @@ Sources/ThorChainKit/Core/Kit.swift
 Sources/ThorChainKit/Core/KitConfigurationError.swift
 Sources/ThorChainKit/Core/KitDependencies.swift
 Sources/ThorChainKit/Core/KitFactory.swift
+Sources/ThorChainKit/Core/TestingAccountReadSession.swift
 Sources/ThorChainKit/Core/TestingEndpointPolicySession.swift
 Sources/ThorChainKit/Crypto/AccountAddressDeriving.swift
 Sources/ThorChainKit/Crypto/AccountAddressFactory.swift
@@ -173,14 +181,34 @@ Sources/ThorChainKit/Models/EndpointConfiguration.swift
 Sources/ThorChainKit/Models/Network.swift
 Sources/ThorChainKit/Models/SyncError.swift
 Sources/ThorChainKit/Models/SyncState.swift
+Sources/ThorChainKit/Network/AccountReadTransport.swift
 Sources/ThorChainKit/Network/EndpointDiagnostics.swift
 Sources/ThorChainKit/Network/EndpointFamilyDescriptor.swift
 Sources/ThorChainKit/Network/EndpointHealth.swift
 Sources/ThorChainKit/Network/EndpointLease.swift
 Sources/ThorChainKit/Network/EndpointPolicy.swift
 Sources/ThorChainKit/Network/EndpointPool.swift
+Sources/ThorChainKit/Network/HTTPTransporting.swift
 Sources/ThorChainKit/Network/LiveNodeProbe.swift
+Sources/ThorChainKit/Network/LiveThorNodeClient.swift
 Sources/ThorChainKit/Network/NodeProbing.swift
+Sources/ThorChainKit/Network/ReadOperationCoordinator.swift
+Sources/ThorChainKit/Network/RequestBuilder.swift
+Sources/ThorChainKit/Network/ThorNodeReadError.swift
+Sources/ThorChainKit/Network/ThorNodeReading.swift
+Sources/ThorChainKit/State/AccountStateManager.swift
+Sources/ThorChainKit/State/StatePublishing.swift
+Sources/ThorChainKit/State/StateSnapshot.swift
+Sources/ThorChainKit/Storage/AccountStateStorage.swift
+Sources/ThorChainKit/Storage/GrdbAccountStateStorage.swift
+Sources/ThorChainKit/Storage/Migrations.swift
+Sources/ThorChainKit/Storage/StorageRecord.swift
+Sources/ThorChainKit/Sync/AccountSyncer.swift
+Sources/ThorChainKit/Sync/AccountSyncing.swift
+Sources/ThorChainKit/Sync/LifecycleCommandBridge.swift
+Sources/ThorChainKit/Sync/LifecycleGate.swift
+Sources/ThorChainKit/Sync/SyncGeneration.swift
+Sources/ThorChainKit/Sync/SyncSchedule.swift
 Sources/ThorChainKit/ThorChainKit.swift
 EOF
 find Sources/ThorChainKit -type f -name '*.swift' | sort > "$actual_sources"
@@ -257,6 +285,7 @@ xcrun swift-symbolgraph-extract \
     -I "$derived_data/Build/Products/Debug-iphonesimulator" \
     -Xcc -fmodule-map-file="$derived_data/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/secp256k1_bindings.modulemap" \
     -Xcc -fmodule-map-file="$derived_data/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/HsCryptoKitC.modulemap" \
+    -Xcc -fmodule-map-file="$derived_data/SourcePackages/checkouts/GRDB.swift/Sources/CSQLite/module.modulemap" \
     -target arm64-apple-ios13.0-simulator \
     -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
     -minimum-access-level public \
@@ -295,7 +324,22 @@ assert baseline <= actual
 PY
 echo "PASS verify-s1-02-public-symbols"
 
-xcrun swift Scripts/verify-s1-01-factory.swift Tests/ThorChainKitTests/Fixtures/S1-01-factory-syntax.txt >/dev/null \
+git merge-base --is-ancestor "$s102_contract_head" HEAD \
+    || fail "accepted S1-02 contract head is not an ancestor"
+git archive "$s102_contract_head" \
+    Scripts/verify-s1-01-factory.swift \
+    Sources/ThorChainKit/Core/KitFactory.swift \
+    Sources/ThorChainKit/Core/KitDependencies.swift \
+    Sources/ThorChainKit/Core/Kit.swift \
+    Sources/ThorChainKit/Models/Network.swift \
+    Tests/ThorChainKitTests/Fixtures/S1-01-factory-syntax.txt \
+    | tar -x -C "$inert_factory_dir" \
+    || fail "accepted S1-02 factory contract could not be materialized"
+(
+    cd "$inert_factory_dir"
+    xcrun swift Scripts/verify-s1-01-factory.swift \
+        Tests/ThorChainKitTests/Fixtures/S1-01-factory-syntax.txt
+) >/dev/null \
     || fail "production Kit factory is no longer inert"
 echo "PASS verify-s1-02-inert-factory"
 
