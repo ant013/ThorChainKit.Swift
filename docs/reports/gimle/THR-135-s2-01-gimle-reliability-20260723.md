@@ -27,15 +27,15 @@ The UW working copy is intentionally dirty with local THR-104/THR-139 integratio
 
 - Immutable public values remain the Kit-owned, host-neutral ownership spine, while the UW handler family is the coherent behavioral analog.
 - Active deferred facade calls with valid local input fail closed as `operationUnavailable`; invalid local input returns its stable validation error; inactive lifecycle admission still returns `kitNotStarted`; pending is empty and `.degraded` until S2-05.
-- Quote identity is opaque, one-use, generation-bound, and exactly ten seconds from the accepted coherent snapshot.
+- Quote identity is opaque, one-use, generation-bound, and exactly ten seconds from the accepted coherent snapshot; its private namespace/generation/deadline envelope is checked before active/consumed state, with eight bounded secure-random attempts.
 - Errors are finite, deterministic, `Sendable`, and sanitized; provider text and raw codespace stay internal, while public codespace is a fixed category allowlist; debug and reflection use explicit redacted mirrors.
 - The composition seam is `Kit` → `KitDependencies`/`KitFactory` → `LifecycleCommandBridge` → `LifecycleGate` with one stored `SendRuntime` dependency.
 - Verification is test-first and local-only. Durable journal, transport, protobuf, signing verification, Example UI, host integration, and S2-02+ remain out of scope.
 
 ## Artifact binding
 
-- Spec/delta-matrix/test-plan digest: `66d50a1259f36edb559459fc9f13034a5285be3822857869d348adc859b543ee`.
-- Implementation-plan digest: `c3d800cae01e2dbd642aa2ac298f33fae36e9033dfc2a02673b20e9fd671d0b5`.
+- Spec/delta-matrix/test-plan digest: `9f8cb01934980b3c2e4907e5905fd63d72d01dc89bf5e12012f58a1b6232b5bc`.
+- Implementation-plan digest: `2c5d0f1a5367d3f475e4f0b639462d5fdaea88ba5ba0550f255b860a6866fe89`.
 - Analog-family digest: `7279cec526c0cd6a2b67407049080de263eddb2680077abb6083c8493eac626d`.
 - Consolidated-test-plan digest: `efb853fd65011a24331606434794d0c59cc9d7d62c1490da0c2f7e22a4a0a0c6`.
 - Committed evidence manifest digest: `c9670f23dbaefe3411db5f2e844a5bfa4f85d4ec3395ac02212f4488a2f4a70d` (`THR-135-s2-01-evidence-r4.json`).

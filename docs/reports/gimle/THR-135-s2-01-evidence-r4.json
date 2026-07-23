@@ -8,8 +8,8 @@
     "integration_head": "937332b2e7020868abcac8681ddd664b6e4bad72"
   },
   "artifacts": {
-    "spec_delta_matrix_test_plan": "66d50a1259f36edb559459fc9f13034a5285be3822857869d348adc859b543ee",
-    "implementation_plan": "c3d800cae01e2dbd642aa2ac298f33fae36e9033dfc2a02673b20e9fd671d0b5",
+    "spec_delta_matrix_test_plan": "9f8cb01934980b3c2e4907e5905fd63d72d01dc89bf5e12012f58a1b6232b5bc",
+    "implementation_plan": "2c5d0f1a5367d3f475e4f0b639462d5fdaea88ba5ba0550f255b860a6866fe89",
     "analog_family": "7279cec526c0cd6a2b67407049080de263eddb2680077abb6083c8493eac626d",
     "consolidated_test_plan": "efb853fd65011a24331606434794d0c59cc9d7d62c1490da0c2f7e22a4a0a0c6",
     "canonical_sprint_report": "cef10adfd8a2a5869f38b74b0266d2c52af5081bdc4fe4169f2b2b80af8e3cc5"
@@ -30,7 +30,8 @@
   "decisions": {
     "deferred_facade": "operationUnavailable only after lifecycle admission and valid local input; zero side effects",
     "lifecycle_composition": "KitDependencies.SendRuntime + KitFactory paths + LifecycleCommandBridge activation/invalidation",
-    "generation_error": "quoteGenerationInvalidated via bounded internal tombstone after rapid restart",
+    "generation_error": "private namespace -> lifecycle generation -> monotonic deadline -> active/consumed lookup; quoteGenerationInvalidated via bounded internal tombstone after rapid restart",
+    "secure_random": "exactly eight token-generation attempts before operationUnavailable",
     "broadcast_codespace": "private raw value projected to sdk/thorchain/other",
     "reflection": "CustomDebugStringConvertible + CustomReflectable fixed redacted mirror",
     "verification": "local MacBook tests plus an implementation-head iOS 13 deployment-floor/import guard and explicit compile-negative/concurrency harnesses; CI build-only"
