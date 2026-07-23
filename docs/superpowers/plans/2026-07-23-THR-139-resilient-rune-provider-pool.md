@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool plan
 
-Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 9. Discovery 2/2; closure 4/5 pending targeted review.
+Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 9. Discovery 2/2; closure 5/5 pending targeted review.
 
 No implementation, UW commit, push, PR, CI, Maestro, or remote smoke is
 authorized until the exact spec and this plan are explicitly approved.
@@ -18,9 +18,9 @@ authorized until the exact spec and this plan are explicitly approved.
 
 ### 1. Fresh bounded design review
 
-**Owner:** ThorChainCodeReviewer. **Dependencies:** pushed revision-8 spec,
+**Owner:** ThorChainCodeReviewer. **Dependencies:** pushed revision-9 spec,
 plan, and Gimle report. Recheck only the frozen D-001 through D-010 allowlist,
-discovery 2/2, closure 4/5. Verify that no UW acceptance transport, launch-
+discovery 2/2, closure 5/5. Verify that no UW acceptance transport, launch-
 argument branch, adapter sink, or production observation callback is introduced;
 verify deterministic full-manifest fixtures, reuse of the existing S1-04 family
 live-smoke runner, XML-safe preflight ordering, fresh result-bundle binding,
@@ -37,8 +37,26 @@ ThorChainKit checkout. Do not create THR-139 ThorChainKit allowlists or
 wrappers, and never pass a caller-supplied allowlist path. The existing
 scripts use `set -euo pipefail`, derive checked-in fixtures from their own
 repository root, create fresh result bundles, and reject stale bundles.
-Verify their checked-in shell syntax and existing negative fixtures before any
-consumer command.
+Verify the exact expected HEAD, clean worktree, `origin/main` equality, and
+base ancestry before any script can emit `PASS`. Then run `bash -n` on the
+three existing wrappers and the existing `Scripts/verify-s1-04.sh
+--source-only` and `--fixtures-only` modes. These commands run before
+`verify-s1-02.sh` and before any Xcode command; no unsupported script mode is
+invented.
+
+```text
+set -euo pipefail
+: "${THR139_EXPECTED_BASE:?set to the reviewed 40-character origin/main SHA}"
+: "${THR139_EXPECTED_HEAD:?set once to the reviewed 40-character ThorChainKit HEAD}"
+(cd "$THORCHAINKIT_ROOT" && \
+  test "$(git rev-parse HEAD)" = "$THR139_EXPECTED_HEAD" && \
+  test -z "$(git status --porcelain)" && \
+  test "$(git rev-parse refs/remotes/origin/main)" = "$THR139_EXPECTED_BASE" && \
+  git merge-base --is-ancestor "$THR139_EXPECTED_BASE" "$THR139_EXPECTED_HEAD" && \
+  bash -n Scripts/verify-s1-02.sh Scripts/verify-s1-04.sh Scripts/verify-s1-04-live.sh && \
+  Scripts/verify-s1-04.sh --source-only && \
+  Scripts/verify-s1-04.sh --fixtures-only)
+```
 
 Before any UW Xcode command, the ThorChainSwiftEngineer authors and owns these
 repository-derived verifier files in the exact UW checkout:
@@ -50,9 +68,20 @@ $UW_ROOT/Scripts/verify-thr-139-uw-tests.py
 
 The first must reject malformed XML, missing/extra testables, and suppressed
 `AppTests`; the second must reject a missing result bundle and every failed or
-skipped test node. Run their negative fixtures and `python3 -m py_compile`
-before the first `xcodebuild` command. QA invokes these exact checked-in paths;
-no inline replacement verifier or caller-supplied allowlist is permitted.
+skipped test node. Both expose runnable `--self-test` modes that create bounded
+temporary mutants and return nonzero if any mutant passes. Run
+`python3 -m py_compile` and both self-tests before the first `xcodebuild`
+command. QA invokes these exact checked-in paths; no inline replacement
+verifier or caller-supplied allowlist is permitted.
+
+```text
+set -euo pipefail
+python3 -m py_compile \
+  "$UW_ROOT/Scripts/verify-thr-139-scheme.py" \
+  "$UW_ROOT/Scripts/verify-thr-139-uw-tests.py"
+python3 "$UW_ROOT/Scripts/verify-thr-139-scheme.py" --self-test
+python3 "$UW_ROOT/Scripts/verify-thr-139-uw-tests.py" --self-test
+```
 
 ### 3. Test-first UW contract
 
@@ -137,8 +166,8 @@ public existing/absent addresses, simulator UUID, and a unique evidence root.
 Independently verify each fresh result with the existing S1-04 evidence
 verifier. Its actual schema is `schemaVersion`, `head`, `familyId`, `chainId`,
 timestamp, the three heights, and the exact existing/absent account records.
-The fixed REST/RPC pair is bound by each command invocation; the result verifies
-the pair's family, chain, height, and account invariants. Deterministic AppTests
+The fixed REST/RPC pair is bound by each command invocation; stored evidence
+does not attest the literal URL pair. Deterministic AppTests
 prove provider-pool selection with the complete three-family manifest. No Unstoppable acceptance transport,
 launch argument, adapter sink, or new live runner is added. The injected HTTP
 503 test is the failover proof; online passes are network identity/pair

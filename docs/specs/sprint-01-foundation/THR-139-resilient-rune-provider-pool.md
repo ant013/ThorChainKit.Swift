@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool
 
-**Design revision:** 9 — discovery 2/2, closure 4/5 pending targeted review.
+**Design revision:** 9 — discovery 2/2, closure 5/5 pending targeted review.
 **Status:** revised
 design; implementation remains blocked until this exact revision is accepted by
 the adversarial reviewer and explicitly approved by the operator.
@@ -138,9 +138,10 @@ observation; it only controls responses.
 
 The online smoke intentionally does not claim ownership of a family from an
 Unstoppable app event. The approved S1-04 runner receives one audited public
-family input and its fixed REST/RPC pair per isolated pass, then independently
+family input and its fixed REST/RPC pair per isolated pass. The stored result
 verifies the family, chain identity, accepted height, and repository-defined
-evidence JSON. The
+evidence JSON; it does not attest the literal URL pair supplied by the command.
+The
 deterministic AppTests are the provider-pool ownership proof: every fixture
 constructs the complete three-family manifest, varies only scripted valid
 Comet heights, and asserts the completed projection's
@@ -167,9 +168,10 @@ selector is added to Unstoppable or ThorChainKit.
    to have the greatest valid Comet height, and verifies the completed
    projection's `providerFamilyId` equals the actually selected family. The
    existing S1-04 family live-smoke runner performs three isolated real-node
-   passes, one for each approved family, and independently verifies each
-   REST/RPC pair, `thorchain-1`, accepted height/identity invariants, and fresh
-   repository-schema evidence. The full manifest is stable and verified in the
+   passes, one for each approved family. Each invocation supplies its fixed
+   REST/RPC pair; the stored result verifies `thorchain-1`, accepted
+   height/identity invariants, and fresh repository-schema evidence, but does
+   not attest the literal URL pair. The full manifest is stable and verified in the
    deterministic AppTests; the online JSON does not duplicate it or the URL
    records. It does not claim that online
    passes forced provider selection. No Unstoppable acceptance transport,
@@ -189,11 +191,20 @@ selector is added to Unstoppable or ThorChainKit.
    checked-in fixtures from the repository root, create fresh result bundles,
    and reject stale bundles internally. Run their existing shell syntax and
    negative-fixture checks; no caller-supplied allowlist path is permitted.
+   Before `verify-s1-02.sh` can run or emit any `PASS`, perform the exact
+   expected-HEAD, clean-worktree, `origin/main` equality, and base-ancestry
+   preflight shown below. Then run `bash -n` plus the existing
+   `verify-s1-04.sh --source-only` and `--fixtures-only` modes; these are the
+   checked-in no-Xcode static/negative gates at the reviewed ThorChainKit HEAD.
    Before the UW-specific commands below, author and own the exact
    `$UW_ROOT/Scripts/verify-thr-139-scheme.py` and
    `$UW_ROOT/Scripts/verify-thr-139-uw-tests.py` repository files. Their
    negative fixtures must reject a malformed scheme, an extra/suppressed
    testable, a missing result bundle, and any failed or skipped test node.
+   Each script exposes a `--self-test` mode that creates bounded temporary
+   mutants, asserts every rejection, and exits nonzero if a mutant passes.
+   Run `python3 -m py_compile` and both self-tests before the first Xcode
+   command; no prose-only negative claim is accepted.
 2. **Pre-edit contract tests (ThorChainSwiftEngineer).** In the exact UW
    checkout, run the repository-owned scheme preflight before this first Xcode
    command, then replace the old one-Liquify expectation with exact order, URL,
@@ -242,9 +253,11 @@ selector is added to Unstoppable or ThorChainKit.
    Verify each fresh result with the existing S1-04 evidence verifier and its
    actual schema: `schemaVersion`, `head`, `familyId`, `chainId`, timestamp,
    `cosmosHeight`, `cometHeight`, `acceptedHeight`, and the exact existing and
-   absent account records. This is network identity/height/pair evidence, not an Unstoppable
-   owner-selection oracle; no UW acceptance transport, launch argument,
-   adapter sink, or new live runner is added.
+   absent account records. Each command supplies its fixed REST/RPC pair; the
+   stored result does not attest that literal pair. This is network
+   identity/height/account evidence, not an Unstoppable owner-selection oracle;
+   no UW acceptance transport, launch argument, adapter sink, or new live
+   runner is added.
 7. **Handoff (CodeReviewer → QA → CTO).** Each reviewer cites the exact pushed
    PR head and concrete output. CTO checks CI, conflict-free head, CR approval,
    QA pass, and explicit operator authorization; only CTO merges.
@@ -258,6 +271,13 @@ set -euo pipefail
 : "${THR139_EXPECTED_BASE:?set to the reviewed 40-character origin/main SHA}"
 : "${THR139_EXPECTED_HEAD:?set once to the reviewed 40-character ThorChainKit HEAD}"
 (cd "$THORCHAINKIT_ROOT" && \
+  test "$(git rev-parse HEAD)" = "$THR139_EXPECTED_HEAD" && \
+  test -z "$(git status --porcelain)" && \
+  test "$(git rev-parse refs/remotes/origin/main)" = "$THR139_EXPECTED_BASE" && \
+  git merge-base --is-ancestor "$THR139_EXPECTED_BASE" "$THR139_EXPECTED_HEAD" && \
+  bash -n Scripts/verify-s1-02.sh Scripts/verify-s1-04.sh Scripts/verify-s1-04-live.sh && \
+  Scripts/verify-s1-04.sh --source-only && \
+  Scripts/verify-s1-04.sh --fixtures-only && \
   THORCHAIN_SIMULATOR_UDID="$THR139_SIMULATOR_UDID" \
   Scripts/verify-s1-02.sh)
 (cd "$THORCHAINKIT_ROOT" && \
@@ -272,6 +292,11 @@ The UW test command is:
 ```text
 scheme="$UW_ROOT/Unstoppable/Unstoppable.xcodeproj/xcshareddata/xcschemes/Development.xcscheme"
 set -euo pipefail
+python3 -m py_compile \
+  "$UW_ROOT/Scripts/verify-thr-139-scheme.py" \
+  "$UW_ROOT/Scripts/verify-thr-139-uw-tests.py"
+python3 "$UW_ROOT/Scripts/verify-thr-139-scheme.py" --self-test
+python3 "$UW_ROOT/Scripts/verify-thr-139-uw-tests.py" --self-test
 uw_result_root="$(mktemp -d)"
 THR139_UW_RESULT_BUNDLE="$uw_result_root/THR-139-uw.xcresult"
 test ! -e "$THR139_UW_RESULT_BUNDLE"
@@ -294,12 +319,12 @@ xcodebuild build -project "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj" \
   -destination "platform=iOS Simulator,id=$THR139_SIMULATOR_UDID" \
   -derivedDataPath "$THR139_UW_DERIVED_DATA" CODE_SIGNING_ALLOWED=NO
 
-: "${THR139_EXISTING_ADDRESS:?set to the audited public existing thor1 address}"
-: "${THR139_ABSENT_ADDRESS:?set to the audited public absent thor1 address}"
-: "${THR139_SIMULATOR_UDID:?set to the approved iOS 26.2 simulator UUID}"
 : "${THR139_EXPECTED_HEAD:?set to the reviewed 40-character ThorChainKit HEAD}"
 : "${THR139_EVIDENCE_ROOT:?set to a non-empty evidence root}"
 test -n "$THR139_EVIDENCE_ROOT"
+: "${THR139_EXISTING_ADDRESS:?set to the audited public existing thor1 address}"
+: "${THR139_ABSENT_ADDRESS:?set to the audited public absent thor1 address}"
+: "${THR139_SIMULATOR_UDID:?set to the approved iOS 26.2 simulator UUID}"
 
 THORCHAIN_S1_04_LIVE=1 \
 THORCHAIN_S1_04_EXPECTED_HEAD="$THR139_EXPECTED_HEAD" \
@@ -372,10 +397,13 @@ paths, or private values may enter committed evidence.
 The Gimle report is RED because the EvmKit snippet freshness is contradictory
 and semantic searches have coverage gaps. Exact local Serena, targeted `rg`,
 and Git verification are the accepted fallback; the defects remain recorded.
-Revision 9 resolves the closure 4/5 corrections by reusing the existing
+Revision 9 resolves the reviewer correction set by reusing the existing
 S1-02 and S1-04 repository gates, removing THR-139-specific ThorChainKit
 allowlists/wrappers, and spelling three executable fixed family-to-REST/RPC
-live invocations with every required public runner input. The unapproved
+live invocations with every required public runner input. The exact HEAD,
+clean-worktree, origin/main, and ancestry preflight now precedes every
+ThorChainKit PASS-capable command; checked-in shell/static gates and the two
+UW verifier self-tests precede Xcode. The unapproved
 Unstoppable live evidence sink/adapter branch remains removed. Discovery
 remains frozen at 2/2; closure remains bounded to the frozen IDs and direct
 regressions, authoring the two repository-owned UW verifier artifacts, and

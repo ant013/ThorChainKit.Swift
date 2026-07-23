@@ -1,11 +1,11 @@
-# Gimle reliability report: THR-139-resilient-rune-provider-pool-20260723-r2
+# Gimle reliability report: THR-139-resilient-rune-provider-pool-20260723-r1
 
 - Task: 13b614f7-ca87-4777-9694-15639e12c283
 - Workflow/phase: analog_change / adversarial_review
 - Trust: **RED**
 - Repository: `$THORCHAINKIT_ROOT`
 - Base HEAD: 6462bec2604db4d3d05b3cfccde1ff5b768c86e0
-- Final HEAD: 85d86570df623cece44a2fadccc68a0817b1c61a
+- Final HEAD: n/a
 - Gimle runtime: native-dev:0e9cf57c00ff970f584256126b500166580e7a72
 - Indexed commit: 8a63bfda028dd8543115b26dd777235a53304311
 
@@ -114,37 +114,28 @@ Bug statuses: {'workaround': 4}
 - D-001@2 ACCEPT: Host cardinality and allowlist semantics
 - D-002@2 ACCEPT: Exact approved-host equality
 - D-003@2 ACCEPT: REST/RPC family pairing
-- D-004@11 ACCEPT: Executable three-family live-smoke boundary
+- D-004@11 ACCEPT: Fixed three-family live invocations with bounded stored evidence
 - D-005@2 ACCEPT: Test-first execution order
-- D-006@11 ACCEPT: Repository-owned deterministic verification paths
-- D-007@10 ACCEPT: Fresh fail-closed result-bundle gate
-- D-008@11 ACCEPT: Existing S1-04 evidence schema; no unimplemented digest schema
+- D-006@11 ACCEPT: Repository-owned verifier artifacts and executable self-tests
+- D-007@11 ACCEPT: Identity and static preflight precede PASS-capable gates
+- D-008@9 ACCEPT: Existing S1-04 schema only
 - D-009@5 ACCEPT: Revision delivery state
 - D-010@2 ACCEPT: Direct identity/height verification coverage
 
 ## Verification and acceptance
 
-### Revision 9 targeted correction
+### Revision 9 closure correction set
 
-- Existing ThorChainKit `Scripts/verify-s1-02.sh`, `Scripts/verify-s1-04.sh`,
-  `Scripts/verify-xcresult.sh`, and `Scripts/verify-s1-04-live.sh` are the
-  verification boundary. No THR-139 ThorChainKit allowlist, wrapper, or
-  caller-supplied result allowlist is added.
-- The live contract is executable as three isolated fixed invocations for
-  `rorcual-mainnet`, `ibs-mainnet`, and `keplr-mainnet`; each binds its exact
-  REST/RPC URL pair and all required runner inputs, including one shared clean
-  expected HEAD, audited public addresses, simulator UUID, and a literal
-  non-empty evidence-root assertion before any child path is constructed.
-- D-008 now matches the existing S1-04 producer/verifier contract: the result
-  contains `schemaVersion`, `head`, `familyId`, `chainId`, timestamp, the three
-  heights, and exact existing/absent account records. Manifest/result digests
-  and REST/RPC URL records are not claimed because the existing runner does not
-  emit them; full-manifest stability remains an AppTests fixture property.
-- D-006 now owns and negatively verifies the exact UW repository files
-  `$UW_ROOT/Scripts/verify-thr-139-scheme.py` and
-  `$UW_ROOT/Scripts/verify-thr-139-uw-tests.py` before Xcode commands.
-- Closure 5/5 must recheck only the frozen IDs and direct regressions; no new
-  discovery is opened.
+- Exact expected HEAD, clean worktree, `origin/main` equality, and base
+  ancestry are checked before `verify-s1-02.sh`; `bash -n` and the existing
+  `verify-s1-04.sh --source-only` and `--fixtures-only` modes precede Xcode.
+- The two required UW verifier files each expose a runnable `--self-test`;
+  `python3 -m py_compile` and both self-tests precede every UW Xcode command.
+- The three live commands supply literal family/REST/RPC pairs. Stored S1-04
+  JSON proves only its existing schema and network invariants, not URL-pair
+  attestation. D-008 remains limited to that existing schema.
+- Closure 5/5 is bounded to D-004, D-006, D-007, D-008, and direct regressions;
+  discovery remains frozen at 2/2.
 
 
 ## Bugs and limitations
