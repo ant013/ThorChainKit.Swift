@@ -1,9 +1,11 @@
 # THR-139 — resilient native RUNE provider pool plan
 
-Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 9. Discovery 2/2; closure 5/5 pending targeted review.
+Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 10. Discovery 2/2; closure 5/5 pending targeted review.
 
 No implementation, UW commit, push, PR, CI, Maestro, or remote smoke is
-authorized until the exact spec and this plan are explicitly approved.
+authorized until the exact spec and this plan are explicitly approved. This
+branch may push only the ThorChainKit docs revision; UW files and evidence stay
+local and finish under an operator-controlled commit gate.
 
 ## Fixed substrate
 
@@ -18,13 +20,13 @@ authorized until the exact spec and this plan are explicitly approved.
 
 ### 1. Fresh bounded design review
 
-**Owner:** ThorChainCodeReviewer. **Dependencies:** pushed revision-9 spec,
+**Owner:** ThorChainCodeReviewer. **Dependencies:** pushed revision-10 spec,
 plan, and Gimle report. Recheck only the frozen D-001 through D-010 allowlist,
 discovery 2/2, closure 5/5. Verify that no UW acceptance transport, launch-
 argument branch, adapter sink, or production observation callback is introduced;
 verify deterministic full-manifest fixtures, reuse of the existing S1-04 family
 live-smoke runner, XML-safe preflight ordering, fresh result-bundle binding,
-repository-derived verifier paths, role-bound six-record equality,
+operator-local verifier paths and before/after manifest binding, role-bound six-record equality,
 cross-family pairing, exact repository-schema evidence verification, simulator selectors, and
 docs-only delivery.
 
@@ -59,7 +61,7 @@ set -euo pipefail
 ```
 
 Before any UW Xcode command, the ThorChainSwiftEngineer authors and owns these
-repository-derived verifier files in the exact UW checkout:
+operator-local verifier files in the exact UW checkout:
 
 ```text
 $UW_ROOT/Scripts/verify-thr-139-scheme.py
@@ -71,8 +73,14 @@ The first must reject malformed XML, missing/extra testables, and suppressed
 skipped test node. Both expose runnable `--self-test` modes that create bounded
 temporary mutants and return nonzero if any mutant passes. Run
 `python3 -m py_compile` and both self-tests before the first `xcodebuild`
-command. QA invokes these exact checked-in paths; no inline replacement
-verifier or caller-supplied allowlist is permitted.
+command. QA invokes these exact local paths; no inline replacement verifier or
+caller-supplied allowlist is permitted. Before and after local edits, run the
+established `Scripts/capture-s1-07-inputs.py` contract. Each manifest must record
+UW `HEAD`, `statusSha256`, and per-file SHA-256 records; the before/after
+manifests must have equal `HEAD` values. Do not copy these artifacts into this
+repository or commit/push them from this branch. If the established capture
+script is absent, stop before implementation; do not replace it with an ad hoc
+manifest command.
 
 ```text
 set -euo pipefail
@@ -90,7 +98,7 @@ static/negative checks. **Paths:** existing native RUNE provider, existing
 manager/descriptor validation seam if required by the failing exact equality
 tests, and `AppTests/ThorChainKitManagerTests`.
 
-In the same shell, run the repository-owned scheme preflight before the first
+In the same shell, run the operator-local scheme preflight before the first
 Xcode command, including this pre-edit test. Then add tests before production
 edits for family count/order, all six exact records, five-host derivation,
 exact equality, duplicate/foreign/HTTP/credential/query/fragment rejection,
@@ -110,15 +118,19 @@ responses; it is never copied into the live observation.
 **Owner:** ThorChainSwiftEngineer. **Dependency:** Step 3 failure evidence.
 
 Use the existing provider/manager seam only. Do not introduce a provider
-abstraction, change ThorChainKit, or edit the multichain swap provider. The
-exact six role-bound records must be compared for equality; no membership-only
-allowlist or silent deduplication is acceptable.
+abstraction or edit the multichain swap provider. Separately apply only the
+approved behavior-equivalent `LiveThorNodeClient.swift:358` do/catch repair and
+focused absence-envelope test in ThorChainKit. The exact six role-bound records
+must be compared for equality; no membership-only allowlist or silent
+deduplication is acceptable.
 
 ### 5. ThorChainKit simulator invariants
 
 **Owner:** ThorChainQAEngineer. **Dependency:** exact implementation head.
 
-Run the existing `Scripts/verify-s1-02.sh` gate, then
+First verify that the approved `LiveThorNodeClient.swift:358` repair makes both
+`Scripts/verify-s1-04.sh --source-only` and `--fixtures-only` pass. Then run the
+existing `Scripts/verify-s1-02.sh` gate, followed by
 `Scripts/verify-s1-04.sh --expected-base <40-char SHA> --expected-head
 <40-char SHA>` with `THORCHAIN_SIMULATOR_UDID` set to the approved simulator.
 The S1-04 gate internally derives its complete checked-in test manifest and
@@ -141,15 +153,15 @@ substrate. Require the verifier to report zero skipped nodes.
 
 **Owner:** ThorChainQAEngineer. **Dependency:** Steps 2 and 4.
 
-Run `set -euo pipefail` and the repository-owned XML verifier before any Xcode
+Run `set -euo pipefail` and the operator-local XML verifier before any Xcode
 command. It must parse the exact `Development.xcscheme` as XML and fail closed unless
 `TestAction/Testables` contains exactly one unsuppressed
 `BuildableReference[BlueprintName="AppTests"]`. This preflight must run before
 `xcodebuild -showdestinations`, `xcodebuild test`, or `xcodebuild build`;
 `-showdestinations` only verifies simulator availability. Then run
 `-only-testing:AppTests/ThorChainKitManagerTests` with a newly-created result
-bundle, verify the compact summary and exact test nodes against the verifier's
-repository-derived allowlist, and
+bundle, verify the compact summary and exact test nodes against the operator-local
+verifier's internally-derived allowlist, and
 run a `Debug-Dev` simulator build. Reject `-only-testing:ThorChain`, device
 artifacts, missing result bundles, failed/skipped nodes, or non-simulator build
 settings.
@@ -170,11 +182,14 @@ The fixed REST/RPC pair is bound by each command invocation; stored evidence
 does not attest the literal URL pair. Deterministic AppTests
 prove provider-pool selection with the complete three-family manifest. No Unstoppable acceptance transport,
 launch argument, adapter sink, or new live runner is added. The injected HTTP
-503 test is the failover proof; online passes are network identity/pair
-evidence, not a caller-selected owner oracle.
+503 test is the failover proof; online passes are network identity/height/account
+evidence from the supplied pair, not a caller-selected owner oracle.
 
-### 8. Review and merge gate
+### 8. Review and operator gate
 
 **Owners:** CodeReviewer, QA, then ThorChainCTO. CR approval and QA PASS must
-cite the exact PR head. CTO verifies required checks and conflict-free head,
-then waits for explicit operator authorization before merge.
+cite the exact ThorChainKit implementation head. QA also attaches the before/
+after UW capture manifests, equal UW `HEAD`, both `statusSha256` values, and
+per-file SHA-256 records. CTO verifies the pushed ThorChainKit docs head, CR
+approval, QA PASS, and explicit operator authorization. Any UW final commit is
+an operator-controlled local action; no UW PR or merge is part of this slice.

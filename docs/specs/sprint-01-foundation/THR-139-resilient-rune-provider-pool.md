@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool
 
-**Design revision:** 9 — discovery 2/2, closure 5/5 pending targeted review.
+**Design revision:** 10 — discovery 2/2, closure 5/5 pending targeted review.
 **Status:** revised
 design; implementation remains blocked until this exact revision is accepted by
 the adversarial reviewer and explicitly approved by the operator.
@@ -19,7 +19,9 @@ contracts.
   activates this correction as the sole current slice.
 - The exact UW v0.50 Development checkout is the implementation and acceptance
   substrate. Its current dirty state is evidence-only during design; it will
-  not be edited or committed until this revision is approved.
+  not be edited until this revision is approved. UW edits and evidence remain
+  local to that checkout: this ThorChainKit branch does not commit, push, PR,
+  or merge UW files.
 - The six public endpoint entries below were independently verified read-only
   on 2026-07-23. Base paths are significant because ThorChainKit appends request
   paths to the configured URL.
@@ -34,14 +36,21 @@ In scope:
 - Exact family ordering, role-bound REST/RPC pairing, fail-closed URL
   validation, and the deterministic three-family live-smoke harness.
 - ThorChainKit simulator tests that prove the existing pool/coordinator
-  behavior without changing ThorChainKit.
+  behavior, plus the one approved source-gate repair and focused absence-envelope
+  regression test described below.
 - Deterministic full-manifest family-selection fixtures in AppTests. They vary
   only scripted Comet heights so Rorcual, IBS, and Keplr are each selected in a
   separate fixture pass.
-- Repository-owned UW verification artifacts: `$UW_ROOT/Scripts/verify-thr-139-scheme.py`
-  and `$UW_ROOT/Scripts/verify-thr-139-uw-tests.py`. The implementation owner
-  authors and negatively verifies these exact scripts before the first Xcode
-  command; QA invokes only those checked-in paths.
+- Operator-local UW verification artifacts: `$UW_ROOT/Scripts/verify-thr-139-scheme.py`
+  and `$UW_ROOT/Scripts/verify-thr-139-uw-tests.py`, plus the established
+  `$UW_ROOT/Scripts/capture-s1-07-inputs.py` manifest contract. The implementation
+  owner authors and negatively verifies the two verifier scripts in the exact
+  UW checkout before the first Xcode command. Before and after local work, the
+  capture contract records UW `HEAD`, `statusSha256`, and per-file SHA-256
+  records; the two snapshots must bind all evidence to the same UW `HEAD`.
+  If the established capture script is absent, the local preflight fails closed;
+  do not substitute an ad hoc manifest. None of these local artifacts is copied
+  into or committed by this repository.
 - Online native-RUNE smoke using the existing S1-04 family live-smoke runner,
   once for each of Rorcual, IBS, and Keplr. This reuses the approved public
   endpoint, REST/RPC identity, height, and repository-defined evidence boundary; it adds
@@ -50,13 +59,16 @@ In scope:
 
 Out of scope:
 
-- A new provider abstraction, ThorChainKit implementation/lifecycle/API
-  changes, request-level retry, or identity/height-policy changes.
+- A new provider abstraction, ThorChainKit implementation/lifecycle/API changes
+  other than the single behavior-equivalent parser repair below, request-level
+  retry, or identity/height-policy changes.
 - The existing multichain swap provider, including its Liquify configuration.
 - Liquify as a native RUNE family; it is a rejected one-provider counterexample.
 - THR-135, Sprint 2, Maestro, GitHub Actions, remote simulators, or remote
   live-smoke execution.
-- Any implementation commit or PR before explicit approval of this revision.
+- Any implementation edit, commit, push, PR, or merge before explicit approval
+  of this revision. After approval, UW remains subject to an operator-controlled
+  local final-commit gate; no UW PR or merge is part of this slice.
 
 ## Exact native RUNE configuration
 
@@ -88,6 +100,20 @@ host-set membership. A configured subset, superset, duplicate, HTTP URL,
 credential, query, fragment, foreign host, or cross-family REST/RPC pairing
 fails closed. This preserves the existing manager/descriptor seam and does not
 create another abstraction.
+
+## Approved ThorChainKit gate repair
+
+The reviewed ThorChainKit base has one source-contract failure that prevents
+both `Scripts/verify-s1-04.sh --source-only` and `--fixtures-only`:
+`Sources/ThorChainKit/Network/LiveThorNodeClient.swift:358` contains
+`try? JSONSerialization`. The only permitted ThorChainKit correction in this
+slice is a behavior-equivalent `do/catch` at that expression, preserving
+successful `String` decoding and returning `nil` for JSON or cast failure. It
+must not change endpoint, selection, health, retry, height, identity, or
+acceptance semantics. Extend or verify the focused
+`testAccountAcceptsOnlyExactObservedAbsenceEnvelope` coverage so malformed
+message tokens remain rejected while the two approved absence messages still
+return `nil`.
 
 ## Verified analog family
 
@@ -153,7 +179,8 @@ selector is added to Unstoppable or ThorChainKit.
 
 1. THR-138 is done and this issue is the sole activated correction slice.
 2. This spec, plan, and Gimle report are committed and pushed as one docs-only
-   revision before implementation approval.
+   ThorChainKit revision before implementation approval. UW local files,
+   manifests, and snapshots are not committed or pushed here.
 3. The exact UW provider returns exactly the three ordered families and the
    six role-bound endpoint records above. Liquify is absent from native RUNE;
    the existing multichain swap provider is unchanged.
@@ -161,8 +188,10 @@ selector is added to Unstoppable or ThorChainKit.
    hosts, HTTP/credential/query/fragment URLs, and every REST/RPC family swap.
 5. Focused tests prove complete-operation failover and preserve height and
    identity rejection; no request-level retry or check weakening is added.
-6. On the MacBook, the exact ThorChainKit simulator tests, UW `AppTests`, and
-   Development simulator build pass at the reviewed implementation head.
+6. On the MacBook, the exact ThorChainKit simulator tests (including the
+   behavior-equivalent parser repair), UW `AppTests`, and Development simulator
+   build pass at the reviewed implementation head. Both no-Xcode S1-04 modes
+   pass before Xcode.
 7. The deterministic AppTests perform three isolated fixture passes. Each pass
    constructs all three families from the checked-in table, scripts one family
    to have the greatest valid Comet height, and verifies the completed
@@ -177,9 +206,10 @@ selector is added to Unstoppable or ThorChainKit.
    passes forced provider selection. No Unstoppable acceptance transport,
    launch-argument branch, adapter sink, or production selector is added. The
    existing injected HTTP 503 coordinator case proves complete-operation retry.
-8. CodeReviewer approval, QA pass, CTO merge-gate evidence, and explicit
-   operator authorization remain required before any merge. THR-135 and Sprint
-   2 remain blocked until then.
+8. CodeReviewer approval, QA pass, CTO exact-head evidence, and explicit
+   operator authorization remain required. The UW final commit is an
+   operator-controlled local gate; no UW PR or merge is implied. THR-135 and
+   Sprint 2 remain blocked until then.
 
 ## Test-first implementation and verification plan
 
@@ -196,17 +226,20 @@ selector is added to Unstoppable or ThorChainKit.
    preflight shown below. Then run `bash -n` plus the existing
    `verify-s1-04.sh --source-only` and `--fixtures-only` modes; these are the
    checked-in no-Xcode static/negative gates at the reviewed ThorChainKit HEAD.
-   Before the UW-specific commands below, author and own the exact
+   Before the UW-specific commands below, author and own the exact operator-local
    `$UW_ROOT/Scripts/verify-thr-139-scheme.py` and
-   `$UW_ROOT/Scripts/verify-thr-139-uw-tests.py` repository files. Their
+   `$UW_ROOT/Scripts/verify-thr-139-uw-tests.py` files. Their
    negative fixtures must reject a malformed scheme, an extra/suppressed
    testable, a missing result bundle, and any failed or skipped test node.
    Each script exposes a `--self-test` mode that creates bounded temporary
    mutants, asserts every rejection, and exits nonzero if a mutant passes.
    Run `python3 -m py_compile` and both self-tests before the first Xcode
-   command; no prose-only negative claim is accepted.
+   command; no prose-only negative claim is accepted. Capture the UW manifest
+   before and after local edits with the established `capture-s1-07-inputs.py`
+   contract and require equal `HEAD` values plus recorded `statusSha256` and
+   per-file SHA-256 maps.
 2. **Pre-edit contract tests (ThorChainSwiftEngineer).** In the exact UW
-   checkout, run the repository-owned scheme preflight before this first Xcode
+   checkout, run the operator-local scheme preflight before this first Xcode
    command, then replace the old one-Liquify expectation with exact order, URL,
    role-bound record, ownership, duplicate, superset, foreign, and pair-swap
    tests. Run them before editing production; the old provider must fail the
@@ -214,13 +247,17 @@ selector is added to Unstoppable or ThorChainKit.
    returns a real failing XCTest result, not a selector/compilation error.
 3. **Small production edit (ThorChainSwiftEngineer).** Edit only the existing
    native RUNE provider and, if required by the failing exact-equality tests,
-   its existing manager/descriptor validation seam. Do not add an abstraction,
-   touch ThorChainKit, or touch the multichain provider. Check: focused tests
-   pass and `git diff --name-only` is limited to the approved UW paths.
+   its existing manager/descriptor validation seam. Separately apply only the
+   approved `LiveThorNodeClient.swift:358` do/catch repair and focused
+   absence-envelope test in ThorChainKit. Do not add an abstraction or touch the
+   multichain provider. Check: focused tests pass; the UW manifest binds before
+   and after evidence to one unchanged UW `HEAD`; and each repository's diff is
+   limited to its approved paths.
 4. **ThorChainKit invariants (ThorChainQAEngineer).** From
    `$THORCHAINKIT_ROOT`, run the existing `Scripts/verify-s1-02.sh` and
    `Scripts/verify-s1-04.sh --expected-base ... --expected-head ...` gates with
-   the reviewed simulator UUID. Their repository-derived fixtures and
+   the reviewed simulator UUID. First verify that the approved parser repair
+   makes both `--source-only` and `--fixtures-only` pass. Their repository-derived fixtures and
    `Scripts/verify-xcresult.sh` invocation must report `PASS`, with zero
    failures, errors, and skips; do not pass an allowlist path. The S1-04 gate's
    internal manifest includes `EndpointPoolTests`,
@@ -243,7 +280,7 @@ selector is added to Unstoppable or ThorChainKit.
    `-showdestinations` for simulator availability,
    run the exact class selector with a newly-created result bundle, verify its
    compact summary and every test node are `Passed` with zero failures/skips
-   using the verifier's internally-derived checked-in allowlist, and run the
+   using the operator-local verifier's internally-derived allowlist, and run the
    explicit `Debug-Dev` simulator build.
    Check: the test and build both resolve to `PLATFORM_NAME=iphonesimulator`,
    `CONFIGURATION=Debug-Dev`, and no `-only-testing:ThorChain` selector is used.
@@ -258,9 +295,12 @@ selector is added to Unstoppable or ThorChainKit.
    identity/height/account evidence, not an Unstoppable owner-selection oracle;
    no UW acceptance transport, launch argument, adapter sink, or new live
    runner is added.
-7. **Handoff (CodeReviewer → QA → CTO).** Each reviewer cites the exact pushed
-   PR head and concrete output. CTO checks CI, conflict-free head, CR approval,
-   QA pass, and explicit operator authorization; only CTO merges.
+7. **Handoff (CodeReviewer → QA → CTO).** Reviewers cite the exact ThorChainKit
+   implementation head and concrete output. QA also cites the before/after UW
+   manifest pair, equal UW `HEAD`, both `statusSha256` values, and per-file
+   SHA-256 records. CTO verifies the docs branch exact head, CR approval, QA
+   pass, and explicit operator authorization. The UW final commit remains an
+   operator-controlled local action; no UW PR or merge is required.
 
 ## Exact command shapes
 
@@ -384,8 +424,9 @@ repository-derived S1-04 allowlist.
 This contract intentionally does not claim manifest or result digest fields,
 or REST/RPC URL records because the existing runner does not emit them. The
 three command invocations above are the source of the fixed URL-pair binding;
-the live result proves the supplied pair's family, chain, height, and account
-invariants. Full-manifest stability is proven by the deterministic AppTests,
+the live result provides network identity/height/account evidence from the
+supplied pair; it does not attest the literal URL pair or map it to a family.
+Full-manifest stability is proven by the deterministic AppTests,
 which construct and exercise all three families. Adding a second live producer
 or verifier is outside this correction slice.
 
@@ -397,7 +438,7 @@ paths, or private values may enter committed evidence.
 The Gimle report is RED because the EvmKit snippet freshness is contradictory
 and semantic searches have coverage gaps. Exact local Serena, targeted `rg`,
 and Git verification are the accepted fallback; the defects remain recorded.
-Revision 9 resolves the reviewer correction set by reusing the existing
+Revision 10 resolves the reviewer correction set by reusing the existing
 S1-02 and S1-04 repository gates, removing THR-139-specific ThorChainKit
 allowlists/wrappers, and spelling three executable fixed family-to-REST/RPC
 live invocations with every required public runner input. The exact HEAD,
@@ -406,7 +447,9 @@ ThorChainKit PASS-capable command; checked-in shell/static gates and the two
 UW verifier self-tests precede Xcode. The unapproved
 Unstoppable live evidence sink/adapter branch remains removed. Discovery
 remains frozen at 2/2; closure remains bounded to the frozen IDs and direct
-regressions, authoring the two repository-owned UW verifier artifacts, and
-asserting a non-empty evidence root before child paths are built. Explicit
-operator approval of this exact pushed spec and plan is
+regressions, authoring the two operator-local UW verifier artifacts, binding
+before/after capture manifests to one UW `HEAD`, repairing the single
+ThorChainKit source-gate expression, and asserting a non-empty evidence root
+before child paths are built. Explicit operator approval of this exact pushed
+spec and plan is
 required before implementation.

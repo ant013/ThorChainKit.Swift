@@ -5,7 +5,7 @@
 - Trust: **RED**
 - Repository: `$THORCHAINKIT_ROOT`
 - Base HEAD: 6462bec2604db4d3d05b3cfccde1ff5b768c86e0
-- Final HEAD: fdb40d48f950140278a35ec0b091c4614fa79747
+- Final HEAD: n/a
 - Gimle runtime: native-dev:0e9cf57c00ff970f584256126b500166580e7a72
 - Indexed commit: 8a63bfda028dd8543115b26dd777235a53304311
 
@@ -121,21 +121,12 @@ Bug statuses: {'workaround': 4}
 - D-008@10 ACCEPT: Existing S1-04 schema only
 - D-009@5 ACCEPT: Revision delivery state
 - D-010@2 ACCEPT: Direct identity/height verification coverage
+- D-011@2 ACCEPT: Local-only UW boundary
+- D-012@2 ACCEPT: Required ThorChainKit gate repair
+- D-013@2 ACCEPT: URL-pair evidence wording
+- D-014@2 ACCEPT: Closure artifact consistency
 
 ## Verification and acceptance
-
-### Revision 9 closure correction set
-
-- Exact expected HEAD, clean worktree, `origin/main` equality, and base
-  ancestry are checked before `verify-s1-02.sh`; `bash -n` and the existing
-  `verify-s1-04.sh --source-only` and `--fixtures-only` modes precede Xcode.
-- The two required UW verifier files each expose a runnable `--self-test`;
-  `python3 -m py_compile` and both self-tests precede every UW Xcode command.
-- The three live commands supply literal family/REST/RPC pairs. Stored S1-04
-  JSON proves only its existing schema and network invariants, not URL-pair
-  attestation. D-008 remains limited to that existing schema.
-- Closure 5/5 is bounded to D-004, D-006, D-007, D-008, and direct regressions;
-  discovery remains frozen at 2/2.
 
 
 ## Bugs and limitations
