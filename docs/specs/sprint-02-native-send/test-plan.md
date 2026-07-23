@@ -8,15 +8,19 @@ This plan makes the seven slice exits executable and separates deterministic pro
 
 | Layer | Execution | Proof |
 |---|---|---|
-| pure domain | default CI | exact/Max intent, opaque quote token, absolute expiry, typed errors, retry decisions |
-| protocol codec | default CI | exact protobuf bytes, digests, signatures, TxRaw, hash |
-| controlled async | default CI | one-family H0/H1/H2 preflight, cancellation, cross-Kit/sequence single-flight |
-| storage/crash | default CI with temporary GRDB | migration, pre-broadcast durability, restart transitions |
-| package integration | default CI | public facade, real internal dependencies, pending publisher |
+| pure domain | local MacBook test run | exact/Max intent, opaque quote token, absolute expiry, typed errors, retry decisions |
+| protocol codec | local MacBook test run | exact protobuf bytes, digests, signatures, TxRaw, hash |
+| controlled async | local MacBook test run | one-family H0/H1/H2 preflight, cancellation, cross-Kit/sequence single-flight |
+| storage/crash | local MacBook test run with temporary GRDB | migration, pre-broadcast durability, restart transitions |
+| package integration | local MacBook test run | public facade, real internal dependencies, pending publisher |
 | Example UI | guarded isolated-fixture Maestro suite | user-visible review/CheckTx-accepted/unknown/retry/restart states |
 | opt-in mainnet | manual/release gate | current endpoint, fee, halt, signing, broadcast compatibility |
 | WalletCore | host branch CI | handler/factory/signer/error contract |
 | Unstoppable manual | Development app | real SendNew transfer; no Maestro in host |
+
+GitHub Actions are build-only for the ThorChainKit repository. They do not run
+Swift tests, mutants, simulators, Maestro, or mainnet calls; local MacBook
+evidence is the authority for test execution.
 
 ## Traceability Matrix
 

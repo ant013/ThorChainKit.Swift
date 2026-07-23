@@ -1,0 +1,34 @@
+{
+  "schema": "THR-135-s2-01-evidence-r3",
+  "run": "THR-135-s2-01-20260723-r3",
+  "phase": "adversarial_review",
+  "repository": {
+    "branch": "docs/THR-135-s2-01-formalization",
+    "head_before_commit": "b377a13aff03f76e3d4c01d9bc18c77ce1fa5493",
+    "integration_head": "937332b2e7020868abcac8681ddd664b6e4bad72"
+  },
+  "artifacts": {
+    "spec_delta_matrix_test_plan": "639e8da5bbb329ff07e1c7ab4d9b59886afdf3e87e54ddff1474b8d90d937d21",
+    "implementation_plan": "d6590930f8797ccf49622d10bf6a9274315bb00cee93f3cf546f25c899d9ab4e",
+    "analog_family": "7279cec526c0cd6a2b67407049080de263eddb2680077abb6083c8493eac626d",
+    "consolidated_test_plan": "efb853fd65011a24331606434794d0c59cc9d7d62c1490da0c2f7e22a4a0a0c6",
+    "sprint_family_report": "80cd125b1c8d056d644c809f055195e4d42c6b399e0959ff591e326a4c6900f7"
+  },
+  "analog": {
+    "primary": "C-S201-HANDLER",
+    "supporting": ["C-S201-COMPOSITION", "current ThorChainKit Kit/LifecycleGate seam"],
+    "rejected": ["C-S201-PRIVATEKEY-COUNTER"],
+    "claims": ["F-S201-HANDLER", "F-S201-COMPOSITION", "F-S201-BIGINT-SENDABLE-BOUNDARY", "F-S201-ERROR-GRAPH-COMPILE"]
+  },
+  "decisions": {
+    "deferred_facade": "operationUnavailable after lifecycle admission; zero side effects",
+    "lifecycle_composition": "KitDependencies.SendRuntime + KitFactory paths + LifecycleCommandBridge activation/invalidation",
+    "generation_error": "quoteGenerationInvalidated via bounded internal tombstone after rapid restart",
+    "broadcast_codespace": "private raw value projected to sdk/thorchain/other",
+    "reflection": "CustomDebugStringConvertible + CustomReflectable fixed redacted mirror",
+    "dependency": "default BigInt 5.7.0 and exact declared floor 5.0.0",
+    "verification": "local MacBook tests and explicit compile-negative/concurrency harnesses; CI build-only"
+  },
+  "gimle_trust": "RED",
+  "trust_reason": "Gimle mapping/session defects remain quarantined; every load-bearing selected claim is independently verified with current-tree rg/Git evidence."
+}

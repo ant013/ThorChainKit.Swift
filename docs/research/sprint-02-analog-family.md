@@ -25,9 +25,14 @@ The design intentionally combines three roles:
 
 ## Selection Matrix
 
+For S2-01, the single primary authority is the current Unstoppable SendNew
+handler family (`EvmSendHandler`/`TronSendHandler`). TronKit is supporting
+evidence for the standalone Kit ownership and lifecycle composition seam only;
+it is not a competing primary and its raw transaction construction is rejected.
+
 | Slice | Primary analog | Supporting evidence | Rejected counterexample | Adopted delta |
 |---|---|---|---|---|
-| S2-01 | current UW `EvmSendHandler`/`TronSendHandler` review→send split | `SendData`, `SendHandlerFactory` | EvmKit public seed/private-key signer | quote moves into the standalone kit, remains opaque, and stores only checked-Sendable snapshots |
+| S2-01 | current UW `EvmSendHandler`/`TronSendHandler` review→send split, typed validation, and ten-second expiration | `SendData`, `SendHandlerFactory`; TronKit Kit/lifecycle composition as supporting kit-boundary evidence | EvmKit public seed/private-key signer; TronKit raw transaction authority | quote moves into the standalone kit, remains opaque, stores only checked-Sendable snapshots, and fails closed until later engines exist |
 | S2-02 | Vultisig THOR preflight spine | THORNode `handler_send.go`/keeper Mimir semantics, Vultisig fixture | EvmKit maximum nonce across providers | one endpoint family with coherent monotonic H0/H1/H2 snapshots; every provider operation has an owned deadline/token race |
 | S2-03 | Vultisig `THORChainHelper` signing spine | THORNode proto/TxConfig/official CLI, independent fixture | Vultisig `20_000_000` default gas | local Swift protobuf encoding with pinned official `3_000_000` gas provenance and complete deterministic signed vector |
 | S2-04 | UW host owns signing capability | HsCryptoKit compact signing, THOR vector | concrete EvmKit signer owning a private key | ephemeral async signer; kit verifies key/address/signature; actor serialization and non-cooperative-operation liveness |

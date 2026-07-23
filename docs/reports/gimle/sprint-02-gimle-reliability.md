@@ -78,6 +78,14 @@ Bug statuses: {'workaround': 7, 'fixed': 5}
 
 ## Component analog family
 
+S2-01 primary authority is `C-S201-HANDLER` (current Unstoppable
+`EvmSendHandler`/`TronSendHandler`) for review→send separation, typed
+validation, and ten-second expiration. `C-S201-COMPOSITION` and current
+TronKit lifecycle/Kit composition are supporting evidence only; TronKit is not
+the S2-01 primary. The public domain, fail-closed deferred facade, generation
+tombstone, fixed codespace category, and redacted reflection are ThorChainKit
+deltas.
+
 | Slice | Risk | Required dimensions | Required roles | Waived roles | Primary | Supporting | Counterexamples |
 |---|---|---|---|---|---|---|---|
 | S2-01 | high | boundary, responsibility, state_errors, tests | composition, consumer, contract, counterexample, implementation, test | test | C-S201-HANDLER | C-S201-COMPOSITION | C-S201-PRIVATEKEY-COUNTER |
