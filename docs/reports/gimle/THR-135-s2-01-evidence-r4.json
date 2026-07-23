@@ -4,7 +4,7 @@
   "phase": "adversarial_review",
   "repository": {
     "branch": "docs/THR-135-s2-01-formalization",
-    "superseded_head": "299a8ea7ff3ad7a93580ede5b39bd8872b015193",
+    "superseded_head": "e6581204f1a96cafb7fe7189dcd82ee764c6e612",
     "integration_head": "937332b2e7020868abcac8681ddd664b6e4bad72"
   },
   "artifacts": {
@@ -18,7 +18,7 @@
     "primary": "C-S201-HANDLER",
     "supporting": ["C-S201-COMPOSITION", "current ThorChainKit Kit/LifecycleGate seam"],
     "rejected": ["C-S201-PRIVATEKEY-COUNTER"],
-    "claims": ["F-S201-HANDLER", "F-S201-COMPOSITION", "F-S201-BIGINT-CURRENT", "F-S201-ERROR-GRAPH-COMPILE"]
+    "claims": ["F-S201-HANDLER", "F-S201-COMPOSITION", "F-S201-BIGINT-CURRENT"]
   },
   "current_dependency_evidence": {
     "default_lock": "Package.resolved BigInt 5.7.0",
@@ -28,12 +28,12 @@
     "historical_non_load_bearing": "F-S201-BIGINT-SENDABLE-BOUNDARY revision 1, BigInt 5.3.0 and host-local /tmp compiler probe"
   },
   "decisions": {
-    "deferred_facade": "operationUnavailable after lifecycle admission; zero side effects",
+    "deferred_facade": "operationUnavailable only after lifecycle admission and valid local input; zero side effects",
     "lifecycle_composition": "KitDependencies.SendRuntime + KitFactory paths + LifecycleCommandBridge activation/invalidation",
     "generation_error": "quoteGenerationInvalidated via bounded internal tombstone after rapid restart",
     "broadcast_codespace": "private raw value projected to sdk/thorchain/other",
     "reflection": "CustomDebugStringConvertible + CustomReflectable fixed redacted mirror",
-    "verification": "local MacBook tests and explicit compile-negative/concurrency harnesses; CI build-only"
+    "verification": "local MacBook tests plus an implementation-head iOS 13 deployment-floor/import guard and explicit compile-negative/concurrency harnesses; CI build-only"
   },
   "gimle_trust": "RED",
   "trust_reason": "Gimle mapping/session defects remain quarantined; every load-bearing selected claim is independently verified with current-tree rg/Git evidence."

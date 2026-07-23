@@ -26,7 +26,7 @@ The UW working copy is intentionally dirty with local THR-104/THR-139 integratio
 ## S2-01 decisions
 
 - Immutable public values remain the Kit-owned, host-neutral ownership spine, while the UW handler family is the coherent behavioral analog.
-- Active deferred facade calls fail closed as `operationUnavailable`; inactive lifecycle admission still returns `kitNotStarted`; pending is empty and `.degraded` until S2-05.
+- Active deferred facade calls with valid local input fail closed as `operationUnavailable`; invalid local input returns its stable validation error; inactive lifecycle admission still returns `kitNotStarted`; pending is empty and `.degraded` until S2-05.
 - Quote identity is opaque, one-use, generation-bound, and exactly ten seconds from the accepted coherent snapshot.
 - Errors are finite, deterministic, `Sendable`, and sanitized; provider text and raw codespace stay internal, while public codespace is a fixed category allowlist; debug and reflection use explicit redacted mirrors.
 - The composition seam is `Kit` → `KitDependencies`/`KitFactory` → `LifecycleCommandBridge` → `LifecycleGate` with one stored `SendRuntime` dependency.
@@ -43,3 +43,6 @@ The UW working copy is intentionally dirty with local THR-104/THR-139 integratio
   binding for this revision; no mutable external audit root is required to
   reconstruct the selected claims, candidate IDs, decision IDs, or artifact
   hashes.
+- The historical host-local `F-S201-ERROR-GRAPH-COMPILE` probe is quarantined
+  and omitted from the load-bearing manifest; the implementation head must
+  supply the committed deployment-floor/import and concurrency harnesses.

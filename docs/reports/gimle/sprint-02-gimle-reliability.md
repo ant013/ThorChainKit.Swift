@@ -281,10 +281,10 @@ deltas.
   - Serena: n/a
   - rg: Tags 5f2141c3,59a3e925,c6fa8caa,52e66ad9 share helpers.go SHA256 72ce4607... and keys.go SHA256 65f6e606... with the same nine module names; live Version current/querier is 3.19.3/3.19.0
   - Anchors: THORNode official v3.19.0-v3.19.3 tags
-| F-S201-ERROR-GRAPH-COMPILE | 2 | yes | MATCH | yes | rg | n/a | valid | known_current | The revision-9 public SendError graph with internally validated read-only nonempty QuoteChanges is checked Sendable under Swift 5 complete mode, while an external consumer canno... |
+| F-S201-ERROR-GRAPH-COMPILE | 2 | no | MATCH | no | rg | n/a | valid | quarantined_non_load_bearing | Historical host-local compiler probe retained for audit context only; it is removed from the THR-135 load-bearing manifest and does not prove the final package. |
   - Serena: n/a
-  - rg: xcrun swiftc positive exact-graph probe exited 0; separately emitted Revision9Errors module made both external QuoteChanges(validating: []) and SendError.quoteChanged([]) fail compilation without suppression
-  - Anchors: compiler-probe:/tmp/thor-s2-sendable.RdvsEf/revision9_error_probe.swift
+  - rg: Historical xcrun swiftc probe only; the absolute `/tmp` source and output are not delivery evidence.
+  - Anchors: compiler-probe:/tmp/thor-s2-sendable.RdvsEf/revision9_error_probe.swift (historical/non-load-bearing)
 | F-S205-LIVE-TX-LOOKUP | 1 | yes | MATCH | yes | rg | n/a | valid | known_current | Cosmos SDK v0.53.0 defines GET /cosmos/tx/v1beta1/txs/{hash}; current Liquify returns a bounded HTTP 200 with matching tx_response.txhash and positive height for an indexed tran... |
   - Serena: n/a
   - rg: Official Cosmos SDK v0.53.0 service.proto pins the route and x/auth/tx/service.go maps QueryTx not-found to gRPC NotFound; live 2026-07-17 probes returned 200/matching hash/height and 404/code5/details[]/exact hash-bearing message
