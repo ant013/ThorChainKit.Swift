@@ -119,7 +119,7 @@ Bug statuses: {'workaround': 4}
 - D-006@2 ACCEPT: ThorChainKit command viability
 - D-007@2 ACCEPT: WalletCore testable selector
 - D-008@2 ACCEPT: Live-smoke operability evidence
-- D-009@2 ACCEPT: Revision delivery state
+- D-009@3 ACCEPT: Revision delivery state
 - D-010@2 ACCEPT: Direct identity/height verification coverage
 
 ## Verification and acceptance
