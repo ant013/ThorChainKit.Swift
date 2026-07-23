@@ -208,10 +208,10 @@ if [[ "$fixtures_only" == false ]]; then
         if [[ -n "$selector" ]]; then
             selection=("-only-testing:ThorChainKitTests/$selector")
         else
-            while IFS= read -r suite; do
-                selection+=("-only-testing:${suite/./\/}")
-            done < <(cut -d/ -f1 "$allowlist" | LC_ALL=C sort -u)
-            ((${#selection[@]} > 0)) || fail "full test allowlist contains no suites"
+            while IFS= read -r test_id; do
+                selection+=("-only-testing:${test_id/./\/}")
+            done < "$allowlist"
+            ((${#selection[@]} > 0)) || fail "full test allowlist contains no tests"
         fi
         derived_data=$(mktemp -d)
         result_bundle=$(mktemp -d)/"$label.xcresult"
