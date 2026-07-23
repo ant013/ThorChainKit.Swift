@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool
 
-**Design revision:** 12 — discovery 2/2, closure 5/5 remains frozen; targeted
+**Design revision:** 13 — discovery 2/2, closure 5/5 remains frozen; targeted
 correction review is pending.
 **Status:** revised
 design; implementation remains blocked until this exact revision is accepted by
@@ -220,76 +220,73 @@ selector is added to Unstoppable or ThorChainKit.
 
 ## Test-first implementation and verification plan
 
-1. **Pre-approval baseline and post-repair gates (ThorChainSwiftEngineer).** Reuse the
-   existing repository-owned `Scripts/verify-s1-02.sh`, `Scripts/verify-s1-04.sh`,
-   `Scripts/verify-xcresult.sh`, and `Scripts/verify-s1-04-live.sh` contracts.
-   Do not add THR-139 ThorChainKit allowlists, result-bundle wrappers, or
-   allowlist arguments. Those scripts use `set -euo pipefail`, derive their
-   checked-in fixtures from the repository root, create fresh result bundles,
-   and reject stale bundles internally. Run their existing shell syntax and
-   negative-fixture checks; no caller-supplied allowlist path is permitted.
-   Before approval, perform only the exact expected-HEAD, clean-worktree,
-   `origin/main` equality, and base-ancestry preflight shown below plus `bash -n`.
-   Do not claim a source/fixture PASS on the unmodified base: the known
-   `LiveThorNodeClient.swift:358` parser defect is the approved correction.
-   After approval, apply that repair first (Step 3), rerun the same preflight,
-   then run `bash -n` plus the existing `verify-s1-04.sh --source-only` and
-   `--fixtures-only` modes. Only this post-repair run may emit PASS or precede
-   `verify-s1-02.sh`; no PASS-capable ThorChainKit gate runs before the repair.
-   Before the UW-specific commands below, author and own the exact operator-local
-   `$UW_ROOT/Scripts/verify-thr-139-scheme.py` and
-   `$UW_ROOT/Scripts/verify-thr-139-uw-tests.py` files. Their
-   negative fixtures must reject a malformed scheme, an extra/suppressed
-   testable, a missing result bundle, and any failed or skipped test node.
-   Each script exposes a `--self-test` mode that creates bounded temporary
-   mutants, asserts every rejection, and exits nonzero if a mutant passes.
-   Run `python3 -m py_compile` and both self-tests before the first Xcode
-   command; no prose-only negative claim is accepted. Capture the UW manifest
-   before and after local edits with
-   `$THORCHAINKIT_ROOT/Scripts/capture-s1-07-inputs.py --root "$UW_ROOT"`
-   and labels `before` and `after`; require each manifest `head` to equal
-   `8a63bfda028dd8543115b26dd777235a53304311`, equal before/after `HEAD`
-   values, and recorded `statusSha256` and per-file SHA-256 maps. After the
-   local verifier files are authored, a machine-readable check must fail closed
-   unless the `after` manifest's file map contains both exact relative paths
-   `Scripts/verify-thr-139-scheme.py` and `Scripts/verify-thr-139-uw-tests.py`
-   with non-empty SHA-256 values. A manifest that omits either verifier is not
-   accepted; the `before` manifest is captured before those new files exist.
-   The check is executable, not a prose assertion:
+1. **Baseline gates, verifier artifacts, and initial capture (ThorChainSwiftEngineer).**
+   Reuse the existing repository-owned `Scripts/verify-s1-02.sh`,
+   `Scripts/verify-s1-04.sh`, `Scripts/verify-xcresult.sh`, and
+   `Scripts/verify-s1-04-live.sh` contracts. Do not add THR-139 ThorChainKit
+   allowlists, result-bundle wrappers, or allowlist arguments. Before approval,
+   perform the exact expected-HEAD, clean-worktree, `origin/main` equality, base
+   ancestry, and `bash -n` preflight, then reproduce both known no-Xcode
+   failures with `--source-only` and `--fixtures-only`; both must exit nonzero
+   at `LiveThorNodeClient.swift:358`. Do not claim PASS on the unmodified base.
+   Author both operator-local verifier files before the initial `before` capture,
+   run `python3 -m py_compile` and both self-tests, and then capture `before`.
+   Capture `after` only after all approved local edits. Each manifest must record
+   schema 1, approved head `8a63bfda028dd8543115b26dd777235a53304311`, a
+   lowercase 64-character `statusSha256`, valid per-file SHA-256 records, and
+   both verifier paths with `state == "present"` and lowercase 64-character
+   digests. The two manifest heads must be equal. If the ThorChainKit capture
+   utility is absent, stop; do not substitute an ad hoc manifest.
+
+   The exact executable validation is:
 
    ```text
-   python3 - "$THR139_UW_AFTER_MANIFEST" <<'PY'
-   import json, sys
-
-   manifest = json.load(open(sys.argv[1], encoding="utf-8"))
-   assert manifest["head"] == "8a63bfda028dd8543115b26dd777235a53304311"
-   assert manifest["statusSha256"]
-   files = manifest["files"]
-   for path in (
-       "Scripts/verify-thr-139-scheme.py",
-       "Scripts/verify-thr-139-uw-tests.py",
-   ):
-       digest = files.get(path)
-       assert isinstance(digest, str) and len(digest) == 64 and digest
-   PY
+   set -euo pipefail
+   expected_head=8a63bfda028dd8543115b26dd777235a53304311
+   scheme_path=Scripts/verify-thr-139-scheme.py
+   tests_path=Scripts/verify-thr-139-uw-tests.py
+   for manifest in "$THR139_UW_BEFORE_MANIFEST" "$THR139_UW_AFTER_MANIFEST"; do
+     jq -e --arg expected_head "$expected_head" \
+       --arg scheme_path "$scheme_path" --arg tests_path "$tests_path" '
+       .schemaVersion == 1
+       and (.head == $expected_head)
+       and ((.statusSha256 | type) == "string")
+       and (.statusSha256 | test("^[0-9a-f]{64}$"))
+       and ((.files | type) == "array" and (.files | length) > 0)
+       and all(.files[];
+         ((.path | type) == "string")
+         and (.state == "present" or .state == "deleted")
+         and ((.size | type) == "number" and .size >= 0)
+         and ((.sha256 | type) == "string")
+         and (.sha256 | test("^[0-9a-f]{64}$")))
+       and ([.files[] | select(.path == $scheme_path and .state == "present" and (.sha256 | test("^[0-9a-f]{64}$")))] | length == 1)
+       and ([.files[] | select(.path == $tests_path and .state == "present" and (.sha256 | test("^[0-9a-f]{64}$")))] | length == 1)
+     ' "$manifest"
+   done
+   test "$(jq -er '.head' "$THR139_UW_BEFORE_MANIFEST")" = \
+     "$(jq -er '.head' "$THR139_UW_AFTER_MANIFEST")"
    ```
-2. **Pre-edit contract tests (ThorChainSwiftEngineer).** In the exact UW
-   checkout, run the operator-local scheme preflight before this first Xcode
-   command, then replace the old one-Liquify expectation with exact order, URL,
-   role-bound record, ownership, duplicate, superset, foreign, and pair-swap
-   tests. Run them before editing production; the old provider must fail the
-   new contract. Check: `xcodebuild ... -only-testing:AppTests/ThorChainKitManagerTests test`
-   returns a real failing XCTest result, not a selector/compilation error.
-3. **Small production edit and approved parser repair (ThorChainSwiftEngineer).**
-   After explicit approval, apply the behavior-equivalent
-   `LiveThorNodeClient.swift:358` do/catch repair first; only then may the
-   post-repair source/fixture gates in Step 1 run. Edit only the existing
-   native RUNE provider and, if required by the failing exact-equality tests,
-   its existing manager/descriptor validation seam. Apply the focused
-   absence-envelope test in ThorChainKit with that repair. Do not add an abstraction or touch the
-   multichain provider. Check: focused tests pass; the UW manifest binds before
-   and after evidence to one unchanged UW `HEAD`; and each repository's diff is
-   limited to its approved paths.
+2. **Approved parser repair and no-Xcode gate closure (ThorChainSwiftEngineer).**
+   After explicit approval and the baseline failure captures, apply only the
+   behavior-equivalent `LiveThorNodeClient.swift:358` do/catch repair and its
+   focused absence-envelope test. Rerun `Scripts/verify-s1-04.sh
+   --source-only` and `--fixtures-only`; both must PASS. No Xcode command is
+   permitted before both post-repair no-Xcode modes pass.
+3. **Test-first UW contract and minimal native configuration edit (ThorChainSwiftEngineer).**
+   Now run the operator-local scheme preflight and add tests before editing the
+   native provider for family count/order, all six exact records, five-host
+   derivation, exact equality, duplicate/foreign/HTTP/credential/query/fragment
+   rejection, every REST/RPC pair swap, Liquify absence, and unchanged
+   multichain ownership. Run `xcodebuild ... -only-testing:AppTests/ThorChainKitManagerTests test`
+   and capture a genuine pre-edit failure, not a selector/compilation error.
+   The same target retains deterministic full-manifest family-selection fixtures
+   and asserts the completed projection's `providerFamilyId` for Rorcual, IBS,
+   and Keplr. After the failure evidence, edit only the existing native RUNE
+   provider and its manager/descriptor seam if required. Do not add an
+   abstraction or touch the multichain provider. The six role-bound records
+   must be compared for equality; no membership-only allowlist or silent
+   deduplication is acceptable. Check: focused tests pass and both manifests
+   bind to the approved unchanged UW `HEAD`.
 4. **ThorChainKit invariants (ThorChainQAEngineer).** From
    `$THORCHAINKIT_ROOT`, run the existing `Scripts/verify-s1-02.sh` and
    `Scripts/verify-s1-04.sh --expected-base ... --expected-head ...` gates with
@@ -480,7 +477,7 @@ paths, or private values may enter committed evidence.
 The Gimle report is RED because the EvmKit snippet freshness is contradictory
 and semantic searches have coverage gaps. Exact local Serena, targeted `rg`,
 and Git verification are the accepted fallback; the defects remain recorded.
-Revision 12 resolves the closure-5/5 correction set by reusing the existing
+Revision 13 resolves the closure-5/5 correction set by reusing the existing
 S1-02 and S1-04 repository gates, removing THR-139-specific ThorChainKit
 allowlists/wrappers, and spelling three executable fixed family-to-REST/RPC
 live invocations with every required public runner input. The exact HEAD,
@@ -490,7 +487,9 @@ UW verifier self-tests precede Xcode. The unapproved
 Unstoppable live evidence sink/adapter branch remains removed. Discovery
 remains frozen at 2/2; closure remains bounded to the frozen IDs and direct
 regressions, authoring the two operator-local UW verifier artifacts, binding
-before/after capture manifests to one UW `HEAD`, repairing the single
+before/after capture manifests to one approved UW `HEAD`, requiring both
+operator-local verifier paths in both manifests, validating the complete
+manifest schema with executable `jq -e` checks, repairing the single
 ThorChainKit source-gate expression, and asserting a non-empty evidence root
 before child paths are built. Explicit operator approval of this exact pushed
 spec and plan is
