@@ -287,12 +287,20 @@ cat Tests/ThorChainKitTests/Fixtures/S1-01-tests.txt \
     Tests/ThorChainKitTests/Fixtures/S1-05-tests.txt \
     | sort -u > "$allowlist"
 
+selection=()
+while IFS= read -r test_id; do
+    [[ "$test_id" == ThorChainKitTests.*/* ]] \
+        || fail "test allowlist contains an invalid identifier"
+    selection+=("-only-testing:ThorChainKitTests/${test_id#ThorChainKitTests.}")
+done < "$allowlist"
+((${#selection[@]} > 0)) || fail "test allowlist contains no tests"
+
 xcodebuild \
     -scheme ThorChainKit \
     -destination "platform=iOS Simulator,id=$simulator_udid" \
     -derivedDataPath "$derived_data" \
     -resultBundlePath "$result_bundle" \
-    -only-testing:ThorChainKitTests \
+    "${selection[@]}" \
     SWIFT_VERSION=5 \
     SWIFT_STRICT_CONCURRENCY=complete \
     SWIFT_SUPPRESS_WARNINGS=NO \
