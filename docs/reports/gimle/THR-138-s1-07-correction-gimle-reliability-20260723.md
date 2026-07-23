@@ -1,11 +1,18 @@
 # THR-138 Gimle reliability report
 
 - Task: THR-138
-- Workflow/phase: `analog_change` / design
+- Workflow/phase: `analog_change` / adversarial review, design revision 3
 - Repository branch: `docs/s1-07-unstoppable-rune-surface-v050`
-- Repository head for the reviewed design revision: `f7d0333f33ca21da36cb436887e3d1b181fa5077`
+- Repository head for the reviewed design revision: `325212a658ed49b8ec9d1acf7bc811babffb73de`
+- Containing commit for the redacted Liquify artifact and revision-3 design
+  inputs: `325212a658ed49b8ec9d1acf7bc811babffb73de`
 - Canonical state: `audit/runs/THR-138-s1-07-correction-20260723/state.json`
 - Trust: **RED for Gimle/Palace evidence; current-tree and live fallbacks are usable**
+
+The revision-3 artifact hash manifest is recorded in the canonical state and
+the exact Paperclip handoff. It covers the spec, plan, this report, and the
+redacted response artifact; the report digest is captured externally to avoid
+self-reference.
 
 ## Evidence used
 
@@ -54,13 +61,16 @@ balance-operation errors remain fail-closed.
 
 ## Fixed local verification substrate
 
-- UW v0.50: `/Users/ant013/Data/AI/unstoppable-wallet-ios-THR-104-v0.50`
-- MarketKit: `/Users/ant013/Data/AI/MarketKit.Swift-THR-104`
-- ThorChainKit: `/Users/ant013/Data/AI/thorchain`
-- UW workspace/scheme/configuration/destination: `Wallet.xcworkspace`,
+- UW v0.50: symbolic operator input `$UW_ROOT`
+- MarketKit: symbolic operator input `$MARKETKIT_ROOT`
+- ThorChainKit: symbolic operator input `$THORCHAINKIT_ROOT`
+- UW workspace/scheme/configuration/destination: `$UW_WORKSPACE`,
   `Development`, `Debug-Dev`, `generic/platform=iOS`
-- The exact source SHA/status and local package-path resolution must be captured
-  before and after every verification run; any change invalidates the result.
+- Before and after every verification run, capture each root's SHA, full
+  porcelain status, binary tracked-diff digests, intentionally dirty/untracked
+  in-scope file manifest, and local package-path resolution. ThorChainKit must
+  equal the exact implementation PR head; any other change invalidates the
+  result.
 
 ## Limitations
 
@@ -73,5 +83,12 @@ balance-operation errors remain fail-closed.
   verification input, not a claim that the docs review commit contains product
   implementation. QA must bind them to the implementation PR head before
   accepting live-smoke evidence.
+- The current account reader classifies a matching 404 before leased-height
+  validation; revision 3 therefore requires height validation first and
+  duplicate-key rejection before absence classification. These are unrun until
+  explicit design approval.
+- The finalized provider audit requires post-fix exact local S1-04 live
+  acceptance for Rorcual, IBS, and Keplr, plus simulator launchd environment
+  injection and cleanup. Provider configuration remains out of scope here.
 - Local app build/live-smoke after implementation is intentionally unrun until
   the written design receives explicit approval.

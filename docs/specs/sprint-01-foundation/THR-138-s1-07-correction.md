@@ -1,6 +1,6 @@
 # THR-138 — S1-07 native RUNE sync correction
 
-**Status:** design revision 2; discovery 1/2, closure 0/5. Implementation is blocked pending adversarial re-review and explicit approval of this exact revision.
+**Status:** design revision 3; discovery 1/2, closure 0/5. Implementation is blocked pending adversarial re-review and explicit approval of this exact revision.
 
 ## Goal
 
@@ -22,6 +22,11 @@ address `thor1le9eykyndunax8k24w8fykd8ndx35w2h27c008`:
 - message: `account <requested-address> not found`
 - details: `[]`
 - Cosmos height header: present (`27120711` in the reproduction)
+
+The leased-height check is load-bearing: the account reader currently checks
+the 404 absence body before validating that response's Cosmos height. A 404
+from a backend serving a different height can therefore be misclassified as an
+absent account.
 
 The redacted response artifact is
 [`THR-138-liquify-account-404-20260723.json`](../../reports/gimle/THR-138-liquify-account-404-20260723.json).
@@ -49,6 +54,13 @@ Assumptions:
   tolerance is forbidden. Generic or foreign-address messages are not absence.
 - The existing long-form response remains valid and must continue to be
   accepted.
+- The response's leased Cosmos height must be validated before any 404 absence
+  classification. Missing, malformed, or mismatched height is a typed
+  `heightMismatch`, never an absent account.
+- Duplicate JSON object keys are malformed for this envelope. The classifier
+  rejects any duplicate key before decoding or absence classification,
+  including both conflicting and same-value duplicates of `code`, `message`,
+  or `details`.
 
 In scope:
 
@@ -70,19 +82,25 @@ Out of scope:
 1. The real local UW v0.50 + local MarketKit + local ThorChainKit Development
    live-smoke reproduces the short Liquify response before the correction and
    completes the no-funds native RUNE sync after the correction.
-2. Account absence is returned only for HTTP 404 with code `5`, empty details,
-   and full-string equality with either
+2. Account absence is returned only after the response matches the leased
+   Cosmos height, and only for HTTP 404 with code `5`, empty details, no
+   duplicate JSON object keys, and full-string equality with either
    `rpc error: code = NotFound desc = account <requested-address> not found: key not found`
    or `account <requested-address> not found`.
 3. Prefix, suffix, leading/trailing/internal-whitespace, foreign-address,
-   wrong-code, nonempty-details, malformed-JSON, exact-body-under-non-404, and
+   wrong-code, nonempty-details, duplicate-key, malformed-JSON,
+   missing/malformed/mismatched-height, exact-body-under-non-404, and
    balance-404-with-the-same-body cases retain typed fail-closed errors. The
    balance case remains `.httpStatus(.balances, 404)`.
 4. The focused ThorChainKit regression test, relevant ThorChainKit and
    WalletCore tests, and the local Development application build pass. No
    GitHub Actions run is used.
-5. The final QA evidence cites the exact local PR head and records the real
-   device/app/OS/endpoint result without sensitive material. Sprint 2 remains
+5. Post-fix exact local S1-04 live acceptance passes for the three already
+   audited families Rorcual, IBS, and Keplr. This consumes existing verified
+   family inputs only; it does not add provider configuration to this slice.
+6. The final QA evidence cites the exact local PR head, dirty-input content
+   digests, reproducible simulator launchd injection, and the real
+   device/app/OS/endpoint results without sensitive material. Sprint 2 remains
    paused until this correction and the separate provider audit are accepted.
 
 ## Verified analog family
@@ -115,20 +133,23 @@ registration changes are proposed.
 
 | Area | Preserve | Required difference | Rejected difference | Failure mode | Test / verification |
 |---|---|---|---|---|---|
-| Account 404 classifier | code `5`, empty details, address binding, typed errors | Accept the two verified messages by full-string equality only | `contains`, prefix/suffix matching, whitespace normalization, any `404`, generic text, or foreign address | A malformed/foreign response could be treated as an absent account | Focused exact long/short positives plus prefix/suffix/whitespace/foreign negatives |
+| Account 404 classifier | leased-height validation, code `5`, empty details, address binding, typed errors | Accept the two verified messages by full-string equality only after height validation and duplicate-key rejection | `contains`, prefix/suffix matching, whitespace normalization, any `404`, generic text, foreign address, duplicate-key first-value decoding, or bypassing height validation | A cross-backend height failure or ambiguous body could be treated as an absent account | Focused exact long/short positives plus height, duplicate-key, prefix/suffix/whitespace/foreign negatives |
 | Account consumer | `nil` absent account and existing adapter lifecycle | No consumer API or lifecycle change | Add UW-specific fallback or zero-balance behavior | Missing account could mask a real provider failure | Local Development live-smoke and WalletCore tests |
 | Balance/error boundary | All balance non-2xx errors remain typed | None | Reuse account absence matcher for balances | Provider outage could be hidden as empty balance | Focused balances 404 with the same body asserts `.httpStatus(.balances, 404)` |
 
 ## Test-first plan
 
 1. Update the existing account absence test contract to assert exact full-string
-   equality for both accepted messages. Add prefix, suffix, leading/trailing/
-   internal-whitespace, foreign-address, wrong-code, nonempty-details,
-   malformed-JSON, exact-body-under-non-404, and balances-404-with-the-same-body
-   cases; the latter must remain `.httpStatus(.balances, 404)`.
+   equality for both accepted messages. Validate the response height before
+   classification. Add prefix, suffix, leading/trailing/internal-whitespace,
+   foreign-address, wrong-code, nonempty-details, same-value and conflicting
+   duplicate-key, malformed-JSON, missing/malformed/mismatched-height, exact
+   body under non-404, and balances-404-with-the-same-body cases; the latter
+   must remain `.httpStatus(.balances, 404)`.
 2. Run the focused ThorChainKit test and capture the pre-fix failure against
    the short form.
-3. Implement the smallest predicate-only correction.
+3. Implement the smallest account-classification correction in the existing
+   client file; do not change consumer or provider configuration.
 4. Re-run the focused test, the directly affected ThorChainKit suite, relevant
    WalletCore tests, and the exact local Development build command in the plan.
 5. Run the real local Development live-smoke against the exact Liquify REST/RPC
@@ -136,26 +157,45 @@ registration changes are proposed.
    result. The post-fix pass is only valid when the app is online and `.synced`,
    the account is absent, native RUNE is exactly zero, a positive accepted
    height is shown, and no closed/unavailable diagnostic is present. Relaunch
-   and offline behavior are separate regression checks. No mnemonic or private
-   material is recorded.
+   and offline behavior are separate regression checks.
+6. Run the exact local S1-04 live acceptance three times, once each for
+   Rorcual, IBS, and Keplr, using the family inputs from the attached provider
+   audit. Before each run, inject all public test variables into the simulator
+   launchd environment with `simctl spawn ... launchctl setenv`; clear them in a
+   trap afterward. A shell-only export is not valid evidence. No mnemonic,
+   credential, or private material is recorded.
 
 ## Verification commands and evidence
 
-- ThorChainKit focused test: `swift test --package-path /Users/ant013/Data/AI/thorchain --filter LiveThorNodeClientS1_04Tests/testAccountAcceptsOnlyExactObservedAbsenceEnvelope`
-- ThorChainKit directly affected suite: `swift test --package-path /Users/ant013/Data/AI/thorchain --filter LiveThorNodeClientS1_04Tests`
-- Exact UW package/test command: `xcodebuild -workspace /Users/ant013/Data/AI/unstoppable-wallet-ios-THR-104-v0.50/Wallet.xcworkspace -scheme WalletCore -configuration Debug-Dev -destination 'generic/platform=iOS' -derivedDataPath /tmp/THR-138-WalletCore-DD test -resultBundlePath /tmp/THR-138-WalletCore.xcresult`
-- Exact UW Development build: `xcodebuild -workspace /Users/ant013/Data/AI/unstoppable-wallet-ios-THR-104-v0.50/Wallet.xcworkspace -scheme Development -configuration Debug-Dev -destination 'generic/platform=iOS' -derivedDataPath /tmp/THR-138-Development-DD build -resultBundlePath /tmp/THR-138-Development.xcresult`
-- Exact source roots: UW `/Users/ant013/Data/AI/unstoppable-wallet-ios-THR-104-v0.50`, MarketKit `/Users/ant013/Data/AI/MarketKit.Swift-THR-104`, ThorChainKit `/Users/ant013/Data/AI/thorchain`. The UW package manifest must continue to resolve the latter two paths; capture `git rev-parse HEAD`, `git status --porcelain=v1`, and the manifest resolution before and after each run. Any SHA, status, or resolution change invalidates the evidence and requires a fresh capture.
+- ThorChainKit focused test: `swift test --package-path "$THORCHAINKIT_ROOT" --filter LiveThorNodeClientS1_04Tests/testAccountAcceptsOnlyExactObservedAbsenceEnvelope`
+- ThorChainKit directly affected suite: `swift test --package-path "$THORCHAINKIT_ROOT" --filter LiveThorNodeClientS1_04Tests`
+- Exact UW package/test command: `xcodebuild -workspace "$UW_WORKSPACE" -scheme WalletCore -configuration Debug-Dev -destination 'generic/platform=iOS' -derivedDataPath "$QA_ARTIFACT_ROOT/THR-138-WalletCore-DD" test -resultBundlePath "$QA_ARTIFACT_ROOT/THR-138-WalletCore.xcresult"`
+- Exact UW Development build: `xcodebuild -workspace "$UW_WORKSPACE" -scheme Development -configuration Debug-Dev -destination 'generic/platform=iOS' -derivedDataPath "$QA_ARTIFACT_ROOT/THR-138-Development-DD" build -resultBundlePath "$QA_ARTIFACT_ROOT/THR-138-Development.xcresult"`
+- Exact source roots are symbolic operator inputs: `UW_ROOT`, `MARKETKIT_ROOT`, and
+  `THORCHAINKIT_ROOT`; `UW_WORKSPACE` is `$UW_ROOT/Wallet.xcworkspace`. The UW
+  package manifest must resolve the latter two roots. Do not commit resolved
+  values in repository documents.
+- Before and after every test, build, and smoke run capture each root's
+  `git rev-parse HEAD`, `git status --porcelain=v1 --untracked-files=all`,
+  `git diff --binary`, `git diff --cached --binary`, and SHA-256 manifest of
+  intentionally dirty or untracked in-scope files. Require the ThorChainKit
+  root to equal the exact implementation PR head; require every other digest,
+  status, and local package resolution to be byte-for-byte unchanged. Any
+  mismatch invalidates the evidence and requires a fresh capture.
 - Live-smoke: launch the local Development app on the MacBook with the exact
   Liquify REST/RPC pair and frozen address above. Record the pre-fix failure,
   post-fix `.synced`/zero-RUNE/positive-height pass, and separate relaunch and
-  offline regression observations in `/tmp/THR-138-live-smoke.txt` or a QA
-  artifact. Never record mnemonic, private, credential, or cookie material.
+  offline regression observations in the operator-selected
+  `QA_ARTIFACT_ROOT` or a QA artifact. Never record mnemonic, private,
+  credential, or cookie material.
 
 ## Open gates
 
 - Adversarial review must confirm the short-form matcher remains address-bound
-  and does not alter balance or generic HTTP error semantics.
+  and does not alter balance or generic HTTP error semantics; it must also
+  confirm duplicate-key rejection and height validation precede absence.
+- QA must pass the exact local Rorcual, IBS, and Keplr live acceptance and show
+  the simulator launchd injection was used and cleaned up.
 - Explicit user approval is required for this design revision before any
   implementation edit.
 - The separate provider evidence audit must be attached before Sprint 2 or
