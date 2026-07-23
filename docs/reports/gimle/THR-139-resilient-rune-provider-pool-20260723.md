@@ -5,7 +5,7 @@
 - Trust: **RED**
 - Repository: `$THORCHAINKIT_ROOT`
 - Base HEAD: 6462bec2604db4d3d05b3cfccde1ff5b768c86e0
-- Final HEAD: n/a
+- Final HEAD: fdb40d48f950140278a35ec0b091c4614fa79747
 - Gimle runtime: native-dev:0e9cf57c00ff970f584256126b500166580e7a72
 - Indexed commit: 8a63bfda028dd8543115b26dd777235a53304311
 
