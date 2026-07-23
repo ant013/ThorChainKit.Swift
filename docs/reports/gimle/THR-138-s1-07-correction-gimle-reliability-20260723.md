@@ -3,9 +3,10 @@
 - Task: THR-138
 - Workflow/phase: `analog_change` / adversarial review, design revision 3
 - Repository branch: `docs/s1-07-unstoppable-rune-surface-v050`
-- Repository head for the reviewed design revision: `4a1d707`
+- Reviewed design revision commit: `4a1d707`
+- Report provenance update commit: `031fb10`
 - The redacted Liquify artifact was introduced at `325212a`; the revision-3
-  design inputs and this report are contained by `4a1d707`.
+  design inputs are contained by `4a1d707`.
 - Canonical state: `audit/runs/THR-138-s1-07-correction-20260723/state.json`
 - Trust: **RED for Gimle/Palace evidence; current-tree and live fallbacks are usable**
 
