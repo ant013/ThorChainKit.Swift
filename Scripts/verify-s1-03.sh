@@ -205,7 +205,14 @@ if [[ "$fixtures_only" == false ]]; then
         local label=$1 selector=$2 allowlist=$3
         local derived_data result_bundle
         local -a selection=()
-        [[ -z "$selector" ]] || selection=("-only-testing:ThorChainKitTests/$selector")
+        if [[ -n "$selector" ]]; then
+            selection=("-only-testing:ThorChainKitTests/$selector")
+        else
+            while IFS= read -r suite; do
+                selection+=("-only-testing:${suite/./\/}")
+            done < <(cut -d/ -f1 "$allowlist" | LC_ALL=C sort -u)
+            ((${#selection[@]} > 0)) || fail "full test allowlist contains no suites"
+        fi
         derived_data=$(mktemp -d)
         result_bundle=$(mktemp -d)/"$label.xcresult"
         : "${derived_data:?derived-data path missing}"
