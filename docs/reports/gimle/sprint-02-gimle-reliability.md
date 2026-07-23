@@ -268,7 +268,7 @@ deltas.
 | F-S201-BIGINT-CURRENT | 2 | yes | MATCH | yes | rg | n/a | valid | known_current | The current THR-135 worktree locks BigInt 5.7.0, declares the compatible 5.0.0 floor, and binds the exact floor verification to the portable THR-135 evidence manifest. |
   - Serena: n/a (Swift language server unavailable in the exact worktree)
   - rg: `Package.resolved` pins BigInt 5.7.0; `Package.swift` declares `from: "5.0.0"`; `Scripts/verify-bigint-floor.sh` is the executable floor gate; the THR-135 manifest records these paths as the load-bearing dependency evidence.
-  - Anchors: `thorchain-s2-01@final:Package.resolved:5-10`, `thorchain-s2-01@final:Package.swift:11`, `thorchain-s2-01@final:Scripts/verify-bigint-floor.sh`, `docs/reports/gimle/THR-135-s2-01-evidence-r4.json`
+  - Anchors: `thorchain-s2-01@final:Package.resolved:5-10`, `thorchain-s2-01@final:Package.swift:11`, `thorchain-s2-01@final:Scripts/verify-bigint-floor.sh`, `docs/reports/gimle/THR-135-s2-01-evidence-r5.json`
 | F-S202-LIVE-HEIGHT-PROOF | 1 | yes | MATCH | yes | rg | n/a | valid | known_current | A send provider must prove each returned value by its own route-specific height mode; current official Liquify REST strips the Cosmos height response header on required successf... |
   - Serena: n/a
   - rg: Fresh independent live probes at height 27048835 returned HTTP 200 without x-cosmos-block-height for Liquify network, exact-key Mimir and spendable-bank routes; official THOR developer docs list Liquify API and paired RPC roles.

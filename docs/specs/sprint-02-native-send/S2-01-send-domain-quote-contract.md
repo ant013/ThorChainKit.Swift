@@ -101,7 +101,7 @@ extension Kit {
 
 S2-01 exposes the facade signatures before the later engines exist, but it never fabricates a quote, submission, retry, or pending record. Lifecycle admission is first: a never-started or stopped Kit returns `SendError.kitNotStarted` before behavioral input validation or any dependency call. An admitted call then applies the specified local validation order; invalid local input returns its stable validation error with zero QuoteStore, signer, journal, endpoint, and publisher-state mutation. Only an admitted call with valid local input returns `SendError.operationUnavailable` while the later engine is absent, also with zero mutation. Until S2-05 supplies durable pending state, `pendingTransactions` is an empty snapshot, its publisher replays that empty snapshot, and `pendingTransactionsStatus` is `.degraded`; these values perform no storage work. Later slices may replace only this unavailable implementation behind the fixed public contract.
 
-`quote`, `send`, and `retryBroadcast` require this `Kit` instance's Sprint 1 lifecycle client to be active. A never-started or stopped instance throws `SendError.kitNotStarted` before QuoteStore/journal access, quote-token consumption, signer work, or endpoint I/O. The composition root adds one stored `SendRuntime` dependency to `KitDependencies`; the public `Kit.instance` and `Kit.fixture` entry points implemented in `Core/KitFactory.swift` construct it with the same facade dispatcher and pass it to `Kit` and `LifecycleCommandBridge`. `LifecycleCommandBridge.start` calls `SendRuntime.activate(generation:)` immediately after `LifecycleGate.start()` returns a generation; `stop` calls `SendRuntime.invalidate(generation:)` immediately after `LifecycleGate.close()` marks the client closed and before sync shutdown. The runtime actor gives every successful `start()` activation a monotonic client lifecycle generation. Quote admission captures that exact generation; every H0 callback, next-request decision, and final QuoteStore insertion must still match it. `stop()` deactivates and advances the generation, resolves any suspended quote-operation waiters with `kitNotStarted`, and invalidates in-flight quote construction and stored unconsumed quotes. A late H0 callback from the old generation is discarded, cannot store/return a quote after a rapid `start()`, and cannot begin another request. Once QuoteStore atomically admits a send/retry by consuming a quote or retry record, that operation is no longer an unconsumed quote; S2-05 supplies the later operation hold so it can finish or repair after client stop. The S2-01 state contract therefore distinguishes construction, unconsumed, admitted, and terminal states explicitly.
+`quote`, `send`, and `retryBroadcast` require this `Kit` instance's Sprint 1 lifecycle client to be active. A never-started or stopped instance throws `SendError.kitNotStarted` before QuoteStore/journal access, quote-token consumption, signer work, or endpoint I/O. The composition root adds one stored `SendRuntime` dependency to `KitDependencies`; the public `Kit.instance` and `Kit.fixture` entry points implemented in `Core/KitFactory.swift` construct it with the same facade dispatcher and pass it to `Kit` and `LifecycleCommandBridge`. Each factory invocation also allocates a fresh per-instance `QuoteAuthorityClientID` and passes it to `SendRuntime`/`QuoteStore`; it is deliberately distinct from the deterministic wallet persistence namespace, so two Kits for the same wallet and network cannot share quote authority. `LifecycleCommandBridge.start` calls `SendRuntime.activate(generation:)` immediately after `LifecycleGate.start()` returns a generation; `stop` calls `SendRuntime.invalidate(generation:)` immediately after `LifecycleGate.close()` marks the client closed and before sync shutdown. If `LifecycleGate.close()` fails after marking the client closed, the bridge must still call an idempotent `SendRuntime.revokeActiveGeneration()` path that captures and advances the retained active generation; the failure branch must never proceed without revoking it. The runtime actor gives every successful `start()` activation a monotonic client lifecycle generation. Quote admission captures that exact generation; every H0 callback, next-request decision, and final QuoteStore insertion must still match it. `stop()` deactivates and advances the generation, resolves any suspended quote-operation waiters with `kitNotStarted`, and invalidates in-flight quote construction and stored unconsumed quotes. A late H0 callback from the old generation is discarded, cannot store/return a quote after a rapid `start()`, and cannot begin another request. Once QuoteStore atomically admits a send/retry by consuming a quote or retry record, that operation is no longer an unconsumed quote; S2-05 supplies the later operation hold so it can finish or repair after client stop. The S2-01 state contract therefore distinguishes construction, unconsumed, admitted, and terminal states explicitly.
 
 `SendAmount.exact(_:)` immediately copies the caller's `BigUInt` into canonical big-endian magnitude `Data`; `.maximum` stores no magnitude. The public call spelling remains `SendAmount.exact(value)`/`.maximum`, but the value that enters `QuoteStore`, an endpoint task, or an actor is checked `Sendable`. Likewise, `Kit.retryBroadcast(...acceptingNativeFee:)` is a non-actor-isolated facade entry point whose first operation canonicalizes its optional ergonomic `BigUInt` argument into an internal `Data?` snapshot before any runtime-actor call; the public argument is never captured by an escaping task. Neither caller-owned BigInt storage crosses a task or actor boundary. The strict-concurrency test invokes the facade from a caller task and proves the snapshot occurs before the first actor hop.
 
@@ -125,33 +125,23 @@ public struct SendQuote: Sendable {
     private let amountMagnitude: Data
     private let nativeFeeMagnitude: Data
     private let totalDebitMagnitude: Data
-    private let authorityNamespace: Data
-    private let authorityGeneration: UInt64
-    private let authorityDeadlineTicks: UInt64
-    private let quoteToken: Data
+    private let authorityRecord: QuoteAuthorityRecord
 
-    internal var internalAuthorityEnvelope: QuoteAuthorityEnvelope {
-        QuoteAuthorityEnvelope(
-            namespace: authorityNamespace,
-            generation: authorityGeneration,
-            deadlineTicks: authorityDeadlineTicks,
-            token: quoteToken
-        )
-    }
+    internal var internalAuthorityRecord: QuoteAuthorityRecord { authorityRecord }
 }
 ```
 
-The custom authoritative initializer is internal; private magnitude and authority fields make the synthesized memberwise initializer unavailable outside the type. The three amount accessors reconstruct a fresh `BigUInt` from canonical big-endian `Data` magnitudes using BigInt's nonfailing `BigUInt(Data)` initializer; no `BigUInt` is stored. Zero fee uses empty canonical magnitude, while amount/total remain positive. Strict Swift 5 complete-mode compilation proves every stored field—including Sprint 1's `Address`, the private namespace/generation/deadline/token envelope, `Data`, strings, integers, Bool and Date—is `Sendable`. `QuoteAuthorityEnvelope` is an internal, non-reflected `Sendable` value; `internalAuthorityEnvelope` is the only cross-file authority access used by `QuoteStore` and remains invisible to an external consumer.
+`QuoteAuthorityEnvelope` is an internal, non-reflected `Sendable` identity value containing the per-instance `QuoteAuthorityClientID`, lifecycle generation, monotonic deadline, and opaque token. `QuoteReviewSnapshot` is the one canonical immutable record of sender, recipient, requested amount intent, resolved amount, native fee, total debit, memo, accepted height, account number, sequence, provider-family lease identity, and policy snapshot. `QuoteAuthorityRecord` contains that envelope and snapshot; `SendQuote` stores the record and exposes only a public review projection of it. The custom authoritative initializer is internal; the private record makes the synthesized memberwise initializer unavailable outside the type. The three amount accessors reconstruct a fresh `BigUInt` from canonical big-endian `Data` magnitudes using BigInt's nonfailing `BigUInt(Data)` initializer; no `BigUInt` is stored. Zero fee uses empty canonical magnitude, while amount/total remain positive. Strict Swift 5 complete-mode compilation proves every stored field—including Sprint 1's `Address`, the private client ID/generation/deadline/token record, `Data`, strings, integers, Bool and Date—is `Sendable`. `internalAuthorityRecord` is the only cross-file authority access used by `QuoteStore` and remains invisible to an external consumer.
 
-Internal state contains one 32-byte opaque quote token generated with the platform secure-random source. The store makes at most eight token-generation attempts inside the same atomic insertion; secure-random failure, collision exhaustion, or an unavailable store fails closed as `operationUnavailable` with no quote or dependency side effect. `SendQuote` carries the private authority envelope across the facade boundary in its private stored fields; `QuoteStore` is the authoritative per-Kit router and checks that envelope against its Kit namespace before consulting its own active or tombstoned record. The envelope also binds the lifecycle client ID/generation and authoritative monotonic deadline, plus the sender, requested amount intent, account number, sequence, provider-family lease identity, policy snapshot, and every review field. The insertion occurs only after the runtime actor revalidates the still-active captured generation. A second undefined tamper signature is intentionally not added. The quote:
+Internal state contains one 32-byte opaque quote token generated with the platform secure-random source. The store makes at most eight token-generation attempts inside the same atomic insertion; secure-random failure, collision exhaustion, or an unavailable store fails closed as `operationUnavailable` with no quote or dependency side effect. `QuoteStore` is the authoritative per-Kit router: it checks the record's client ID against its own per-instance authority, then requires exact equality between the quote's `QuoteAuthorityRecord` and the stored canonical record before consulting active or tombstoned state. The insertion occurs only after the runtime actor revalidates the still-active captured generation. A second undefined tamper signature is intentionally not added. The quote:
 
-- is valid only for the originating `Kit` instance/wallet namespace;
+- is valid only for the originating `Kit` instance's authority ID, never merely its wallet persistence namespace;
 - expires exactly ten seconds after the final coherent quote snapshot has been accepted and stored, measured by an injected monotonic clock; `expiresAt` is a wall-clock display projection only;
 - can start at most one send attempt; `QuoteStore.consume` is the atomic linearization point and removes/reserves the token before signer work;
 - cannot be reconstructed from public review values;
 - does not expose endpoint credentials, module addresses, or account metadata.
 
-When `stop()` invalidates an unconsumed quote, `QuoteStore` retains an internal tombstone keyed by the quote's private authority envelope. Atomic `consume` changes an active record to a consumed tombstone before signer work. After lifecycle admission, lookup has one fixed order: a private Kit namespace mismatch returns `quoteOwnershipMismatch`; an old private lifecycle generation returns `quoteGenerationInvalidated`; `now >=` the private monotonic deadline returns `quoteExpired`; otherwise the per-Kit store active/consumed lookup returns `quoteAlreadyConsumed` for a consumed record, admits an active record, and returns `operationUnavailable` for a missing own unexpired record. Tombstones are retained through the original deadline and then lazily cleaned; the private authority envelope remains inside `SendQuote`, so an originating quote still returns `quoteExpired` after cleanup rather than being mistaken for a foreign token. The envelope and all accessors remain unreadable to public consumers and absent from debug/reflection output.
+When `stop()` invalidates an unconsumed quote, `QuoteStore` retains an internal tombstone keyed by the quote's private authority record. Atomic `consume` changes an active record to a consumed tombstone before signer work and returns that same canonical record to the later signing path. After lifecycle admission, lookup has one fixed order: a client-ID mismatch returns `quoteOwnershipMismatch`; an old private lifecycle generation returns `quoteGenerationInvalidated`; `now >=` the private monotonic deadline returns `quoteExpired`; a record/projection mismatch fails closed as `operationUnavailable`; otherwise the per-instance store active/consumed lookup returns `quoteAlreadyConsumed` for a consumed record, admits an active record, and returns `operationUnavailable` for a missing own unexpired record. Tombstones are retained through the original deadline and then lazily cleaned; the originating quote's private authority record still returns `quoteExpired` after cleanup rather than being mistaken for a foreign token. The record, envelope, and all accessors remain unreadable to public consumers and absent from debug/reflection output. Tests must compare the stored canonical record with the reviewed projection and reject a deliberately mismatched internal record before signer work.
 
 `totalDebit` is checked addition of `amount + nativeFee`; overflow is an error, never wrapping arithmetic.
 
@@ -323,7 +313,7 @@ public enum SendError: Error, Equatable, Sendable {
 
 All custom initializers for `QuoteChanges`, `NativeFeeChange`, and `BroadcastRejection` are internal and invariant-checking. `QuoteChanges` rejects an empty set and exposes its read-only nonempty `values`; the public enum case cannot be constructed from a raw or empty set. Fee magnitudes use the same canonical big-endian representation as `SendQuote`; they may be zero but never noncanonical. `BroadcastRejection.code` is nonzero; raw provider codespace is private and maps only to the fixed public `BroadcastCodespaceCategory` allowlist (`.sdk`, `.thorchain`, `.other`), with missing, malformed, or unrecognized input mapping to `.other`; `sanitizedLog` is nil or a package-owned fixed diagnostic category rendered to a bounded string. No public case carries an upstream `Error`, URL, response body, arbitrary log, or secret.
 
-`LocalizedError`/debug rendering is deterministic and bounded: `quoteChanged` sorts `QuoteChanges.values` by `QuoteChange.rawValue`, monetary values render canonical base-unit decimal strings, and no description relies on `Set` iteration, upstream error text, or locale. WalletCore maps cases to localized copy; the package error itself does not own UI localization. `SendQuote`, `SigningRequest`, `PendingTransaction`, and `SendError` provide explicit `CustomDebugStringConvertible` and `CustomReflectable` projections that omit quote tokens, private authority namespace/generation/deadline fields, digest/sign-doc/signature bytes, public-key bytes, URLs, credentials, wallet identifiers, and upstream response text. Their `customMirror` contains only the same fixed, bounded reviewed fields; `Mirror(reflecting:)`, `String(reflecting:)`, and `dump` therefore cannot fall back to stored sensitive fields. Synthesized/default debug or reflection output is not permitted for these types.
+`LocalizedError`/debug rendering is deterministic and bounded: `quoteChanged` sorts `QuoteChanges.values` by `QuoteChange.rawValue`, monetary values render canonical base-unit decimal strings, and no description relies on `Set` iteration, upstream error text, or locale. WalletCore maps cases to localized copy; the package error itself does not own UI localization. `SendQuote`, `SigningRequest`, `PendingTransaction`, and `SendError` provide explicit `CustomDebugStringConvertible` and `CustomReflectable` projections that omit quote tokens, private authority client ID/generation/deadline/record fields, digest/sign-doc/signature bytes, public-key bytes, URLs, credentials, wallet identifiers, and upstream response text. Their `customMirror` contains only the same fixed, bounded reviewed fields; `Mirror(reflecting:)`, `String(reflecting:)`, and `dump` therefore cannot fall back to stored sensitive fields. Synthesized/default debug or reflection output is not permitted for these types.
 
 `SendError` is explicitly checked `Sendable`. Because `Error` values cross concurrency boundaries, no case stores `BigUInt`; computed monetary accessors reconstruct new values. A strict compiler probe for a control `Error` case containing `BigUInt` must fail, while a probe containing this exact graph must compile without suppression.
 
@@ -376,12 +366,14 @@ Gimle indexed the UW project under a different checkout and commit. That mapping
 - **S2-01-A7 — reflection and pending:** Explicit debug and custom-mirror projections redact stored sensitive fields; pending values are honest about `checkTxAccepted` versus `unknown` and sort by `(createdAt, transactionId.hash)`.
 - **S2-01-A8 — local verification:** Every criterion maps to a named local test or compile harness, including an executable iOS 13 deployment-floor build and UIKit/SwiftUI import guard; focused commands require nonzero discovery, default and floor dependency identities are recorded, and GitHub Actions remain build-only.
 
+The implementation plan's executable acceptance inventory is normative: each A1-A8 row names the focused test or harness, its required negative or runtime probe, and the exact command that produces evidence.
+
 ## Verification
 
 Verification is local to the MacBook and applies to the future implementation head, not this documentation-only revision:
 
 1. Run `swift test` for the package after the implementation slice exists; the focused test target must cover each acceptance criterion.
-2. Run the committed deployment-floor harness, which compiles the public graph for `arm64-apple-ios13.0` and fails on any `UIKit` or `SwiftUI` import; run a strict Swift 5 complete-concurrency compile probe proving the public graph is `Sendable` without `@unchecked Sendable` or `@preconcurrency` suppression.
+2. Run `bash Scripts/verify-s2-01-deployment-floor.sh`, which compiles the public graph for `arm64-apple-ios13.0` and fails on any `UIKit` or `SwiftUI` import; run a strict Swift 5 complete-concurrency compile probe proving the public graph is `Sendable` without `@unchecked Sendable` or `@preconcurrency` suppression.
 3. Run focused tests for canonical `BigUInt` snapshots, lifecycle admission precedence, quote expiry boundaries, atomic one-use consume, generation invalidation, local validation order, deterministic error/debug projections, and redaction.
 4. Inspect the public symbol surface to prove no transaction builder, raw account/sequence override, fee/gas override, private-key constructor, arbitrary broadcast API, URL, credential, key, signature, SignDoc, TxRaw, or response-body field is exposed.
 5. Confirm the diff contains only S2-01 documentation in this phase. GitHub Actions remain build-only; no CI tests, mutants, simulators, or Maestro are part of S2-01, and no Maestro suite is applied to Unstoppable Wallet.
@@ -423,7 +415,7 @@ Kit owns quote/send authority, immutable value invariants, QuoteStore admission,
 - `SendAmount`, `SendQuote`, `SendSubmission`, `TransactionID`, `PendingTransaction`, all nested states/status, `QuoteChanges`, `NativeFeeChange`, `BroadcastCodespaceCategory`, and `SendError` compile as checked `Sendable` under Swift 5 complete mode against the committed BigInt 5.7.0 lock and the exact 5.0.0 floor; a source guard proves no cross-boundary value stores `BigUInt` or uses unchecked/preconcurrency suppression;
 - every exact `SendError` case and supporting payload above is constructed by tests; internal `QuoteChanges(validating:)` rejects an empty set, a public-only consumer cannot initialize `QuoteChanges` or compile `.quoteChanged([])`, `NativeFeeChange` round-trips zero and values above `UInt64`, retry-blocked cases project to matching pending availability, and broadcast diagnostic bounds/redaction are enforced;
 - never-started and after-stop quote/send/retry fail with `kitNotStarted` before behavioral input/quote/row validation, QuoteStore/journal access, consumption, signer, or endpoint work; stopped quote with invalid input, stopped send with a foreign/expired quote, and stopped retry with a missing/terminal ID prove lifecycle error precedence and zero storage-spy calls;
-- suspended H0 → `stop()` → late success, including `start()` again before quote expiry, returns `kitNotStarted`, leaves QuoteStore empty, starts no next request, and cannot return/use an old-generation quote; S2-01 proves only the admission boundary, while S2-05 proves the admitted-operation hold and finalization/repair behavior;
+- suspended H0 → `stop()` → late success, including a `LifecycleGate.close()` storage failure and `start()` again before quote expiry, returns `kitNotStarted`, leaves QuoteStore empty, starts no next request, and cannot return/use an old-generation quote; S2-01 proves only the admission boundary, while S2-05 proves the admitted-operation hold and finalization/repair behavior;
 - exact amount and optional retry-fee inputs are copied into canonical `Data` before the first actor/task call; actor-crossing probes and values above `UInt64` prove the original BigUInt object is never retained;
 - quote amount/fee/total round-trip boundaries through canonical magnitude Data, including zero fee, one base unit, values above UInt64, and repeated cross-task reads producing equal independent BigUInt values;
 - the public-only signer reads every `SigningRequest` accessor, while external memberwise construction remains unavailable;
@@ -459,22 +451,31 @@ swift test
 bash Scripts/verify-s2-01-public-surface.sh
 bash Scripts/verify-s2-01-concurrency.sh --dependency 5.7.0
 bash Scripts/verify-s2-01-concurrency.sh --dependency 5.0.0
-bash Scripts/verify-bigint-floor.sh
+bash Scripts/verify-s2-01-deployment-floor.sh
+THORCHAIN_SIMULATOR_UDID=<selected-runtime-udid> bash Scripts/verify-bigint-floor.sh
 ```
 
 The public-surface harness must compile a temporary external consumer and assert
-expected failures for memberwise quote/request construction,
-`QuoteChanges(validating:)`, and `.quoteChanged([])`; a zero or unexpected
-failure is a harness failure. The concurrency harness must compile the actual
+expected failures for memberwise `SendQuote`, `SigningRequest`, and
+`TransactionID` construction, `QuoteChanges(validating:)`,
+`.quoteChanged([])`, `QuoteAuthorityEnvelope`, and
+`SendQuote.internalAuthorityRecord`; it must also run the forbidden-import and
+forbidden-public-field guards. A zero or unexpected failure is a harness
+failure. The concurrency harness must compile the actual
 S2-01 graph with `-swift-version 5 -strict-concurrency=complete
 -warnings-as-errors`, and must compile a control containing stored `BigUInt` as
-an expected failure. Each focused command must report a nonzero discovered test
-count. The PR/QA evidence must cite one exact head SHA, `git diff --name-only`
-against the base, local test logs, build-only GitHub Actions conclusions, the
-public import/secret/reflection audits, and an explicit QA PASS on that same
-SHA. Before implementation, only documentation/spec hash and current-tree
-evidence checks are expected; package commands apply to the implementation head
-because the exact current worktree already contains `Package.swift`.
+an expected failure. Runtime reflection tests must exercise `Mirror(reflecting:)`,
+`String(reflecting:)`, and `dump` for every public error/value projection and
+prove that the authority record, token, digest/signature bytes, URLs, and
+upstream text are absent. Each focused command must report a nonzero discovered
+test count; the floor command must record the selected simulator UUID and both
+BigInt dependency identities. The PR/QA evidence must cite one exact head SHA,
+`git diff --name-only` against the base, local test logs, build-only GitHub
+Actions conclusions, the public import/secret/reflection audits, and an
+explicit QA PASS on that same SHA. Before implementation, only documentation/spec
+hash and current-tree evidence checks are expected; package commands apply to
+the implementation head because the exact current worktree already contains
+`Package.swift`.
 
 ## Acceptance Criteria
 
