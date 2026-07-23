@@ -283,6 +283,7 @@ xcrun swift-symbolgraph-extract \
     -I "$derived_data/Build/Products/Debug-iphonesimulator" \
     -Xcc -fmodule-map-file="$derived_data/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/secp256k1_bindings.modulemap" \
     -Xcc -fmodule-map-file="$derived_data/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/HsCryptoKitC.modulemap" \
+    -Xcc -fmodule-map-file="$derived_data/SourcePackages/checkouts/GRDB.swift/Sources/CSQLite/module.modulemap" \
     -target arm64-apple-ios13.0-simulator \
     -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
     -minimum-access-level public \
