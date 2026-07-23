@@ -441,6 +441,7 @@ test -n "$THR139_EVIDENCE_ROOT"
 : "${THR139_ABSENT_ADDRESS:?set to the audited public absent thor1 address}"
 : "${THR139_SIMULATOR_UDID:?set to the approved iOS 26.2 simulator UUID}"
 
+guard_preserved_reports
 THORCHAIN_S1_04_LIVE=1 \
 THORCHAIN_S1_04_EXPECTED_HEAD="$THR139_EXPECTED_HEAD" \
 THORCHAIN_S1_04_FAMILY_ID="rorcual-mainnet" \
@@ -450,8 +451,12 @@ THORCHAIN_S1_04_COMET_URL="https://rpc-thorchain.rorcual.xyz" \
 THORCHAIN_S1_04_EXISTING_ADDRESS="$THR139_EXISTING_ADDRESS" \
 THORCHAIN_S1_04_ABSENT_ADDRESS="$THR139_ABSENT_ADDRESS" \
 THORCHAIN_SIMULATOR_UDID="$THR139_SIMULATOR_UDID" \
+GIT_CONFIG_COUNT=1 \
+GIT_CONFIG_KEY_0=status.showUntrackedFiles \
+GIT_CONFIG_VALUE_0=no \
 "$THORCHAINKIT_ROOT/Scripts/verify-s1-04-live.sh"
 
+guard_preserved_reports
 THORCHAIN_S1_04_LIVE=1 \
 THORCHAIN_S1_04_EXPECTED_HEAD="$THR139_EXPECTED_HEAD" \
 THORCHAIN_S1_04_FAMILY_ID="ibs-mainnet" \
@@ -461,8 +466,12 @@ THORCHAIN_S1_04_COMET_URL="https://thorchain.ibs.team/rpc" \
 THORCHAIN_S1_04_EXISTING_ADDRESS="$THR139_EXISTING_ADDRESS" \
 THORCHAIN_S1_04_ABSENT_ADDRESS="$THR139_ABSENT_ADDRESS" \
 THORCHAIN_SIMULATOR_UDID="$THR139_SIMULATOR_UDID" \
+GIT_CONFIG_COUNT=1 \
+GIT_CONFIG_KEY_0=status.showUntrackedFiles \
+GIT_CONFIG_VALUE_0=no \
 "$THORCHAINKIT_ROOT/Scripts/verify-s1-04-live.sh"
 
+guard_preserved_reports
 THORCHAIN_S1_04_LIVE=1 \
 THORCHAIN_S1_04_EXPECTED_HEAD="$THR139_EXPECTED_HEAD" \
 THORCHAIN_S1_04_FAMILY_ID="keplr-mainnet" \
@@ -472,14 +481,20 @@ THORCHAIN_S1_04_COMET_URL="https://rpc-thorchain.keplr.app" \
 THORCHAIN_S1_04_EXISTING_ADDRESS="$THR139_EXISTING_ADDRESS" \
 THORCHAIN_S1_04_ABSENT_ADDRESS="$THR139_ABSENT_ADDRESS" \
 THORCHAIN_SIMULATOR_UDID="$THR139_SIMULATOR_UDID" \
+GIT_CONFIG_COUNT=1 \
+GIT_CONFIG_KEY_0=status.showUntrackedFiles \
+GIT_CONFIG_VALUE_0=no \
 "$THORCHAINKIT_ROOT/Scripts/verify-s1-04-live.sh"
 ```
 
 The XML-safe Python preflight above is run before the `xcodebuild test` block;
 the command block is shown compactly here only after its preflight has passed.
-The three live invocations are intentionally explicit: the family ID and both
-URLs are fixed literals, while the expected HEAD, public addresses, simulator
-UUID, and evidence root are required inputs shared across the isolated passes.
+The three live invocations are intentionally explicit: each immediately runs
+`guard_preserved_reports`, then supplies command-local
+`status.showUntrackedFiles=no` while retaining tracked-dirt rejection. The
+family ID and both URLs are fixed literals, while the expected HEAD, public
+addresses, simulator UUID, and evidence root are required inputs shared across
+the isolated passes.
 The expected HEAD is captured once from the clean exact checkout and is
 not recomputed between families.
 

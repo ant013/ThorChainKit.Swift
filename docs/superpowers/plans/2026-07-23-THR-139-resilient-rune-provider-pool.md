@@ -233,6 +233,25 @@ HTTP 503 from the first family; it preserves height/identity rejection.
 `swift test` is explicitly not a verification command for this iOS-only
 substrate. Require the verifier to report zero skipped nodes.
 
+For each of the three existing `Scripts/verify-s1-04-live.sh` family commands
+in the spec, call `guard_preserved_reports` immediately before the invocation,
+then pass the same command-local Git configuration shown here:
+
+```text
+guard_preserved_reports
+THORCHAIN_S1_04_LIVE=1 \
+GIT_CONFIG_COUNT=1 \
+GIT_CONFIG_KEY_0=status.showUntrackedFiles \
+GIT_CONFIG_VALUE_0=no \
+.../Scripts/verify-s1-04-live.sh
+```
+
+The guard rejects tracked dirt, rejects any unexpected untracked path, and
+checks both intentional report digests before each run. The command-local
+configuration hides only those untracked reports from the existing live
+runner's clean-tree check; it is never persisted and does not weaken tracked-
+dirt rejection.
+
 ### 6. UW simulator tests and build
 
 **Owner:** ThorChainQAEngineer. **Dependency:** Steps 2 and 4.
