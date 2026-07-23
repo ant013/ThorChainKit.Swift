@@ -26,31 +26,47 @@ import Foundation
 final class LifecycleCommandBridge: KitLifecycle {
     private let syncer: any AccountSyncing
     private let gate: LifecycleGate
+    private let sendRuntime: SendRuntime
+    private var activeGeneration: UInt64?
     private var tail: Task<Void, Never>?
 
-    init(syncer: any AccountSyncing, gate: LifecycleGate) {
+    init(syncer: any AccountSyncing, gate: LifecycleGate, sendRuntime: SendRuntime = SendRuntime()) {
         self.syncer = syncer
         self.gate = gate
+        self.sendRuntime = sendRuntime
     }
 
     func start(sequence: UInt64) -> LifecycleCommandBarrier {
         _ = sequence
         guard let generation = gate.start() else { return completedBarrier(success: false) }
-        return enqueue { [syncer] in await syncer.start(generation: generation) }
+        activeGeneration = generation
+        return enqueue { [syncer, sendRuntime] in
+            await sendRuntime.activate(generation: generation)
+            await syncer.start(generation: generation)
+        }
     }
 
     func stop(sequence: UInt64) -> LifecycleCommandBarrier {
         _ = sequence
         tail?.cancel()
-        let cancellation = Task { [syncer] in await syncer.cancelRefresh() }
+        let invalidatedGeneration = activeGeneration
+        activeGeneration = nil
         switch gate.close() {
         case let .success(generation):
-            return enqueue { [syncer] in
+            return enqueue { [syncer, sendRuntime] in
+                if let invalidatedGeneration {
+                    await sendRuntime.invalidate(generation: invalidatedGeneration)
+                }
+                let cancellation = Task { await syncer.cancelRefresh() }
                 await cancellation.value
                 await syncer.stop(generation: generation)
             }
         case .failure:
-            return enqueue { [syncer, gate] in
+            return enqueue { [syncer, gate, sendRuntime] in
+                if let invalidatedGeneration {
+                    await sendRuntime.invalidate(generation: invalidatedGeneration)
+                }
+                let cancellation = Task { await syncer.cancelRefresh() }
                 await cancellation.value
                 await syncer.cancelStop()
                 gate.publishStopFailureIfCurrent()

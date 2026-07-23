@@ -6,10 +6,12 @@ public final class Kit {
     public let address: Address
     public let network: Network
 
-    private let dependencies: KitDependencies
+    let dependencies: KitDependencies
     private let facadeDispatcher: DispatchQueue
     private let dispatcherKey = DispatchSpecificKey<UInt8>()
     private let publishing: StatePublishing
+    private let pendingTransactionsSubject: CurrentValueSubject<[PendingTransaction], Never>
+    private let pendingTransactionsStatusSubject: CurrentValueSubject<PendingTransactionsStatus, Never>
     private var desiredRunning = false
     private var nextLifecycleSequence: UInt64 = 0
     private var pendingLifecycleCommands = [PendingLifecycleCommand]()
@@ -20,7 +22,9 @@ public final class Kit {
         dependencies: KitDependencies,
         persistenceNamespace: String,
         facadeDispatcher: DispatchQueue = DispatchQueue(label: "io.horizontalsystems.thorchain-kit.facade"),
-        publishing: StatePublishing = StatePublishing()
+        publishing: StatePublishing = StatePublishing(),
+        pendingTransactionsSubject: CurrentValueSubject<[PendingTransaction], Never> = CurrentValueSubject([]),
+        pendingTransactionsStatusSubject: CurrentValueSubject<PendingTransactionsStatus, Never> = CurrentValueSubject(.degraded)
     ) {
         self.address = address
         network = address.network
@@ -28,6 +32,8 @@ public final class Kit {
         self.persistenceNamespace = persistenceNamespace
         self.facadeDispatcher = facadeDispatcher
         self.publishing = publishing
+        self.pendingTransactionsSubject = pendingTransactionsSubject
+        self.pendingTransactionsStatusSubject = pendingTransactionsStatusSubject
         facadeDispatcher.setSpecific(key: dispatcherKey, value: 1)
     }
 
@@ -36,6 +42,22 @@ public final class Kit {
     public var accountState: AccountState? { withOwnedState { publishing.snapshot.accountState } }
     public var runeBalance: BigUInt { withOwnedState { publishing.snapshot.runeBalance } }
     public var accountExists: Bool { withOwnedState { publishing.snapshot.accountState?.exists ?? false } }
+
+    public var pendingTransactions: [PendingTransaction] {
+        withOwnedState { pendingTransactionsSubject.value }
+    }
+
+    public var pendingTransactionsPublisher: AnyPublisher<[PendingTransaction], Never> {
+        withOwnedState { pendingTransactionsSubject.eraseToAnyPublisher() }
+    }
+
+    public var pendingTransactionsStatus: PendingTransactionsStatus {
+        withOwnedState { pendingTransactionsStatusSubject.value }
+    }
+
+    public var pendingTransactionsStatusPublisher: AnyPublisher<PendingTransactionsStatus, Never> {
+        withOwnedState { pendingTransactionsStatusSubject.eraseToAnyPublisher() }
+    }
 
     public var lastBlockHeightPublisher: AnyPublisher<Int64?, Never> {
         withOwnedState { publishing.lastBlockHeightSubject.eraseToAnyPublisher() }
