@@ -132,6 +132,7 @@ Bug statuses: {'workaround': 4}
 - D-019@2 ACCEPT: Complete two-manifest verifier coverage
 - D-020@1 ACCEPT: Online family-ownership wording
 - D-021@2 ACCEPT: Revision and review counters
+- D-022@1 ACCEPT: Preserved assigned-worktree reports
 
 ## Verification and acceptance
 

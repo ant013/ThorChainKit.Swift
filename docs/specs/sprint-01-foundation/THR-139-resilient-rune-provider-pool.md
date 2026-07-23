@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool
 
-**Design revision:** 14 — discovery 2/2, closure 5/5 remains frozen; targeted
+**Design revision:** 15 — discovery 2/2, closure 5/5 remains frozen; targeted
 correction review is pending.
 **Status:** revised
 design; implementation remains blocked until this exact revision is accepted by
@@ -300,9 +300,15 @@ selector is added to Unstoppable or ThorChainKit.
    deduplication is acceptable. Check: focused tests pass and both manifests
    bind to the approved unchanged UW `HEAD`.
 4. **ThorChainKit invariants (ThorChainQAEngineer).** From
-   `$THORCHAINKIT_ROOT`, run the existing `Scripts/verify-s1-02.sh` and
+   `$THORCHAINKIT_ROOT`, run the preserved-worktree guard for the exact two
+   intentional untracked reports and their raw SHA-256 values, then run the
+   existing `Scripts/verify-s1-02.sh` and
    `Scripts/verify-s1-04.sh --expected-base ... --expected-head ...` gates with
-   the reviewed simulator UUID. First verify that the approved parser repair
+   the reviewed simulator UUID. The two raw digests are not the Gimle
+   `repository.base_worktree_manifest` composite hashes. After the guard, the
+   full exact-head verifier alone receives command-local
+   `status.showUntrackedFiles=no`; no exclude rule or repository script change
+   is permitted. First verify that the approved parser repair
    makes both `--source-only` and `--fixtures-only` pass. Their repository-derived fixtures and
    `Scripts/verify-xcresult.sh` invocation must report `PASS`, with zero
    failures, errors, and skips; do not pass an allowlist path. The S1-04 gate's
@@ -352,7 +358,7 @@ selector is added to Unstoppable or ThorChainKit.
 
 The ThorChainKit command block below is post-approval and must run only after
 the Step 3 parser repair. Before approval, the read-only baseline is limited to
-the identity/clean-worktree/ancestry checks and `bash -n`; source/fixture and
+the identity/preserved-worktree/ancestry checks and `bash -n`; source/fixture and
 Xcode PASS claims are not made against the unmodified base.
 
 The ThorChainKit test command is a simulator Xcode command, not `swift test`:
@@ -361,9 +367,23 @@ The ThorChainKit test command is a simulator Xcode command, not `swift test`:
 set -euo pipefail
 : "${THR139_EXPECTED_BASE:?set to the reviewed 40-character origin/main SHA}"
 : "${THR139_EXPECTED_HEAD:?set once to the reviewed 40-character ThorChainKit HEAD}"
+guard_preserved_reports() {
+  (
+    cd "$THORCHAINKIT_ROOT"
+    expected_report_1='docs/reports/gimle/THR-118-s1-07-closure-2-verification-20260722.md'
+    expected_report_2='docs/reports/gimle/THR-138-implementation-verification-20260723.md'
+    test -z "$(git status --porcelain=v1 --untracked-files=all | awk 'substr($0,1,2) != "??"')"
+    test "$(git ls-files --others --exclude-standard | LC_ALL=C sort)" = \
+      "$(printf '%s\n' "$expected_report_1" "$expected_report_2" | LC_ALL=C sort)"
+    test "$(shasum -a 256 "$expected_report_1" | awk '{print $1}')" = \
+      094d56fb8ac1f6a4b604b3df6e8ab7a47ee457edcca26b6d9f5912277ad02307
+    test "$(shasum -a 256 "$expected_report_2" | awk '{print $1}')" = \
+      6e4735f7666b89f7af5b1a8b3f9888e18909faa0adb128d5fe6ec6497cb3d9fe
+  )
+}
+guard_preserved_reports
 (cd "$THORCHAINKIT_ROOT" && \
   test "$(git rev-parse HEAD)" = "$THR139_EXPECTED_HEAD" && \
-  test -z "$(git status --porcelain)" && \
   test "$(git rev-parse refs/remotes/origin/main)" = "$THR139_EXPECTED_BASE" && \
   git merge-base --is-ancestor "$THR139_EXPECTED_BASE" "$THR139_EXPECTED_HEAD" && \
   bash -n Scripts/verify-s1-02.sh Scripts/verify-s1-04.sh Scripts/verify-s1-04-live.sh && \
@@ -371,8 +391,12 @@ set -euo pipefail
   Scripts/verify-s1-04.sh --fixtures-only && \
   THORCHAIN_SIMULATOR_UDID="$THR139_SIMULATOR_UDID" \
   Scripts/verify-s1-02.sh)
+guard_preserved_reports
 (cd "$THORCHAINKIT_ROOT" && \
   THORCHAIN_SIMULATOR_UDID="$THR139_SIMULATOR_UDID" \
+  GIT_CONFIG_COUNT=1 \
+  GIT_CONFIG_KEY_0=status.showUntrackedFiles \
+  GIT_CONFIG_VALUE_0=no \
   Scripts/verify-s1-04.sh \
     --expected-base "$THR139_EXPECTED_BASE" \
     --expected-head "$THR139_EXPECTED_HEAD")
@@ -489,7 +513,7 @@ paths, or private values may enter committed evidence.
 The Gimle report is RED because the EvmKit snippet freshness is contradictory
 and semantic searches have coverage gaps. Exact local Serena, targeted `rg`,
 and Git verification are the accepted fallback; the defects remain recorded.
-Revision 14 resolves the closure-5/5 correction set by reusing the existing
+Revision 15 resolves the closure-5/5 correction set by reusing the existing
 S1-02 and S1-04 repository gates, removing THR-139-specific ThorChainKit
 allowlists/wrappers, and spelling three executable fixed family-to-REST/RPC
 live invocations with every required public runner input. The exact HEAD,

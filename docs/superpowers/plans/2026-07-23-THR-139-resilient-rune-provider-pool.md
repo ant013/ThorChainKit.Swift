@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool plan
 
-Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 14. Discovery 2/2; closure 5/5 remains frozen; targeted correction review is pending.
+Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 15. Discovery 2/2; closure 5/5 remains frozen; targeted correction review is pending.
 
 No implementation, UW commit, push, PR, CI, Maestro, or remote smoke is
 authorized until the exact spec and this plan are explicitly approved. This
@@ -22,8 +22,8 @@ local and finish under an operator-controlled commit gate.
 
 ### 1. Fresh bounded design review
 
-**Owner:** ThorChainCodeReviewer. **Dependencies:** pushed revision-14 spec,
-plan, and Gimle report. Recheck only the frozen D-001 through D-021 allowlist,
+**Owner:** ThorChainCodeReviewer. **Dependencies:** pushed revision-15 spec,
+plan, and Gimle report. Recheck only the frozen D-001 through D-022 allowlist,
 discovery 2/2, closure 5/5. Verify that no UW acceptance transport, launch-
 argument branch, adapter sink, or production observation callback is introduced;
 verify deterministic full-manifest fixtures, reuse of the existing S1-04 family
@@ -41,9 +41,13 @@ ThorChainKit checkout. Do not create THR-139 ThorChainKit allowlists or
 wrappers, and never pass a caller-supplied allowlist path. The existing
 scripts use `set -euo pipefail`, derive checked-in fixtures from their own
 repository root, create fresh result bundles, and reject stale bundles.
-Before approval, verify only the exact expected HEAD, clean worktree,
-`origin/main` equality, base ancestry, and `bash -n`. Then reproduce both known
-no-Xcode failures with the existing `--source-only` and `--fixtures-only` modes;
+Before approval, verify only the exact expected HEAD, the preserved-worktree
+guard below, `origin/main` equality, base ancestry, and `bash -n`. The assigned
+worktree intentionally preserves exactly two untracked reports; do not delete,
+move, modify, stage, or commit them. Their raw file SHA-256 values below are
+independent of the Gimle `repository.base_worktree_manifest` composite hashes.
+Reject all tracked dirt and any unexpected untracked path. Then reproduce both
+known no-Xcode failures with the existing `--source-only` and `--fixtures-only` modes;
 both must exit 1 and emit the generic verifier failure. Bind the reproduced
 cause separately to the exact source line. Do not claim PASS on the unmodified
 base.
@@ -54,7 +58,15 @@ set -euo pipefail
 : "${THR139_EXPECTED_HEAD:?set once to the reviewed 40-character ThorChainKit HEAD}"
 (cd "$THORCHAINKIT_ROOT" && \
   test "$(git rev-parse HEAD)" = "$THR139_EXPECTED_HEAD" && \
-  test -z "$(git status --porcelain)" && \
+  expected_report_1='docs/reports/gimle/THR-118-s1-07-closure-2-verification-20260722.md' && \
+  expected_report_2='docs/reports/gimle/THR-138-implementation-verification-20260723.md' && \
+  test -z "$(git status --porcelain=v1 --untracked-files=all | awk 'substr($0,1,2) != "??"')" && \
+  test "$(git ls-files --others --exclude-standard | LC_ALL=C sort)" = \
+    "$(printf '%s\n' "$expected_report_1" "$expected_report_2" | LC_ALL=C sort)" && \
+  test "$(shasum -a 256 "$expected_report_1" | awk '{print $1}')" = \
+    094d56fb8ac1f6a4b604b3df6e8ab7a47ee457edcca26b6d9f5912277ad02307 && \
+  test "$(shasum -a 256 "$expected_report_2" | awk '{print $1}')" = \
+    6e4735f7666b89f7af5b1a8b3f9888e18909faa0adb128d5fe6ec6497cb3d9fe && \
   test "$(git rev-parse refs/remotes/origin/main)" = "$THR139_EXPECTED_BASE" && \
   git merge-base --is-ancestor "$THR139_EXPECTED_BASE" "$THR139_EXPECTED_HEAD" && \
   bash -n Scripts/verify-s1-02.sh Scripts/verify-s1-04.sh Scripts/verify-s1-04-live.sh)
@@ -195,7 +207,14 @@ test "$(jq -er '.head' "$THR139_UW_BEFORE_MANIFEST")" = \
 
 First verify that the approved `LiveThorNodeClient.swift:358` repair makes both
 `Scripts/verify-s1-04.sh --source-only` and `--fixtures-only` pass. Then run the
-existing `Scripts/verify-s1-02.sh` gate, followed by
+preserved-worktree guard for the exact two intentional untracked reports and
+their raw SHA-256 values, followed by the existing `Scripts/verify-s1-02.sh`
+gate and the full exact-head verifier. The raw digests are not the Gimle
+`repository.base_worktree_manifest` composite hashes. For the full verifier
+only, after the guard, set command-local
+`GIT_CONFIG_COUNT=1`, `GIT_CONFIG_KEY_0=status.showUntrackedFiles`, and
+`GIT_CONFIG_VALUE_0=no`; never persist an exclude rule or weaken the script.
+Run the
 `Scripts/verify-s1-04.sh --expected-base <40-char SHA> --expected-head
 <40-char SHA>` with `THORCHAIN_SIMULATOR_UDID` set to the approved simulator.
 The S1-04 gate internally derives its complete checked-in test manifest and
