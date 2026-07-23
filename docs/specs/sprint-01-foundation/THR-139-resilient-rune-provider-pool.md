@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool
 
-**Design revision:** 8 — discovery 2/2, closure 4/5 pending targeted review.
+**Design revision:** 9 — discovery 2/2, closure 4/5 pending targeted review.
 **Status:** revised
 design; implementation remains blocked until this exact revision is accepted by
 the adversarial reviewer and explicitly approved by the operator.
@@ -38,9 +38,13 @@ In scope:
 - Deterministic full-manifest family-selection fixtures in AppTests. They vary
   only scripted Comet heights so Rorcual, IBS, and Keplr are each selected in a
   separate fixture pass.
+- Repository-owned UW verification artifacts: `$UW_ROOT/Scripts/verify-thr-139-scheme.py`
+  and `$UW_ROOT/Scripts/verify-thr-139-uw-tests.py`. The implementation owner
+  authors and negatively verifies these exact scripts before the first Xcode
+  command; QA invokes only those checked-in paths.
 - Online native-RUNE smoke using the existing S1-04 family live-smoke runner,
   once for each of Rorcual, IBS, and Keplr. This reuses the approved public
-  endpoint, REST/RPC identity, height, manifest, and evidence boundary; it adds
+  endpoint, REST/RPC identity, height, and repository-defined evidence boundary; it adds
   no Unstoppable acceptance transport, test launch-argument branch, adapter
   sink, or production observation callback.
 
@@ -120,7 +124,7 @@ Rejected counterexamples:
 | URL trust boundary | Existing HTTPS and URL-component validation | Compare exactly six role-bound records; reject subset/superset and cross-family pairs | Duplicate, foreign, superset, HTTP, credential/query/fragment, and pair-swap negatives |
 | Failover lifecycle | EndpointPool health/selection and ReadOperationCoordinator complete-operation retry | Supply all three families; do not alter ThorChainKit | Use the existing `testRetryRepeatsTheCompleteOperationOnTheNextFamily` proof, whose injected first-family `ThorNodeReadError.httpStatus(... code: 503 ...)` causes one complete retry; assert unchanged height/identity checks |
 | Ownership | Native RUNE provider owns native endpoints; multichain owns swaps | Keep Liquify out of native RUNE and leave multichain source untouched | Source diff plus native/multichain composition negatives |
-| Online network smoke | Existing S1-04 family live-smoke runner and public node probes | Run the approved runner once per production family; do not add a UW acceptance transport, launch-argument branch, adapter sink, or production selector | Per-family manifest/evidence freshness, REST/RPC pair ownership, `thorchain-1`, accepted heights, and fail-closed drift |
+| Online network smoke | Existing S1-04 family live-smoke runner and public node probes | Run the approved runner once per production family with the fixed REST/RPC pair in the invocation; do not add a UW acceptance transport, launch-argument branch, adapter sink, or production selector | Per-family fresh evidence, family/chain/height/account invariants, and fail-closed drift; the full manifest is checked by deterministic AppTests |
 
 ### Selection and live-smoke contract
 
@@ -133,9 +137,10 @@ by the scripted heights. The fixture target is never copied into the
 observation; it only controls responses.
 
 The online smoke intentionally does not claim ownership of a family from an
-Unstoppable app event. The approved S1-04 runner supplies one audited public
-family input per isolated pass and independently verifies that family's REST/RPC
-pair, chain identity, accepted height, and digest-only evidence. The
+Unstoppable app event. The approved S1-04 runner receives one audited public
+family input and its fixed REST/RPC pair per isolated pass, then independently
+verifies the family, chain identity, accepted height, and repository-defined
+evidence JSON. The
 deterministic AppTests are the provider-pool ownership proof: every fixture
 constructs the complete three-family manifest, varies only scripted valid
 Comet heights, and asserts the completed projection's
@@ -163,8 +168,10 @@ selector is added to Unstoppable or ThorChainKit.
    projection's `providerFamilyId` equals the actually selected family. The
    existing S1-04 family live-smoke runner performs three isolated real-node
    passes, one for each approved family, and independently verifies each
-   REST/RPC pair, `thorchain-1`, accepted height/identity invariants, fresh
-   digest-only evidence, and manifest stability. It does not claim that online
+   REST/RPC pair, `thorchain-1`, accepted height/identity invariants, and fresh
+   repository-schema evidence. The full manifest is stable and verified in the
+   deterministic AppTests; the online JSON does not duplicate it or the URL
+   records. It does not claim that online
    passes forced provider selection. No Unstoppable acceptance transport,
    launch-argument branch, adapter sink, or production selector is added. The
    existing injected HTTP 503 coordinator case proves complete-operation retry.
@@ -182,6 +189,11 @@ selector is added to Unstoppable or ThorChainKit.
    checked-in fixtures from the repository root, create fresh result bundles,
    and reject stale bundles internally. Run their existing shell syntax and
    negative-fixture checks; no caller-supplied allowlist path is permitted.
+   Before the UW-specific commands below, author and own the exact
+   `$UW_ROOT/Scripts/verify-thr-139-scheme.py` and
+   `$UW_ROOT/Scripts/verify-thr-139-uw-tests.py` repository files. Their
+   negative fixtures must reject a malformed scheme, an extra/suppressed
+   testable, a missing result bundle, and any failed or skipped test node.
 2. **Pre-edit contract tests (ThorChainSwiftEngineer).** In the exact UW
    checkout, run the repository-owned scheme preflight before this first Xcode
    command, then replace the old one-Liquify expectation with exact order, URL,
@@ -227,8 +239,10 @@ selector is added to Unstoppable or ThorChainKit.
 6. **Three-family online smoke (ThorChainQAEngineer).** Use the existing
    `$THORCHAINKIT_ROOT/Scripts/verify-s1-04-live.sh` runner once per approved
    family with unique evidence roots and the already audited public inputs.
-   Verify each fresh digest-only result with the existing S1-04 evidence
-   verifier. This is network identity/height/pair evidence, not an Unstoppable
+   Verify each fresh result with the existing S1-04 evidence verifier and its
+   actual schema: `schemaVersion`, `head`, `familyId`, `chainId`, timestamp,
+   `cosmosHeight`, `cometHeight`, `acceptedHeight`, and the exact existing and
+   absent account records. This is network identity/height/pair evidence, not an Unstoppable
    owner-selection oracle; no UW acceptance transport, launch argument,
    adapter sink, or new live runner is added.
 7. **Handoff (CodeReviewer → QA → CTO).** Each reviewer cites the exact pushed
@@ -283,6 +297,9 @@ xcodebuild build -project "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj" \
 : "${THR139_EXISTING_ADDRESS:?set to the audited public existing thor1 address}"
 : "${THR139_ABSENT_ADDRESS:?set to the audited public absent thor1 address}"
 : "${THR139_SIMULATOR_UDID:?set to the approved iOS 26.2 simulator UUID}"
+: "${THR139_EXPECTED_HEAD:?set to the reviewed 40-character ThorChainKit HEAD}"
+: "${THR139_EVIDENCE_ROOT:?set to a non-empty evidence root}"
+test -n "$THR139_EVIDENCE_ROOT"
 
 THORCHAIN_S1_04_LIVE=1 \
 THORCHAIN_S1_04_EXPECTED_HEAD="$THR139_EXPECTED_HEAD" \
@@ -326,30 +343,26 @@ UUID, and evidence root are required inputs shared across the isolated passes.
 The expected HEAD is captured once from the clean exact checkout and is
 not recomputed between families.
 
-### Canonical digest domains
+### Existing S1-04 evidence contract
 
-`manifestSha256` is the lowercase SHA-256 of the UTF-8 bytes of canonical JSON
-for the checked-in manifest object `{"families":[six role-bound records]}`,
-with recursively sorted object keys, compact separators, and no trailing
-newline. Every manifest record has exactly the keys `basePath`, `family`,
-`host`, `port`, `role`, and `scheme`. `resultSha256` is the lowercase SHA-256
-of the same canonical encoding for the result object with the `resultSha256`
-field omitted. `rest` and `rpc` each have exactly the six record keys plus
-`chainId` and `height`; the top-level result has exactly `chainId`, `height`,
-`manifestSha256`, `observedFamily`, `rest`, `rpc`, and `schemaVersion` before
-`resultSha256` is added:
+The existing S1-04 runner and verifier are the evidence producer and consumer.
+Their committed result schema is exactly `schemaVersion`, `head`, `familyId`,
+`chainId`, `timestamp`, `cosmosHeight`, `cometHeight`, `acceptedHeight`,
+`existing`, and `absent`. The verifier requires `schemaVersion == 1`, the
+reviewed HEAD and fixed family ID, `chainId == "thorchain-1"`, positive integer
+heights, `acceptedHeight == cosmosHeight`, a Comet/Cosmos difference of at most
+five, an existing account with matching raw/implementation RUNE amounts, and
+an absent account with no balances. It rejects credential-bearing or URL-like
+strings in the serialized evidence and binds the fresh result bundle to the
+repository-derived S1-04 allowlist.
 
-```json
-{"chainId":"thorchain-1","height":12345678,"manifestSha256":"2b103c56a8e8020e210d9e589150420618de663b2184c39e0a1140000c5d712b","observedFamily":"rorcual-mainnet","rest":{"basePath":"/","chainId":"thorchain-1","family":"rorcual-mainnet","height":12345678,"host":"api-thorchain.rorcual.xyz","port":443,"role":"rest","scheme":"https"},"rpc":{"basePath":"/","chainId":"thorchain-1","family":"rorcual-mainnet","height":12345678,"host":"rpc-thorchain.rorcual.xyz","port":443,"role":"rpc","scheme":"https"},"schemaVersion":1}
-```
-
-For that fixed fixture, the manifest digest is
-`2b103c56a8e8020e210d9e589150420618de663b2184c39e0a1140000c5d712b` and the
-result digest is
-`356b6fe7d87d023a26cd4422da72dac1df226ed055508821b104717180d2a22c`.
-The independent verifier reconstructs both preimages, rejects any extra or
-missing field, and compares the resulting digests before reporting success. No
-digest is computed over an object containing itself.
+This contract intentionally does not claim `manifestSha256`, `resultSha256`,
+or REST/RPC URL records because the existing runner does not emit them. The
+three command invocations above are the source of the fixed URL-pair binding;
+the live result proves the supplied pair's family, chain, height, and account
+invariants. Full-manifest stability is proven by the deterministic AppTests,
+which construct and exercise all three families. Adding a second live producer
+or verifier is outside this correction slice.
 
 No raw endpoint responses, credentials, cookies, mnemonics, absolute operator
 paths, or private values may enter committed evidence.
@@ -359,11 +372,13 @@ paths, or private values may enter committed evidence.
 The Gimle report is RED because the EvmKit snippet freshness is contradictory
 and semantic searches have coverage gaps. Exact local Serena, targeted `rg`,
 and Git verification are the accepted fallback; the defects remain recorded.
-Revision 8 resolves the board's closure 4/5 correction by reusing the existing
+Revision 9 resolves the closure 4/5 corrections by reusing the existing
 S1-02 and S1-04 repository gates, removing THR-139-specific ThorChainKit
 allowlists/wrappers, and spelling three executable fixed family-to-REST/RPC
 live invocations with every required public runner input. The unapproved
 Unstoppable live evidence sink/adapter branch remains removed. Discovery
 remains frozen at 2/2; closure remains bounded to the frozen IDs and direct
-regressions. Explicit operator approval of this exact pushed spec and plan is
+regressions, authoring the two repository-owned UW verifier artifacts, and
+asserting a non-empty evidence root before child paths are built. Explicit
+operator approval of this exact pushed spec and plan is
 required before implementation.

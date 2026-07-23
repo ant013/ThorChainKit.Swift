@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool plan
 
-Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 8. Discovery 2/2; closure 4/5 pending targeted review.
+Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 9. Discovery 2/2; closure 4/5 pending targeted review.
 
 No implementation, UW commit, push, PR, CI, Maestro, or remote smoke is
 authorized until the exact spec and this plan are explicitly approved.
@@ -25,10 +25,10 @@ argument branch, adapter sink, or production observation callback is introduced;
 verify deterministic full-manifest fixtures, reuse of the existing S1-04 family
 live-smoke runner, XML-safe preflight ordering, fresh result-bundle binding,
 repository-derived verifier paths, role-bound six-record equality,
-cross-family pairing, exact result verification, simulator selectors, and
+cross-family pairing, exact repository-schema evidence verification, simulator selectors, and
 docs-only delivery.
 
-### 2. Existing verification gates
+### 2. Existing verification gates and UW verifier artifacts
 
 **Owner:** ThorChainSwiftEngineer. **Dependency:** Step 1 review disposition.
 Reuse `Scripts/verify-s1-02.sh`, `Scripts/verify-s1-04.sh`,
@@ -39,6 +39,20 @@ scripts use `set -euo pipefail`, derive checked-in fixtures from their own
 repository root, create fresh result bundles, and reject stale bundles.
 Verify their checked-in shell syntax and existing negative fixtures before any
 consumer command.
+
+Before any UW Xcode command, the ThorChainSwiftEngineer authors and owns these
+repository-derived verifier files in the exact UW checkout:
+
+```text
+$UW_ROOT/Scripts/verify-thr-139-scheme.py
+$UW_ROOT/Scripts/verify-thr-139-uw-tests.py
+```
+
+The first must reject malformed XML, missing/extra testables, and suppressed
+`AppTests`; the second must reject a missing result bundle and every failed or
+skipped test node. Run their negative fixtures and `python3 -m py_compile`
+before the first `xcodebuild` command. QA invokes these exact checked-in paths;
+no inline replacement verifier or caller-supplied allowlist is permitted.
 
 ### 3. Test-first UW contract
 
@@ -120,11 +134,12 @@ three explicit invocations, one each for `rorcual-mainnet`, `ibs-mainnet`, and
 `keplr-mainnet`. Each invocation must set the exact fixed family ID, its fixed
 REST and RPC URL pair from the spec, the same reviewed expected HEAD, audited
 public existing/absent addresses, simulator UUID, and a unique evidence root.
-Independently verify each fresh digest-only result with the existing S1-04
-evidence verifier. This proves
-REST/RPC pair ownership, `thorchain-1`, accepted height/identity invariants,
-and evidence freshness; deterministic AppTests prove provider-pool selection
-with the complete three-family manifest. No Unstoppable acceptance transport,
+Independently verify each fresh result with the existing S1-04 evidence
+verifier. Its actual schema is `schemaVersion`, `head`, `familyId`, `chainId`,
+timestamp, the three heights, and the exact existing/absent account records.
+The fixed REST/RPC pair is bound by each command invocation; the result verifies
+the pair's family, chain, height, and account invariants. Deterministic AppTests
+prove provider-pool selection with the complete three-family manifest. No Unstoppable acceptance transport,
 launch argument, adapter sink, or new live runner is added. The injected HTTP
 503 test is the failover proof; online passes are network identity/pair
 evidence, not a caller-selected owner oracle.
