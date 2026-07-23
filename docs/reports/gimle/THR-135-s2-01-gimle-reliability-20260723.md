@@ -34,11 +34,11 @@ The UW working copy is intentionally dirty with local THR-104/THR-139 integratio
 
 ## Artifact binding
 
-- Spec/delta-matrix/test-plan digest: `639e8da5bbb329ff07e1c7ab4d9b59886afdf3e87e54ddff1474b8d90d937d21`.
-- Implementation-plan digest: `fc34f5c9b5cdcf24e3541b61d3f27d929ed231fecbe327c914b8f7bde8889e75`.
+- Spec/delta-matrix/test-plan digest: `66d50a1259f36edb559459fc9f13034a5285be3822857869d348adc859b543ee`.
+- Implementation-plan digest: `c3d800cae01e2dbd642aa2ac298f33fae36e9033dfc2a02673b20e9fd671d0b5`.
 - Analog-family digest: `7279cec526c0cd6a2b67407049080de263eddb2680077abb6083c8493eac626d`.
 - Consolidated-test-plan digest: `efb853fd65011a24331606434794d0c59cc9d7d62c1490da0c2f7e22a4a0a0c6`.
-- Committed evidence manifest digest: `07e01a28a91c6348c32cf47a53f5a7845c9e8df72a60cd83bff30a027cb91c35` (`THR-135-s2-01-evidence-r4.json`).
+- Committed evidence manifest digest: `07e01a28a91c6348c32cf47a53f5a7845c9e8df72a60cd83bff30a027cb91c35` (`THR-135-s2-01-evidence-r4.json`; refresh after this correction commit).
 - The repository report and manifest are the immutable sanitized evidence
   binding for this revision; no mutable external audit root is required to
   reconstruct the selected claims, candidate IDs, decision IDs, or artifact
