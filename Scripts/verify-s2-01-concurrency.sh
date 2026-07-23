@@ -17,6 +17,13 @@ done
 root=$(cd "$(dirname "$0")/.." && pwd -P)
 temporary_root=$(mktemp -d)
 trap 'rm -rf "$temporary_root"' EXIT
+
+if rg -n '@unchecked Sendable|@preconcurrency' "$root/Sources/ThorChainKit/Send" >/dev/null; then
+    echo "FAIL verify-s2-01-concurrency: forbidden unchecked-concurrency boundary in Send sources" >&2
+    rg -n '@unchecked Sendable|@preconcurrency' "$root/Sources/ThorChainKit/Send" >&2
+    exit 1
+fi
+
 package_copy="$temporary_root/package"
 mkdir -p "$package_copy/Sources" "$package_copy/Tests"
 cp "$root/Package.swift" "$root/Package.resolved" "$package_copy/"

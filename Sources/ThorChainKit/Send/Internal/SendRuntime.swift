@@ -1,23 +1,24 @@
 import BigInt
 import Foundation
 
-fileprivate final class SendRuntimeAdmissionState: @unchecked Sendable {
-    private let lock = NSLock()
-    private var activeGeneration: UInt64?
+fileprivate final class SendRuntimeAdmissionState: Sendable {
+    private let stateQueue = DispatchQueue(label: "ThorChainKit.Send.Admission")
+    private let generationKey = DispatchSpecificKey<UInt64>()
 
     func activate(generation: UInt64) {
-        lock.lock(); defer { lock.unlock() }
-        activeGeneration = generation
+        stateQueue.sync { stateQueue.setSpecific(key: generationKey, value: generation) }
     }
 
     func invalidate(generation: UInt64) {
-        lock.lock(); defer { lock.unlock() }
-        if activeGeneration == generation { activeGeneration = nil }
+        stateQueue.sync {
+            if stateQueue.getSpecific(key: generationKey) == generation {
+                stateQueue.setSpecific(key: generationKey, value: nil)
+            }
+        }
     }
 
     func isActive() -> Bool {
-        lock.lock(); defer { lock.unlock() }
-        return activeGeneration != nil
+        stateQueue.sync { stateQueue.getSpecific(key: generationKey) != nil }
     }
 }
 
