@@ -40,7 +40,7 @@ The UW working copy is intentionally dirty with local THR-104/THR-139 integratio
 - Implementation-plan digest: `24296888ec34cdbbaa40d142ce17a5c9f90611afb0297d6f854a7c3e90b2c330`.
 - Analog-family digest: `7279cec526c0cd6a2b67407049080de263eddb2680077abb6083c8493eac626d`.
 - Consolidated-test-plan digest: `efb853fd65011a24331606434794d0c59cc9d7d62c1490da0c2f7e22a4a0a0c6`.
-- Committed evidence manifest: `THR-135-s2-01-evidence-r5.json`, bound to reviewed head `b33d2ae696e72109410fe008d197507f2fd14cb9`.
+- Committed evidence manifest: `THR-135-s2-01-evidence-r5.json`; r5 records `b33d2ae696e72109410fe008d197507f2fd14cb9` only as the reviewed predecessor/superseded head. The candidate head is bound externally by the atomic Paperclip handoff and verified as `HEAD == origin` branch `==` handoff SHA.
 - The repository report and manifest are the immutable sanitized evidence
   binding for this revision; no mutable external audit root is required to
   reconstruct the selected claims, candidate IDs, decision IDs, or artifact
