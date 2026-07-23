@@ -3,7 +3,7 @@
 - Task: SPRINT-02-NATIVE-SEND-ARCH
 - Workflow/phase: analog_change / awaiting_approval
 - Trust: **YELLOW**
-- Repository: /Users/ant013/Data/AI/thorchain-worktrees/sprint-02-architecture
+- Repository: $THORCHAINKIT_ROOT
 - Base HEAD: 771bad30bb4ff20fa32ed0f4be260a7b934899e9
 - Final HEAD: n/a
 - Gimle runtime: 0e9cf57c00ff970f584256126b500166580e7a72
