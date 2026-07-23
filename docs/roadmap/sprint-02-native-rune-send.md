@@ -11,15 +11,17 @@ The outcome is demonstrated in both products:
 
 ## Slice Sequence
 
-| Slice | Capability | Observable exit |
-|---|---|---|
-| S2-01 | immutable send/quote domain | Example can validate input and render stable review data; signer summary uses unambiguous fixed-eight RUNE values |
-| S2-02 | one-family, one-height preflight | Example displays account sequence, native fee, total debit, and halt state from one coherent snapshot |
-| S2-03 | local direct-sign codec | official and independent fixtures produce exact SignDoc, TxRaw, and transaction hashes |
-| S2-04 | external signer + per-account coordinator | a host signer authorizes one request; wrong key, bad signature, stale quote, and concurrent send fail closed |
-| S2-05 | durable broadcast + pending lifecycle | exact signed bytes survive timeout/restart and can be rebroadcast idempotently |
-| S2-06 | Example acceptance | Maestro proves review, CheckTx acceptance, ambiguous result, retry, and restart/pending projections in an isolated fixture target |
-| S2-07 | Unstoppable integration | the real `SendNew` flow sends a controlled mainnet transfer and records the local hash and node result |
+| Slice | Capability | Observable exit | Status |
+|---|---|---|---|
+| S2-01 | immutable send/quote domain | Example can validate input and render stable review data; signer summary uses unambiguous fixed-eight RUNE values | ✅ Implemented — PR #11 — 2026-07-24 |
+| S2-02 | one-family, one-height preflight | Example displays account sequence, native fee, total debit, and halt state from one coherent snapshot | Pending |
+| S2-03 | local direct-sign codec | official and independent fixtures produce exact SignDoc, TxRaw, and transaction hashes | Pending |
+| S2-04 | external signer + per-account coordinator | a host signer authorizes one request; wrong key, bad signature, stale quote, and concurrent send fail closed | Pending |
+| S2-05 | durable broadcast + pending lifecycle | exact signed bytes survive timeout/restart and can be rebroadcast idempotently | Pending |
+| S2-06 | Example acceptance | Maestro proves review, CheckTx acceptance, ambiguous result, retry, and restart/pending projections in an isolated fixture target | Pending |
+| S2-07 | Unstoppable integration | the real `SendNew` flow sends a controlled mainnet transfer and records the local hash and node result | Pending |
+
+The status cell is the canonical repository marker. A completed row contains `✅ Implemented — PR #<real> — <YYYY-MM-DD>` and no commit SHA. Exact reviewed `headRefOid` and post-merge `mergeCommit.oid` remain external review/merge evidence.
 
 Each slice is independently reviewable and must leave the package buildable. S2-07 starts only after the standalone package behavior is accepted.
 
