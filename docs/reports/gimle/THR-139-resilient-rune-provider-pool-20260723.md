@@ -128,6 +128,10 @@ Bug statuses: {'workaround': 4}
 - D-015@1 ACCEPT: Approved UW workspace identity
 - D-016@1 ACCEPT: ThorChainKit capture utility ownership
 - D-017@1 ACCEPT: Approved manifest binding
+- D-018@1 ACCEPT: Repair gate ordering
+- D-019@1 ACCEPT: Executable verifier manifest coverage
+- D-020@1 ACCEPT: Online family-ownership wording
+- D-021@1 ACCEPT: Revision and review counters
 
 ## Verification and acceptance
 

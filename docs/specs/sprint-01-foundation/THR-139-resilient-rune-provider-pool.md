@@ -1,6 +1,7 @@
 # THR-139 — resilient native RUNE provider pool
 
-**Design revision:** 11 — discovery 2/2, closure 5/5 pending targeted review.
+**Design revision:** 12 — discovery 2/2, closure 5/5 remains frozen; targeted
+correction review is pending.
 **Status:** revised
 design; implementation remains blocked until this exact revision is accepted by
 the adversarial reviewer and explicitly approved by the operator.
@@ -170,8 +171,9 @@ observation; it only controls responses.
 The online smoke intentionally does not claim ownership of a family from an
 Unstoppable app event. The approved S1-04 runner receives one audited public
 family input and its fixed REST/RPC pair per isolated pass. The stored result
-verifies the family, chain identity, accepted height, and repository-defined
-evidence JSON; it does not attest the literal URL pair supplied by the command.
+records the requested family identifier and verifies chain identity, accepted
+height, and repository-defined evidence JSON; it does not prove family
+ownership or attest the literal URL pair supplied by the command.
 The
 deterministic AppTests are the provider-pool ownership proof: every fixture
 constructs the complete three-family manifest, varies only scripted valid
@@ -203,12 +205,12 @@ selector is added to Unstoppable or ThorChainKit.
    projection's `providerFamilyId` equals the actually selected family. The
    existing S1-04 family live-smoke runner performs three isolated real-node
    passes, one for each approved family. Each invocation supplies its fixed
-   REST/RPC pair; the stored result verifies `thorchain-1`, accepted
-   height/identity invariants, and fresh repository-schema evidence, but does
-   not attest the literal URL pair. The full manifest is stable and verified in the
+   REST/RPC pair; the stored result records the requested `familyId` and verifies
+   `thorchain-1`, accepted height/identity invariants, and fresh
+   repository-schema evidence, but does not prove family ownership or attest the
+   literal URL pair. The full manifest and provider-pool selection are proved in
    deterministic AppTests; the online JSON does not duplicate it or the URL
-   records. It does not claim that online
-   passes forced provider selection. No Unstoppable acceptance transport,
+   records. It does not claim that online passes forced provider selection. No Unstoppable acceptance transport,
    launch-argument branch, adapter sink, or production selector is added. The
    existing injected HTTP 503 coordinator case proves complete-operation retry.
 8. CodeReviewer approval, QA pass, CTO exact-head evidence, and explicit
@@ -218,7 +220,7 @@ selector is added to Unstoppable or ThorChainKit.
 
 ## Test-first implementation and verification plan
 
-1. **Existing verification gates (ThorChainSwiftEngineer).** Reuse the
+1. **Pre-approval baseline and post-repair gates (ThorChainSwiftEngineer).** Reuse the
    existing repository-owned `Scripts/verify-s1-02.sh`, `Scripts/verify-s1-04.sh`,
    `Scripts/verify-xcresult.sh`, and `Scripts/verify-s1-04-live.sh` contracts.
    Do not add THR-139 ThorChainKit allowlists, result-bundle wrappers, or
@@ -226,11 +228,14 @@ selector is added to Unstoppable or ThorChainKit.
    checked-in fixtures from the repository root, create fresh result bundles,
    and reject stale bundles internally. Run their existing shell syntax and
    negative-fixture checks; no caller-supplied allowlist path is permitted.
-   Before `verify-s1-02.sh` can run or emit any `PASS`, perform the exact
-   expected-HEAD, clean-worktree, `origin/main` equality, and base-ancestry
-   preflight shown below. Then run `bash -n` plus the existing
-   `verify-s1-04.sh --source-only` and `--fixtures-only` modes; these are the
-   checked-in no-Xcode static/negative gates at the reviewed ThorChainKit HEAD.
+   Before approval, perform only the exact expected-HEAD, clean-worktree,
+   `origin/main` equality, and base-ancestry preflight shown below plus `bash -n`.
+   Do not claim a source/fixture PASS on the unmodified base: the known
+   `LiveThorNodeClient.swift:358` parser defect is the approved correction.
+   After approval, apply that repair first (Step 3), rerun the same preflight,
+   then run `bash -n` plus the existing `verify-s1-04.sh --source-only` and
+   `--fixtures-only` modes. Only this post-repair run may emit PASS or precede
+   `verify-s1-02.sh`; no PASS-capable ThorChainKit gate runs before the repair.
    Before the UW-specific commands below, author and own the exact operator-local
    `$UW_ROOT/Scripts/verify-thr-139-scheme.py` and
    `$UW_ROOT/Scripts/verify-thr-139-uw-tests.py` files. Their
@@ -244,7 +249,30 @@ selector is added to Unstoppable or ThorChainKit.
    `$THORCHAINKIT_ROOT/Scripts/capture-s1-07-inputs.py --root "$UW_ROOT"`
    and labels `before` and `after`; require each manifest `head` to equal
    `8a63bfda028dd8543115b26dd777235a53304311`, equal before/after `HEAD`
-   values, and recorded `statusSha256` and per-file SHA-256 maps.
+   values, and recorded `statusSha256` and per-file SHA-256 maps. After the
+   local verifier files are authored, a machine-readable check must fail closed
+   unless the `after` manifest's file map contains both exact relative paths
+   `Scripts/verify-thr-139-scheme.py` and `Scripts/verify-thr-139-uw-tests.py`
+   with non-empty SHA-256 values. A manifest that omits either verifier is not
+   accepted; the `before` manifest is captured before those new files exist.
+   The check is executable, not a prose assertion:
+
+   ```text
+   python3 - "$THR139_UW_AFTER_MANIFEST" <<'PY'
+   import json, sys
+
+   manifest = json.load(open(sys.argv[1], encoding="utf-8"))
+   assert manifest["head"] == "8a63bfda028dd8543115b26dd777235a53304311"
+   assert manifest["statusSha256"]
+   files = manifest["files"]
+   for path in (
+       "Scripts/verify-thr-139-scheme.py",
+       "Scripts/verify-thr-139-uw-tests.py",
+   ):
+       digest = files.get(path)
+       assert isinstance(digest, str) and len(digest) == 64 and digest
+   PY
+   ```
 2. **Pre-edit contract tests (ThorChainSwiftEngineer).** In the exact UW
    checkout, run the operator-local scheme preflight before this first Xcode
    command, then replace the old one-Liquify expectation with exact order, URL,
@@ -252,11 +280,13 @@ selector is added to Unstoppable or ThorChainKit.
    tests. Run them before editing production; the old provider must fail the
    new contract. Check: `xcodebuild ... -only-testing:AppTests/ThorChainKitManagerTests test`
    returns a real failing XCTest result, not a selector/compilation error.
-3. **Small production edit (ThorChainSwiftEngineer).** Edit only the existing
+3. **Small production edit and approved parser repair (ThorChainSwiftEngineer).**
+   After explicit approval, apply the behavior-equivalent
+   `LiveThorNodeClient.swift:358` do/catch repair first; only then may the
+   post-repair source/fixture gates in Step 1 run. Edit only the existing
    native RUNE provider and, if required by the failing exact-equality tests,
-   its existing manager/descriptor validation seam. Separately apply only the
-   approved `LiveThorNodeClient.swift:358` do/catch repair and focused
-   absence-envelope test in ThorChainKit. Do not add an abstraction or touch the
+   its existing manager/descriptor validation seam. Apply the focused
+   absence-envelope test in ThorChainKit with that repair. Do not add an abstraction or touch the
    multichain provider. Check: focused tests pass; the UW manifest binds before
    and after evidence to one unchanged UW `HEAD`; and each repository's diff is
    limited to its approved paths.
@@ -310,6 +340,11 @@ selector is added to Unstoppable or ThorChainKit.
    operator-controlled local action; no UW PR or merge is required.
 
 ## Exact command shapes
+
+The ThorChainKit command block below is post-approval and must run only after
+the Step 3 parser repair. Before approval, the read-only baseline is limited to
+the identity/clean-worktree/ancestry checks and `bash -n`; source/fixture and
+Xcode PASS claims are not made against the unmodified base.
 
 The ThorChainKit test command is a simulator Xcode command, not `swift test`:
 
@@ -445,7 +480,7 @@ paths, or private values may enter committed evidence.
 The Gimle report is RED because the EvmKit snippet freshness is contradictory
 and semantic searches have coverage gaps. Exact local Serena, targeted `rg`,
 and Git verification are the accepted fallback; the defects remain recorded.
-Revision 10 resolves the reviewer correction set by reusing the existing
+Revision 12 resolves the closure-5/5 correction set by reusing the existing
 S1-02 and S1-04 repository gates, removing THR-139-specific ThorChainKit
 allowlists/wrappers, and spelling three executable fixed family-to-REST/RPC
 live invocations with every required public runner input. The exact HEAD,

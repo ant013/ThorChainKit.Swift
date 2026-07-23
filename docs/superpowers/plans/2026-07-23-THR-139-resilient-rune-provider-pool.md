@@ -1,6 +1,6 @@
 # THR-139 — resilient native RUNE provider pool plan
 
-Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 11. Discovery 2/2; closure 5/5 pending targeted review.
+Plan source of truth: [THR-139 spec](../../specs/sprint-01-foundation/THR-139-resilient-rune-provider-pool.md), design revision 12. Discovery 2/2; closure 5/5 remains frozen; targeted correction review is pending.
 
 No implementation, UW commit, push, PR, CI, Maestro, or remote smoke is
 authorized until the exact spec and this plan are explicitly approved. This
@@ -22,8 +22,8 @@ local and finish under an operator-controlled commit gate.
 
 ### 1. Fresh bounded design review
 
-**Owner:** ThorChainCodeReviewer. **Dependencies:** pushed revision-11 spec,
-plan, and Gimle report. Recheck only the frozen D-001 through D-010 allowlist,
+**Owner:** ThorChainCodeReviewer. **Dependencies:** pushed revision-12 spec,
+plan, and Gimle report. Recheck only the frozen D-001 through D-017 allowlist,
 discovery 2/2, closure 5/5. Verify that no UW acceptance transport, launch-
 argument branch, adapter sink, or production observation callback is introduced;
 verify deterministic full-manifest fixtures, reuse of the existing S1-04 family
@@ -32,7 +32,7 @@ operator-local verifier paths and before/after manifest binding, role-bound six-
 cross-family pairing, exact repository-schema evidence verification, simulator selectors, and
 docs-only delivery.
 
-### 2. Existing verification gates and UW verifier artifacts
+### 2. Baseline gates and UW verifier artifacts
 
 **Owner:** ThorChainSwiftEngineer. **Dependency:** Step 1 review disposition.
 Reuse `Scripts/verify-s1-02.sh`, `Scripts/verify-s1-04.sh`,
@@ -41,12 +41,13 @@ ThorChainKit checkout. Do not create THR-139 ThorChainKit allowlists or
 wrappers, and never pass a caller-supplied allowlist path. The existing
 scripts use `set -euo pipefail`, derive checked-in fixtures from their own
 repository root, create fresh result bundles, and reject stale bundles.
-Verify the exact expected HEAD, clean worktree, `origin/main` equality, and
-base ancestry before any script can emit `PASS`. Then run `bash -n` on the
-three existing wrappers and the existing `Scripts/verify-s1-04.sh
---source-only` and `--fixtures-only` modes. These commands run before
-`verify-s1-02.sh` and before any Xcode command; no unsupported script mode is
-invented.
+Before approval, verify only the exact expected HEAD, clean worktree,
+`origin/main` equality, base ancestry, and `bash -n`; do not claim a source or
+fixture PASS because the approved parser repair is not yet present. After
+approval and Step 4's repair, rerun that preflight and then run the existing
+`Scripts/verify-s1-04.sh --source-only` and `--fixtures-only` modes. Only this
+post-repair run may emit PASS or precede `verify-s1-02.sh` and Xcode; no
+unsupported script mode is invented.
 
 ```text
 set -euo pipefail
@@ -57,9 +58,7 @@ set -euo pipefail
   test -z "$(git status --porcelain)" && \
   test "$(git rev-parse refs/remotes/origin/main)" = "$THR139_EXPECTED_BASE" && \
   git merge-base --is-ancestor "$THR139_EXPECTED_BASE" "$THR139_EXPECTED_HEAD" && \
-  bash -n Scripts/verify-s1-02.sh Scripts/verify-s1-04.sh Scripts/verify-s1-04-live.sh && \
-  Scripts/verify-s1-04.sh --source-only && \
-  Scripts/verify-s1-04.sh --fixtures-only)
+  bash -n Scripts/verify-s1-02.sh Scripts/verify-s1-04.sh Scripts/verify-s1-04-live.sh)
 ```
 
 Before any UW Xcode command, the ThorChainSwiftEngineer authors and owns these
@@ -89,10 +88,34 @@ python3 "$THORCHAINKIT_ROOT/Scripts/capture-s1-07-inputs.py" \
 Each manifest must record UW `HEAD`, `statusSha256`, and per-file SHA-256
 records; each `head` must equal
 `8a63bfda028dd8543115b26dd777235a53304311`, and the before/after manifests
-must have equal `HEAD` values. Do not copy these artifacts into this repository
+must have equal `HEAD` values. After the two verifier files are authored, a
+machine-readable check must fail closed unless the `after` manifest's file map
+contains both exact relative paths
+`Scripts/verify-thr-139-scheme.py` and
+`Scripts/verify-thr-139-uw-tests.py`, each with a non-empty SHA-256 value. The
+`before` manifest is intentionally captured before those new files exist. Do not copy these artifacts into this repository
 or commit/push them from this branch. If the ThorChainKit capture utility is
 absent, stop before implementation; do not replace it with an ad hoc manifest
 command.
+
+The check is executable, not a prose assertion:
+
+```text
+python3 - "$THR139_UW_AFTER_MANIFEST" <<'PY'
+import json, sys
+
+manifest = json.load(open(sys.argv[1], encoding="utf-8"))
+assert manifest["head"] == "8a63bfda028dd8543115b26dd777235a53304311"
+assert manifest["statusSha256"]
+files = manifest["files"]
+for path in (
+    "Scripts/verify-thr-139-scheme.py",
+    "Scripts/verify-thr-139-uw-tests.py",
+):
+    digest = files.get(path)
+    assert isinstance(digest, str) and len(digest) == 64 and digest
+PY
+```
 
 ```text
 set -euo pipefail
@@ -127,12 +150,15 @@ responses; it is never copied into the live observation.
 
 ### 4. Minimal native configuration edit
 
-**Owner:** ThorChainSwiftEngineer. **Dependency:** Step 3 failure evidence.
+**Owner:** ThorChainSwiftEngineer. **Dependency:** Step 3 failure evidence and
+explicit spec approval.
 
-Use the existing provider/manager seam only. Do not introduce a provider
+First apply the approved behavior-equivalent
+`LiveThorNodeClient.swift:358` do/catch repair and focused absence-envelope
+test in ThorChainKit; this must precede every PASS-capable ThorChainKit gate.
+Then use the existing provider/manager seam only. Do not introduce a provider
 abstraction or edit the multichain swap provider. Separately apply only the
-approved behavior-equivalent `LiveThorNodeClient.swift:358` do/catch repair and
-focused absence-envelope test in ThorChainKit. The exact six role-bound records
+The exact six role-bound records
 must be compared for equality; no membership-only allowlist or silent
 deduplication is acceptable.
 
@@ -195,7 +221,8 @@ does not attest the literal URL pair. Deterministic AppTests
 prove provider-pool selection with the complete three-family manifest. No Unstoppable acceptance transport,
 launch argument, adapter sink, or new live runner is added. The injected HTTP
 503 test is the failover proof; online passes are network identity/height/account
-evidence from the supplied pair, not a caller-selected owner oracle.
+evidence from the supplied pair, not a proof of family ownership or a
+caller-selected owner oracle.
 
 ### 8. Review and operator gate
 
