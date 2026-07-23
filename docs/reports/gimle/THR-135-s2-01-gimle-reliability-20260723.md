@@ -27,15 +27,15 @@ The UW working copy is intentionally dirty with local THR-104/THR-139 integratio
 
 - Immutable public values remain the Kit-owned, host-neutral ownership spine, while the UW handler family is the coherent behavioral analog.
 - Active deferred facade calls with valid local input fail closed as `operationUnavailable`; invalid local input returns its stable validation error; inactive lifecycle admission still returns `kitNotStarted`; pending is empty and `.degraded` until S2-05.
-- Quote identity is opaque, one-use, generation-bound, and exactly ten seconds from the accepted coherent snapshot; its private namespace/generation/deadline envelope is checked before active/consumed state, with eight bounded secure-random attempts.
+- Quote identity is opaque, one-use, generation-bound, and exactly ten seconds from the accepted coherent snapshot; SendQuote carries its private namespace/generation/deadline/token envelope through cleanup, checks it before active/consumed state, fails closed for an own unexpired missing record, and uses eight bounded secure-random attempts.
 - Errors are finite, deterministic, `Sendable`, and sanitized; provider text and raw codespace stay internal, while public codespace is a fixed category allowlist; debug and reflection use explicit redacted mirrors.
 - The composition seam is `Kit` → `KitDependencies`/`KitFactory` → `LifecycleCommandBridge` → `LifecycleGate` with one stored `SendRuntime` dependency.
 - Verification is test-first and local-only. Durable journal, transport, protobuf, signing verification, Example UI, host integration, and S2-02+ remain out of scope.
 
 ## Artifact binding
 
-- Spec/delta-matrix/test-plan digest: `9f8cb01934980b3c2e4907e5905fd63d72d01dc89bf5e12012f58a1b6232b5bc`.
-- Implementation-plan digest: `2c5d0f1a5367d3f475e4f0b639462d5fdaea88ba5ba0550f255b860a6866fe89`.
+- Spec/delta-matrix/test-plan digest: `464a3f840973782185c3607dc85598d676ba9852fec1154936555fb88a56cf58`.
+- Implementation-plan digest: `b675aec67ed5ce1f0f71e7b98fb2b5d9e5740bd0941365e5d5959f3b33b55a8d`.
 - Analog-family digest: `7279cec526c0cd6a2b67407049080de263eddb2680077abb6083c8493eac626d`.
 - Consolidated-test-plan digest: `efb853fd65011a24331606434794d0c59cc9d7d62c1490da0c2f7e22a4a0a0c6`.
 - Committed evidence manifest digest: `f682cfdb7503b5295ba40b605aa063d57c4cf0fb16408eb4ee47f8af97fd2ce8` (`THR-135-s2-01-evidence-r4.json`).
