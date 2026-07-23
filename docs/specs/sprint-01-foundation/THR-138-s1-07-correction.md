@@ -1,6 +1,6 @@
 # THR-138 — S1-07 native RUNE sync correction
 
-**Status:** design revision 4; discovery 1/2, closure 1/5. Implementation is blocked pending adversarial re-review and explicit approval of this exact revision.
+**Status:** design revision 5; discovery 1/2, closure 2/5. Implementation is blocked pending adversarial re-review and explicit approval of this exact revision.
 
 ## Goal
 
@@ -179,7 +179,8 @@ registration changes are proposed.
 - ThorChainKit directly affected suite: `swift test --package-path "$THORCHAINKIT_ROOT" --filter LiveThorNodeClientS1_04Tests`
 - Exact UW AppTests command (the `Development` scheme's `AppTests` testable):
   `xcodebuild -project "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj" -scheme Development -configuration Debug-Dev -destination "platform=iOS Simulator,id=$THR138_SIMULATOR_UDID" -derivedDataPath "$QA_ARTIFACT_ROOT/THR-138-AppTests-DD" test -only-testing:AppTests -resultBundlePath "$QA_ARTIFACT_ROOT/THR-138-AppTests.xcresult"`
-- Exact UW Development build: `xcodebuild -project "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj" -scheme Development -configuration Debug-Dev -destination 'generic/platform=iOS' -derivedDataPath "$QA_ARTIFACT_ROOT/THR-138-Development-DD" build`
+- Exact UW Development build: `xcodebuild -project "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj" -scheme Development -configuration Debug-Dev -destination "platform=iOS Simulator,id=$THR138_SIMULATOR_UDID" -derivedDataPath "$QA_ARTIFACT_ROOT/THR-138-Development-DD" build`
+- Before that build, verify the consumed simulator artifact with `xcodebuild -project "$UW_ROOT/Unstoppable/Unstoppable.xcodeproj" -scheme Development -configuration Debug-Dev -destination "platform=iOS Simulator,id=$THR138_SIMULATOR_UDID" -derivedDataPath "$QA_ARTIFACT_ROOT/THR-138-Development-DD" -showBuildSettings | rg '^( *PLATFORM_NAME| *CONFIGURATION_BUILD_DIR) ='`; require `PLATFORM_NAME = iphonesimulator` and `CONFIGURATION_BUILD_DIR = .../Debug-Dev-iphonesimulator`.
 - Exact source roots are symbolic operator inputs: `UW_ROOT`, `MARKETKIT_ROOT`,
   and `THORCHAINKIT_ROOT`; the UW project is
   `$UW_ROOT/Unstoppable/Unstoppable.xcodeproj`. The UW package manifest must

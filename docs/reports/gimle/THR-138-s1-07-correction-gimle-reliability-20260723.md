@@ -1,7 +1,7 @@
 # THR-138 Gimle reliability report
 
 - Task: THR-138
-- Workflow/phase: `analog_change` / adversarial review, design revision 4
+- Workflow/phase: `analog_change` / adversarial review, design revision 5
 - Repository branch: `docs/s1-07-unstoppable-rune-surface-v050`
 - Reviewed design revision commit: `10ca4d84b1daaf526efceca94054842f269c44da`
 - Report provenance update commit: this report's containing commit
@@ -66,8 +66,11 @@ balance-operation errors remain fail-closed.
 - MarketKit: symbolic operator input `$MARKETKIT_ROOT`
 - ThorChainKit: symbolic operator input `$THORCHAINKIT_ROOT`
 - UW project/scheme/configuration/destination: `$UW_ROOT/Unstoppable/Unstoppable.xcodeproj`,
-  `Development`, `Debug-Dev`, `generic/platform=iOS` or the named simulator
-  for AppTests
+  `Development`, `Debug-Dev`, and the named simulator
+  (`platform=iOS Simulator,id=$THR138_SIMULATOR_UDID`) for both the build and
+  AppTests; QA must verify `PLATFORM_NAME=iphonesimulator` and the
+  `Debug-Dev-iphonesimulator` configuration build directory before installing
+  the app.
 - Before and after every verification run, capture each root's SHA, a
   canonical digest-only manifest of the sorted tracked/untracked path union,
   a SHA-256 of the NUL-delimited porcelain status, and local package-path
@@ -87,7 +90,7 @@ balance-operation errors remain fail-closed.
   implementation. QA must bind them to the implementation PR head before
   accepting live-smoke evidence.
 - The current account reader classifies a matching 404 before leased-height
-  validation; revision 4 therefore requires height validation first and
+  validation; revision 5 therefore requires height validation first and
   duplicate-key rejection before absence classification. These are unrun until
   explicit design approval.
 - The finalized provider audit requires three distinct post-fix exact local
