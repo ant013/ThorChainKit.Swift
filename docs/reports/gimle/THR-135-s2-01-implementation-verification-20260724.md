@@ -11,7 +11,7 @@ host integration, or S2-02 behavior.
 ## Implementation evidence
 
 - The corrected implementation code is committed at
-  `24e0c92b3019d01b61154fe110a1f4806442fa4c`.
+  `06714fa4feb8fc9706b3dea8dcdebab84052558c`.
 - Send values snapshot `BigUInt` magnitudes before async/runtime hops.
 - Quote authority is one-use, store-owned, generation-bound, and expires at
   the exclusive ten-second monotonic deadline.
@@ -28,6 +28,9 @@ host integration, or S2-02 behavior.
 - Lifecycle stop invalidates the taken generation before either syncer close
   branch, including control-failure close; rapid restart rejects late prior
   generation callbacks.
+- Quote-store and synchronous admission state use checked `Sendable`
+  queue-backed storage. The S2 Send concurrency gate rejects any
+  `@unchecked Sendable` or `@preconcurrency` suppression in the module.
 - The public-surface guard includes a successful external consumer control,
   seven negative access/name-resolution controls, and explicit tracking checks
   for every Send source plus `Core/Kit+Send.swift` despite the case-insensitive
@@ -42,12 +45,17 @@ exit codes.
 
 - The repeated/trailing-separator regression first failed twice on the old
   parser, then passed after the two parsing paths preserved empty subsequences.
-- Named S2-01 selectors: 43 tests, 0 failures, `TEST SUCCEEDED`.
-  This includes `SendValueTests`, `KitCompositionTests`,
+- Before the checked-concurrency correction, named S2-01 selectors passed
+  43/43 and the full non-live `ThorChainKitTests` gate passed 130/130.
+  On exact corrected head `06714fa`, the engineer reran 35 focused tests and
+  the reviewer independently reran 37 focused tests covering quote-store
+  atomicity, lifecycle admission, errors, quote/public projection, reflection,
+  and facade admission; both runs had zero failures.
+  The named selector set includes `SendValueTests`, `KitCompositionTests`,
   `LifecycleCommandBridgeTests`, `SendFacadeAdmissionTests`,
   `QuoteStoreTests`, `SendErrorTests`, `SendReflectionTests`,
   `PendingTransactionTests`, `SendPublicApiTests`, and `SendQuoteTests`.
-- Full local non-live `ThorChainKitTests`: 130 tests, 0 failures, with only
+- The 130-test non-live run had zero failures, with only
   the pre-existing `LifecycleInvariantProbeTests` excluded because it
   repeatedly restarts/timeouts; no live network tests were enabled.
 - `Scripts/verify-s2-01-public-surface.sh`: pass, including positive import
@@ -65,6 +73,18 @@ exit codes.
 - Host `swift test` remains an invalid route on this Mac because the package's
   macOS 10.13 declaration conflicts with the HsCryptoKit dependency's macOS
   10.15 requirement. No package-floor change was made.
+
+## Independent review
+
+- `ThorChainCodeReviewer` approved exact implementation head `06714fa` after
+  independently reviewing the three-file checked-concurrency correction.
+- The reviewer independently passed both BigInt concurrency probes, 37 focused
+  simulator tests, public-surface, deployment-floor, package-manifest, and
+  diff-hygiene checks.
+- Serena had no active Swift language server for this checkout. Exact-tree
+  Git/`rg` inspection and executable local gates supplied the documented
+  fallback; Gimle trust remains RED because of the already quarantined
+  Unstoppable mapping defect.
 
 ## Verification commands
 
