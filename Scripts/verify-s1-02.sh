@@ -5,6 +5,7 @@ set -euo pipefail
 repository_root=$(cd "$(dirname "$0")/.." && pwd -P)
 cd "$repository_root"
 simulator_udid=${THORCHAIN_SIMULATOR_UDID:-}
+s102_contract_head=7fd9663442a0e6dcd9c01c4ab04d35f3abd96fc4
 
 fail() {
     echo "FAIL verify-s1-02: $1" >&2
@@ -154,7 +155,8 @@ actual_symbols=$(mktemp)
 symbol_dir=$(mktemp -d)
 live_tool_dir=$(mktemp -d)
 test_allowlist_dir=$(mktemp -d)
-trap 'rm -f "$expected_sources" "$actual_sources" "$actual_tests" "$actual_symbols"; rm -rf "$symbol_dir" "$live_tool_dir" "$test_allowlist_dir"' EXIT
+inert_factory_dir=$(mktemp -d)
+trap 'rm -f "$expected_sources" "$actual_sources" "$actual_tests" "$actual_symbols"; rm -rf "$symbol_dir" "$live_tool_dir" "$test_allowlist_dir" "$inert_factory_dir"' EXIT
 
 cat > "$expected_sources" <<'EOF'
 Sources/ThorChainKit/Address/AddressCodec.swift
@@ -322,7 +324,22 @@ assert baseline <= actual
 PY
 echo "PASS verify-s1-02-public-symbols"
 
-xcrun swift Scripts/verify-s1-01-factory.swift Tests/ThorChainKitTests/Fixtures/S1-01-factory-syntax.txt >/dev/null \
+git merge-base --is-ancestor "$s102_contract_head" HEAD \
+    || fail "accepted S1-02 contract head is not an ancestor"
+git archive "$s102_contract_head" \
+    Scripts/verify-s1-01-factory.swift \
+    Sources/ThorChainKit/Core/KitFactory.swift \
+    Sources/ThorChainKit/Core/KitDependencies.swift \
+    Sources/ThorChainKit/Core/Kit.swift \
+    Sources/ThorChainKit/Models/Network.swift \
+    Tests/ThorChainKitTests/Fixtures/S1-01-factory-syntax.txt \
+    | tar -x -C "$inert_factory_dir" \
+    || fail "accepted S1-02 factory contract could not be materialized"
+(
+    cd "$inert_factory_dir"
+    xcrun swift Scripts/verify-s1-01-factory.swift \
+        Tests/ThorChainKitTests/Fixtures/S1-01-factory-syntax.txt
+) >/dev/null \
     || fail "production Kit factory is no longer inert"
 echo "PASS verify-s1-02-inert-factory"
 
