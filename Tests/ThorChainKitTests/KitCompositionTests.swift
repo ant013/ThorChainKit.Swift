@@ -76,14 +76,52 @@ final class KitCompositionTests: XCTestCase {
         XCTAssertEqual(first.location.identity, second.location.identity)
     }
 
-    func testInitializationFailureRemovesOnlyMatchingEntry() throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("thorchain-s2-04-(UUID().uuidString)", isDirectory: true)
+    func testInitializationFailureRemovesOnlyMatchingEntry() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("thorchain-s2-04-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        XCTAssertThrowsError(try DatabaseRuntime.open(path: directory.path))
 
-        let valid = directory.appendingPathComponent("database.sqlite")
-        XCTAssertNoThrow(try DatabaseRuntime.open(path: valid.path))
+        let invalid = directory.appendingPathComponent("invalid.sqlite")
+        let invalidAlias = directory.appendingPathComponent("invalid-alias.sqlite")
+        let unrelated = directory.appendingPathComponent("unrelated.sqlite")
+        XCTAssertTrue(FileManager.default.createFile(atPath: invalid.path, contents: Data("not-sqlite".utf8)))
+        try FileManager.default.linkItem(at: invalid, to: invalidAlias)
+        let unrelatedRuntime = try DatabaseRuntime.open(path: unrelated.path)
+
+        let failures = await withTaskGroup(of: Bool.self, returning: [Bool].self) { group in
+            for path in [invalid.path, invalidAlias.path, invalid.path, invalidAlias.path] {
+                group.addTask { (try? DatabaseRuntime.open(path: path)) == nil }
+            }
+            var results = [Bool]()
+            for await result in group { results.append(result) }
+            return results
+        }
+        XCTAssertEqual(failures, [true, true, true, true])
+        let unrelatedAfterFailure = try DatabaseRuntime.open(path: unrelated.path)
+        XCTAssertTrue(unrelatedRuntime === unrelatedAfterFailure)
+
+        let handle = try FileHandle(forWritingTo: invalid)
+        try handle.truncate(atOffset: 0)
+        try handle.close()
+
+        let retries = await withTaskGroup(of: DatabaseRuntime?.self, returning: [DatabaseRuntime].self) { group in
+            for path in [invalid.path, invalidAlias.path, invalid.path, invalidAlias.path] {
+                group.addTask { try? DatabaseRuntime.open(path: path) }
+            }
+            var runtimes = [DatabaseRuntime]()
+            for await runtime in group {
+                if let runtime { runtimes.append(runtime) }
+            }
+            return runtimes
+        }
+        XCTAssertEqual(retries.count, 4)
+        if let first = retries.first {
+            for runtime in retries.dropFirst() {
+                XCTAssertTrue(first === runtime, "concurrent aliases must share one retried writer")
+            }
+        }
+        let unrelatedAfterRetry = try DatabaseRuntime.open(path: unrelated.path)
+        XCTAssertTrue(unrelatedRuntime === unrelatedAfterRetry)
     }
 
     func testTwoClientsInSameNamespaceStoppingADoesNotStopB() async throws {

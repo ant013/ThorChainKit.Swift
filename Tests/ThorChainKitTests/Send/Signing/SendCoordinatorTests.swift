@@ -109,36 +109,96 @@ final class SendCoordinatorTests: XCTestCase {
         await runtime.endAccountAttempt(sender)
     }
 
-    func testExactDigestAndTxRawCrossWireIsRejected() throws {
-        XCTAssertThrowsError(try CompactSignature(Data(repeating: 0, count: 64)))
-        XCTAssertThrowsError(try CompactSignature(Data(repeating: 0xff, count: 64)))
+    func testExactDigestAndTxRawCrossWireIsRejected() async throws {
+        let vector = try await makeGoldenVector()
+        let payload = try DirectSignCodec.makeSignPayload(
+            snapshot: vector.snapshot,
+            quote: PreparedQuote(quote: vector.quote, snapshot: vector.snapshot),
+            publicKey: vector.publicKey
+        )
+        XCTAssertEqual(payload.digest.hex, vector.digestHex)
+
+        let compact = try SignerVerifier().verify(
+            signature: vector.signature,
+            digest: payload.digest,
+            publicKey: vector.publicKey
+        )
+        let signed = try DirectSignCodec.makeTxRaw(payload: payload, compactSignature: compact.rawValue)
+        XCTAssertEqual(signed.txRaw.hex, vector.txRawHex)
+
+        let changedSnapshot = try changed(vector.snapshot, sequence: 2)
+        let changedQuote = try QuoteStore(clock: TestSendClock()).issue(
+            sender: try Address(vector.snapshot.sender, network: .mainnet),
+            recipient: try Address(vector.snapshot.recipient, network: .mainnet),
+            amountMagnitude: SendMagnitude(vector.snapshot.amount).data,
+            isMaximum: false,
+            nativeFeeMagnitude: SendMagnitude(vector.snapshot.nativeFee).data,
+            totalDebitMagnitude: SendMagnitude(vector.snapshot.totalDebit).data,
+            memo: nil,
+            acceptedHeight: changedSnapshot.height,
+            generation: 1,
+            accountNumber: changedSnapshot.accountNumber,
+            sequence: changedSnapshot.sequence,
+            providerFamilyID: changedSnapshot.familyID,
+            preflightContext: changedSnapshot
+        )
+        let changedPayload = try DirectSignCodec.makeSignPayload(
+            snapshot: changedSnapshot,
+            quote: PreparedQuote(quote: changedQuote, snapshot: changedSnapshot),
+            publicKey: vector.publicKey
+        )
+        XCTAssertNotEqual(payload.digest, changedPayload.digest)
+        XCTAssertThrowsError(try SignerVerifier().verify(
+            signature: vector.signature,
+            digest: changedPayload.digest,
+            publicKey: vector.publicKey
+        ))
     }
 
     func testH2RejectsChangedStaleCancelledExpiredAndLateResults() async throws {
-        let (expiryRuntime, expiryQuote, publicKey, expirySnapshot) = try await makeBlockingQuote(namespace: "coordinator-h2-expiry")
-        let expiryResult = await SendCoordinator(runtime: expiryRuntime, now: { .distantFuture }).execute(
-            quote: expiryQuote,
-            signer: CountingSigner(publicKey: publicKey)
-        )
-        XCTAssertEqual(expiryResult.failure, .quoteExpired)
-        let expiryAdmitted = await expiryRuntime.beginAccountAttempt(expirySnapshot.sender)
-        XCTAssertTrue(expiryAdmitted)
-        await expiryRuntime.endAccountAttempt(expirySnapshot.sender)
+        for (name, mutation, expectedChange) in [
+            ("changed", { try changed($0, sequence: 3) }, QuoteChange.sequence),
+            ("stale", { try changed($0, height: 11) }, QuoteChange.heightRollback)
+        ] as [(String, (SendSnapshot) throws -> SendSnapshot, QuoteChange)] {
+            let (runtime, quote, publicKey, snapshot) = try await makeBlockingQuote(namespace: "coordinator-h2-" + name)
+            let provider = try CoordinatorH2Provider(
+                runtime: runtime,
+                base: snapshot,
+                h2: try mutation(snapshot)
+            )
+            let signer = CountingSigner(publicKey: publicKey)
+            let result = await SendCoordinator(runtime: runtime, preflight: SendPreflightCoordinator(runtime: runtime, provider: provider)).execute(
+                quote: quote,
+                signer: signer
+            )
 
-        let (cancelRuntime, cancelQuote, cancelPublicKey, cancelSnapshot) = try await makeBlockingQuote(namespace: "coordinator-h2-cancel")
-        let cancellation = TaskCancellationBox()
-        let cancelTask = Task {
-            await SendCoordinator(runtime: cancelRuntime, now: {
-                cancellation.cancel()
-                return .distantPast
-            }).execute(quote: cancelQuote, signer: CountingSigner(publicKey: cancelPublicKey))
+            guard case let .failure(error) = result else { return XCTFail("H2 " + name + " must not hand off") }
+            guard case let .quoteChanged(changes) = error else { return XCTFail("H2 " + name + " returned \(error)") }
+            XCTAssertTrue(changes.values.contains(expectedChange))
+            XCTAssertEqual(signer.callCount, 1)
+            XCTAssertEqual(provider.snapshotCount, 2)
+            await Task.yield()
+            XCTAssertEqual(provider.snapshotCount, 2, name + " rejection must not start a later provider request")
         }
-        cancellation.install(cancelTask)
-        let cancelResult = await cancelTask.value
-        XCTAssertEqual(cancelResult.failure, .signerCancelled)
-        let cancelAdmitted = await cancelRuntime.beginAccountAttempt(cancelSnapshot.sender)
-        XCTAssertTrue(cancelAdmitted)
-        await cancelRuntime.endAccountAttempt(cancelSnapshot.sender)
+
+        let (lateRuntime, lateQuote, latePublicKey, lateSnapshot) = try await makeBlockingQuote(namespace: "coordinator-h2-late")
+        let lateProvider = try CoordinatorH2Provider(runtime: lateRuntime, base: lateSnapshot, h2: lateSnapshot, blocksH2: true)
+        let lateSigner = CountingSigner(publicKey: latePublicKey)
+        let lateTask = Task {
+            await SendCoordinator(runtime: lateRuntime, preflight: SendPreflightCoordinator(runtime: lateRuntime, provider: lateProvider)).execute(
+                quote: lateQuote,
+                signer: lateSigner
+            )
+        }
+        XCTAssertEqual(lateProvider.h2Started.wait(timeout: .now() + 1), .success)
+        await lateRuntime.invalidate(generation: 1)
+        let lateResult = await lateTask.value
+        XCTAssertEqual(lateResult.failure, .kitNotStarted)
+        XCTAssertEqual(lateSigner.callCount, 1)
+        XCTAssertEqual(lateProvider.snapshotCount, 2)
+        lateProvider.releaseH2()
+        for _ in 0..<4 { await Task.yield() }
+        XCTAssertEqual(lateProvider.snapshotCount, 2, "late H2 completion must not start a later provider request")
     }
 
     func testCleanupFailureReturnsRepairPending() async throws {
@@ -209,6 +269,119 @@ final class SendCoordinatorTests: XCTestCase {
             snapshot: snapshot
         )
         return (runtime, quote, publicKey, snapshot)
+    }
+
+    private func makeGoldenVector(namespace: String = "coordinator-golden") async throws -> GoldenVector {
+        let sender = "thor1w508d6qejxtdg4y5r3zarvary0c5xw7ku6wp68"
+        let recipient = "thor1tgxm5jw6hrlvslrd6lqpk4jwuu4g29dxytrean"
+        let publicKey = Data(hex: "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798")
+        let snapshot = try SendSnapshot(
+            familyID: "thorchain-mainnet", chainID: "thorchain-1", height: 1,
+            sender: sender, recipient: recipient, accountNumber: 123_456, sequence: 1,
+            amount: 100_000_000, nativeFee: 0, spendableRune: 100_000_000,
+            mimir: MimirSnapshot(haltChainGlobal: -1, nodePauseChainGlobal: -1, haltTHORChain: -1, solvencyHaltTHORChain: -1),
+            memoMaximumBytes: 256, nodeVersion: "3.19.3", querierVersion: "3.19.3",
+            accountPublicKey: "/cosmos.crypto.secp256k1.PubKey", accountPublicKeyData: publicKey
+        )
+        let runtime = SendRuntime(address: try Address(sender, network: .mainnet), persistenceNamespace: namespace)
+        await runtime.activate(generation: 1)
+        let quote = try await runtime.issuePreflightQuote(
+            request: SendQuoteRequest(
+                sender: try Address(sender, network: .mainnet),
+                recipient: try Address(recipient, network: .mainnet),
+                amount: .exact(snapshot.amount)
+            ),
+            snapshot: snapshot
+        )
+        return GoldenVector(
+            runtime: runtime,
+            quote: quote,
+            snapshot: snapshot,
+            publicKey: publicKey,
+            signature: Data(hex: "23103daa64330d051da3bfa85ea7c8af9080edf19b19a306403303634b0992a32cc1b9061b2e76cd245edb2976bb437bc6636dfb23deae31e38508c5478dae45"),
+            digestHex: "1ff56dd4c3627af0cee040965178f50c8d7c854e909d7b54aedbd1b7bf110b68",
+            txRawHex: "0a530a510a0e2f74797065732e4d736753656e64123f0a14751e76e8199196d454941c45d1b3a323f1433bd612145a0dba49dab8fec87c6dd7c01b564ee72a8515a61a110a0472756e65120931303030303030303012590a500a460a1f2f636f736d6f732e63727970746f2e736563703235366b312e5075626b7912230a210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179812040a0208011801120510c08db7011a4023103daa64330d051da3bfa85ea7c8af9080edf19b19a306403303634b0992a32cc1b9061b2e76cd245edb2976bb437bc6636dfb23deae31e38508c5478dae45"
+        )
+    }
+}
+
+private struct GoldenVector {
+    let runtime: SendRuntime
+    let quote: SendQuote
+    let snapshot: SendSnapshot
+    let publicKey: Data
+    let signature: Data
+    let digestHex: String
+    let txRawHex: String
+}
+
+private final class CoordinatorH2Provider: SendPreflightProviding, @unchecked Sendable {
+    private let runtime: SendRuntime
+    private let base: SendSnapshot
+    private let h2: SendSnapshot
+    private let blocksH2: Bool
+    private let family: EndpointFamilyDescriptor
+    private let lock = NSLock()
+    private var leasesIssued = 0
+    private var snapshotsIssued = 0
+    private var h2Continuation: CheckedContinuation<Void, Never>?
+
+    let h2Started = DispatchSemaphore(value: 0)
+
+    init(runtime: SendRuntime, base: SendSnapshot, h2: SendSnapshot, blocksH2: Bool = false) throws {
+        self.runtime = runtime
+        self.base = base
+        self.h2 = h2
+        self.blocksH2 = blocksH2
+        family = try EndpointFamilyDescriptor(
+            id: base.familyID,
+            cosmosRestURL: URL(string: "https://rest.coordinator-h2.example")!,
+            cometBftURL: URL(string: "https://rpc.coordinator-h2.example")!
+        )
+    }
+
+    var snapshotCount: Int {
+        lock.lock(); defer { lock.unlock() }
+        return snapshotsIssued
+    }
+
+    func lease(minimumHeight: Int64?) async throws -> EndpointLease {
+        lock.lock(); leasesIssued += 1; lock.unlock()
+        return EndpointLease(family: family, verifiedChainId: base.chainID, cosmosReadHeight: base.height, cometReferenceHeight: base.height, poolGeneration: 1)
+    }
+
+    func snapshot(request: SendQuoteRequest, lease: EndpointLease, height: Int64, policy: SendPolicy, attempt: SendPreflightAttempt) async throws -> SendSnapshot {
+        try await snapshotResult(request: request, lease: lease, height: height, policy: policy, attempt: attempt).snapshot
+    }
+
+    func snapshotResult(request: SendQuoteRequest, lease: EndpointLease, height: Int64, policy: SendPolicy, attempt: SendPreflightAttempt) async throws -> SendSnapshotResult {
+        let index = withLock {
+            snapshotsIssued += 1
+            return snapshotsIssued
+        }
+        if index == 2, blocksH2 {
+            h2Started.signal()
+            await withCheckedContinuation { continuation in
+                withLock { h2Continuation = continuation }
+            }
+        }
+        let snapshot = index == 1 ? base : h2
+        let boundAttempt = try await runtime.bindRoute(attempt, routeID: "recipient-account")
+        return SendSnapshotResult(snapshot: snapshot, attempt: boundAttempt)
+    }
+
+    func releaseH2() {
+        let continuation = withLock { () -> CheckedContinuation<Void, Never>? in
+            let continuation = h2Continuation
+            h2Continuation = nil
+            return continuation
+        }
+        continuation?.resume()
+    }
+
+    private func withLock<T>(_ body: () -> T) -> T {
+        lock.lock(); defer { lock.unlock() }
+        return body()
     }
 }
 
