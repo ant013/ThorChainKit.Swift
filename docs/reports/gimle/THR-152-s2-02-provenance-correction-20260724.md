@@ -5,7 +5,7 @@
 - Trust: **RED**
 - Repository: /Users/ant013/Data/AI/thorchain-s2-02
 - Base HEAD: 23ba7e8c4204dbb16efadaa092a1ff896263e8f7
-- Final HEAD: 23ba7e8c4204dbb16efadaa092a1ff896263e8f7
+- Final HEAD: f4943fe408bd437abc0770baa6517bb6ae1037fb
 - Gimle runtime: n/a
 - Indexed commit: n/a
 
