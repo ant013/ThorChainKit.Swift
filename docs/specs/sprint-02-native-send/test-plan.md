@@ -15,12 +15,14 @@ This plan makes the seven slice exits executable and separates deterministic pro
 | package integration | local MacBook test run | public facade, real internal dependencies, pending publisher |
 | Example UI | guarded isolated-fixture Maestro suite | user-visible review/CheckTx-accepted/unknown/retry/restart states |
 | opt-in mainnet | manual/release gate | current endpoint, fee, halt, signing, broadcast compatibility |
-| WalletCore | host branch CI | handler/factory/signer/error contract |
+| WalletCore | local MacBook host-branch verification | handler/factory/signer/error contract |
 | Unstoppable manual | Development app | real SendNew transfer; no Maestro in host |
 
-GitHub Actions are build-only for the ThorChainKit repository. They do not run
-Swift tests, mutants, simulators, Maestro, or mainnet calls; local MacBook
-evidence is the authority for test execution.
+All builds, tests, mutants, simulator checks, Maestro checks, and other
+verification for remaining Sprint 2 slices run locally on the MacBook. GitHub
+Actions stays disabled and is not an acceptance or merge gate; local evidence
+is the authority for test execution. No hosted workflow may be enabled or
+dispatched without a new explicit operator approval for that exact run.
 
 ## Traceability Matrix
 
@@ -31,8 +33,8 @@ evidence is the authority for test execution.
 | non-cooperative endpoint liveness | `EndpointOperationRunnerTests`, H1/H2 and retry never-resume/late-result interleavings |
 | exact/Max + dynamic native fee | `SendPreflightCoordinatorTests`, `SendPolicyTests`, Max and insufficient-balance matrices |
 | halt/module/memo policy | `HaltEvaluatorTests`, `RecipientAccountClassifierTests`, `ForbiddenModuleAddressSetTests`, `SendPolicyTests` |
-| exact protobuf/direct sign | `MsgSendCodecGoldenTests`, `DirectSignGoldenTests` |
-| external signer trust | `SignerVerifierTests`, `SendCoordinatorTests`, malformed/high-S/wrong-key vectors |
+| exact protobuf/direct sign and static signature fixture control | `MsgSendCodecGoldenTests`, `DirectSignGoldenTests` |
+| external signer trust (S2-04) | `SignerVerifierTests`, `SendCoordinatorTests`, malformed/high-S/wrong-key and supplied-key vectors |
 | one send per namespace/sender/sequence | `SendCoordinatorConcurrencyTests` plus two-Kit/shared-runtime/restart fixtures |
 | persist active generation before I/O | `SendJournalOrderingTests` |
 | publish every initial/retry generation before I/O | `PendingPublicationBarrierTests` with observation failure/deadline cases |
