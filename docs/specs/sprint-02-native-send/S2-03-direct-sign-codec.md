@@ -4,6 +4,13 @@
 **Depends on:** S2-01/S2-02 snapshot types
 **Produces:** deterministic SignDoc, digest, TxRaw, and local transaction hash; no signer ownership or network broadcast
 
+## Verification policy
+
+All builds, tests, mutants, simulator checks, Maestro checks, and other
+verification for this slice run locally on the MacBook. GitHub Actions remains
+disabled, is not an acceptance or merge gate, and must not be enabled or
+dispatched without a new explicit operator approval for that exact run.
+
 ## Goal
 
 Encode the exact THORChain native MsgSend/Cosmos direct-sign subset locally. The network cannot construct or alter sign bytes, and public APIs cannot expose protobuf implementation types.
