@@ -34,7 +34,8 @@ final class QuoteStore: Sendable {
         generation: UInt64,
         accountNumber: UInt64 = 0,
         sequence: UInt64 = 0,
-        providerFamilyID: String = "contract"
+        providerFamilyID: String = "contract",
+        preflightContext: SendSnapshot? = nil
     ) throws -> SendQuote {
         var random = SystemRandomNumberGenerator()
         return try stateQueue.sync {
@@ -73,7 +74,8 @@ final class QuoteStore: Sendable {
                         expiresAt: deadlineDate,
                         accountNumber: accountNumber,
                         sequence: sequence,
-                        providerFamilyID: providerFamilyID
+                        providerFamilyID: providerFamilyID,
+                        preflightContext: preflightContext
                     )
                 )
                 guard records[record] == nil else { continue }

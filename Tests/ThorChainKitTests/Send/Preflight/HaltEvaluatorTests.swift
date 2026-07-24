@@ -23,4 +23,22 @@ final class HaltEvaluatorTests: XCTestCase {
         XCTAssertEqual(try? HaltEvaluator.evaluate(height: 100, mimir: snapshot), .halted)
         XCTAssertEqual(try? HaltEvaluator.evaluate(height: 101, mimir: snapshot), .halted)
     }
+
+    func testEveryHaltKeyUsesAllPinnedHeightBoundaries() throws {
+        let h: Int64 = 100
+        let rules: [(String, (Int64) -> MimirSnapshot, (Int64) -> Bool)] = [
+            ("global", { value in MimirSnapshot(haltChainGlobal: value, nodePauseChainGlobal: -1, haltTHORChain: -1, solvencyHaltTHORChain: -1) }, { $0 <= h }),
+            ("pause", { value in MimirSnapshot(haltChainGlobal: -1, nodePauseChainGlobal: value, haltTHORChain: -1, solvencyHaltTHORChain: -1) }, { $0 >= h }),
+            ("thor", { value in MimirSnapshot(haltChainGlobal: -1, nodePauseChainGlobal: -1, haltTHORChain: value, solvencyHaltTHORChain: -1) }, { $0 <= h }),
+            ("solvency", { value in MimirSnapshot(haltChainGlobal: -1, nodePauseChainGlobal: -1, haltTHORChain: -1, solvencyHaltTHORChain: value) }, { $0 <= h })
+        ]
+        for (name, make, isHalted) in rules {
+            for value in [h - 1, h, h + 1] {
+                let decision = try HaltEvaluator.evaluate(height: h, mimir: make(value))
+                XCTAssertEqual(decision, isHalted(value) ? .halted : .allowed, name)
+            }
+        }
+        XCTAssertEqual(try HaltEvaluator.evaluate(height: h, mimir: MimirSnapshot(haltChainGlobal: -1, nodePauseChainGlobal: -1, haltTHORChain: -1, solvencyHaltTHORChain: -1)), .allowed)
+        XCTAssertThrowsError(try HaltEvaluator.evaluate(height: h, mimir: MimirSnapshot(haltChainGlobal: -2, nodePauseChainGlobal: -1, haltTHORChain: -1, solvencyHaltTHORChain: -1)))
+    }
 }

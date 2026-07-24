@@ -8,10 +8,14 @@ protocol KitLifecycle: AnyObject {
 struct KitDependencies {
     let lifecycle: any KitLifecycle
     let sendRuntime: SendRuntime
+    let preflight: SendPreflightCoordinator?
 
-    init(lifecycle: any KitLifecycle, sendRuntime: SendRuntime = SendRuntime()) {
-        self.lifecycle = lifecycle
-        self.sendRuntime = sendRuntime
+    init(
+        lifecycle: any KitLifecycle,
+        sendRuntime: SendRuntime = SendRuntime(),
+        preflight: SendPreflightCoordinator? = nil
+    ) {
+        self.lifecycle = lifecycle; self.sendRuntime = sendRuntime; self.preflight = preflight
     }
 }
 

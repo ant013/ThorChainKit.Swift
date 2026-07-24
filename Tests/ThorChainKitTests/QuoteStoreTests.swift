@@ -160,6 +160,35 @@ final class QuoteStoreTests: XCTestCase {
         XCTAssertFalse(projection.hasConsistentAuthorityProjection)
     }
 
+    func testQuoteProjectionBindsPreflightContextDigest() throws {
+        let snapshot = try SendSnapshot.fixture(height: 12)
+        let store = QuoteStore()
+        let quote = try store.issue(
+            sender: try Address(snapshot.sender, network: .mainnet), recipient: try Address(snapshot.recipient, network: .mainnet),
+            amountMagnitude: SendMagnitude(snapshot.amount).data, isMaximum: false,
+            nativeFeeMagnitude: SendMagnitude(snapshot.nativeFee).data, totalDebitMagnitude: SendMagnitude(snapshot.totalDebit).data,
+            memo: nil, acceptedHeight: snapshot.height, generation: 7, providerFamilyID: snapshot.familyID, preflightContext: snapshot
+        )
+        let record = quote.internalAuthorityRecord
+        let invalidSnapshot = QuoteReviewSnapshot(
+            sender: record.snapshot.sender, recipient: record.snapshot.recipient,
+            requestedAmountIsMaximum: record.snapshot.requestedAmountIsMaximum,
+            amountMagnitude: record.snapshot.amountMagnitude, nativeFeeMagnitude: record.snapshot.nativeFeeMagnitude,
+            totalDebitMagnitude: record.snapshot.totalDebitMagnitude, memo: record.snapshot.memo,
+            acceptedHeight: record.snapshot.acceptedHeight, expiresAt: record.snapshot.expiresAt,
+            accountNumber: record.snapshot.accountNumber, sequence: record.snapshot.sequence,
+            providerFamilyID: record.snapshot.providerFamilyID, preflightContext: snapshot,
+            preflightDigest: Data(repeating: 0, count: 32)
+        )
+        let invalid = SendQuote(
+            recipient: quote.recipient, amountMagnitude: record.snapshot.amountMagnitude, isMaximum: quote.isMaximum,
+            nativeFeeMagnitude: record.snapshot.nativeFeeMagnitude, totalDebitMagnitude: record.snapshot.totalDebitMagnitude,
+            memo: quote.memo, acceptedHeight: quote.acceptedHeight, expiresAt: quote.expiresAt,
+            authorityRecord: QuoteAuthorityRecord(envelope: record.envelope, snapshot: invalidSnapshot), sender: snapshot.sender
+        )
+        XCTAssertFalse(invalid.hasConsistentAuthorityProjection)
+    }
+
     func testQuoteProjectionRejectsCoherentButNonCanonicalTotal() throws {
         let quote = try issueTestQuote(in: QuoteStore(), clock: TestSendClock(), generation: 12)
         let record = quote.internalAuthorityRecord

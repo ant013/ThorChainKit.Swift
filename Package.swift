@@ -21,6 +21,10 @@ let package = Package(
             url: "https://github.com/groue/GRDB.swift.git",
             exact: "6.29.1"
         ),
+        .package(
+            url: "https://github.com/apple/swift-protobuf.git",
+            exact: "1.33.3"
+        ),
     ],
     targets: [
         .target(
@@ -33,6 +37,7 @@ let package = Package(
                 ),
                 .product(name: "secp256k1", package: "secp256k1.swift"),
                 .product(name: "GRDB", package: "GRDB.swift"),
+                .product(name: "SwiftProtobuf", package: "swift-protobuf"),
             ],
             swiftSettings: [.unsafeFlags(["-warnings-as-errors"])]
         ),

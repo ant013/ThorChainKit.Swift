@@ -123,7 +123,7 @@ struct LiveThorNodeClient: ThorNodeReading {
         throw ThorNodeReadError.pageLimitExceeded
     }
 
-    private func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         try Task.checkCancellation()
         do {
             return try await transport.data(for: request)
@@ -206,6 +206,12 @@ struct LiveThorNodeClient: ThorNodeReading {
         case .notConnectedToInternet: .offline
         default: .other
         }
+    }
+}
+
+extension LiveThorNodeClient: ThorNodeSendTransport {
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        try await send(request)
     }
 }
 

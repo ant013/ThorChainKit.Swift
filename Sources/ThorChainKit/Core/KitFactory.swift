@@ -23,13 +23,14 @@ public extension Kit {
         let storage = try GrdbAccountStateStorage(path: try databasePath(namespace: namespace))
         let probe = LiveNodeProbe(configuration: endpoints)
         let pool = EndpointPool(network: address.network, configuration: endpoints, probe: probe)
+        let liveClient = LiveThorNodeClient(
+            requestTimeout: endpoints.requestTimeout,
+            clientId: endpoints.clientId,
+            maximumBalancePageCount: endpoints.policy.maximumBalancePageCount
+        )
         let reader = ReadOperationCoordinator(
             pool: pool,
-            client: LiveThorNodeClient(
-                requestTimeout: endpoints.requestTimeout,
-                clientId: endpoints.clientId,
-                maximumBalancePageCount: endpoints.policy.maximumBalancePageCount
-            ),
+            client: liveClient,
             configuration: endpoints
         )
         let key = StorageKey(persistenceNamespace: namespace)
@@ -49,11 +50,21 @@ public extension Kit {
             gate: gate
         )
         let bridge = LifecycleCommandBridge(syncer: syncer, gate: gate, sendRuntime: sendRuntime)
+        let preflight = SendPreflightCoordinator(
+            runtime: sendRuntime,
+            provider: ThorNodeSendPreflightProvider(
+                node: ThorNodeSendClient(transport: liveClient),
+                leaseProvider: { try await pool.lease(excludingFamilyIds: []) },
+                runtime: sendRuntime,
+                freshLeaseProvider: { familyID in try await pool.freshLease(familyID: familyID) }
+            )
+        )
         return Kit(
             address: address,
             dependencies: KitDependencies(
                 lifecycle: bridge,
-                sendRuntime: sendRuntime
+                sendRuntime: sendRuntime,
+                preflight: preflight
             ),
             persistenceNamespace: namespace,
             facadeDispatcher: facadeDispatcher,
@@ -86,14 +97,15 @@ public extension Kit {
         let adapter = FixtureHTTPTransportAdapter(transport: transport)
         let probe = LiveNodeProbe(configuration: endpoints, transport: adapter)
         let pool = EndpointPool(network: address.network, configuration: endpoints, probe: probe)
+        let liveClient = LiveThorNodeClient(
+            transport: adapter,
+            requestTimeout: endpoints.requestTimeout,
+            clientId: endpoints.clientId,
+            maximumBalancePageCount: endpoints.policy.maximumBalancePageCount
+        )
         let reader = ReadOperationCoordinator(
             pool: pool,
-            client: LiveThorNodeClient(
-                transport: adapter,
-                requestTimeout: endpoints.requestTimeout,
-                clientId: endpoints.clientId,
-                maximumBalancePageCount: endpoints.policy.maximumBalancePageCount
-            ),
+            client: liveClient,
             configuration: endpoints,
             wallClock: FixtureAccountReadWallClock(now: observedAt)
         )
@@ -113,11 +125,21 @@ public extension Kit {
             storage: storage,
             gate: gate
         )
+        let preflight = SendPreflightCoordinator(
+            runtime: sendRuntime,
+            provider: ThorNodeSendPreflightProvider(
+                node: ThorNodeSendClient(transport: liveClient),
+                leaseProvider: { try await pool.lease(excludingFamilyIds: []) },
+                runtime: sendRuntime,
+                freshLeaseProvider: { familyID in try await pool.freshLease(familyID: familyID) }
+            )
+        )
         return Kit(
             address: address,
             dependencies: KitDependencies(
                 lifecycle: LifecycleCommandBridge(syncer: syncer, gate: gate, sendRuntime: sendRuntime),
-                sendRuntime: sendRuntime
+                sendRuntime: sendRuntime,
+                preflight: preflight
             ),
             persistenceNamespace: namespace,
             facadeDispatcher: facadeDispatcher,
