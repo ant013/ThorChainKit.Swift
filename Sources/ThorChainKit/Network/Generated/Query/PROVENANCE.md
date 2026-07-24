@@ -4,12 +4,12 @@
 - Cosmos SDK source: `v0.53.0`.
 - `cosmossdk.io/api`: `v0.9.2`.
 - SwiftProtobuf package: exact `1.33.3`.
+- SwiftProtobuf source commit: `c169a5744230951031770e27e475ff6eefe51f9d` (tag `1.33.3`).
 - Xcode: exact `26.3` (`17C529`).
 - Apple Swift: exact `6.2.4`.
 - protoc: `libprotoc 34.1`.
 - protoc executable SHA-256: `59001d00d60e6ed0e6c49e2ae6591b58882cec5bf45402f937b22566be893d4e`.
 - protoc-gen-swift: `1.33.3`.
-- protoc-gen-swift executable SHA-256: `e5908e3c8d1504ca39ad14c38503b313a84b87def21d5f7dc4d0ce4e3709b8e0` (built by Apple Swift `6.2.4` under Xcode `26.3` / `17C529`).
 - Source `cosmos/crypto/secp256k1/keys.proto` SHA-256: `d69386568e35c2c20cf367307489f9e50a2710a71552c531a20aee8d9371ba62`.
 - Derived PubKey input SHA-256: `84c4f4b93a6d9526e90686d611f13e6fa5ec6675243a7b429050bdc67c9529bb`.
 - Derived query-only `keys_query.proto` SHA-256: `84c4f4b93a6d9526e90686d611f13e6fa5ec6675243a7b429050bdc67c9529bb`.
