@@ -29,6 +29,12 @@ public extension Kit {
             clientId: endpoints.clientId,
             maximumBalancePageCount: endpoints.policy.maximumBalancePageCount
         )
+        let broadcastClients = Dictionary(uniqueKeysWithValues: endpoints.families.map { family in
+            (family.id, CosmosTransactionBroadcaster(baseURL: family.cosmosRestURL))
+        })
+        let lookupClients = Dictionary(uniqueKeysWithValues: endpoints.families.map { family in
+            (family.id, CosmosTransactionLookupClient(baseURL: family.cosmosRestURL))
+        })
         let reader = ReadOperationCoordinator(
             pool: pool,
             client: liveClient,
@@ -54,7 +60,16 @@ public extension Kit {
             runtimeIdentifier: databaseRuntime.location.identity.rawValue,
             databaseWriter: databaseRuntime.pool,
             pendingRepository: pendingRepository,
-            publicationBarrier: publicationBarrier
+            publicationBarrier: publicationBarrier,
+            broadcastOperation: { familyID, transaction in
+                guard let client = broadcastClients[familyID] else { throw BroadcastTransportError.invalidEndpoint }
+                return try await client.broadcast(transaction: transaction)
+            },
+            lookupOperation: { familyID, transactionID in
+                guard let client = lookupClients[familyID] else { return .providerInconsistent }
+                return await client.lookup(transactionID: transactionID)
+            },
+            operationDeadline: endpoints.requestTimeout
         )
         let syncer = AccountSyncer(
             address: address,
@@ -119,6 +134,12 @@ public extension Kit {
             clientId: endpoints.clientId,
             maximumBalancePageCount: endpoints.policy.maximumBalancePageCount
         )
+        let broadcastClients = Dictionary(uniqueKeysWithValues: endpoints.families.map { family in
+            (family.id, CosmosTransactionBroadcaster(baseURL: family.cosmosRestURL, transport: adapter))
+        })
+        let lookupClients = Dictionary(uniqueKeysWithValues: endpoints.families.map { family in
+            (family.id, CosmosTransactionLookupClient(baseURL: family.cosmosRestURL, transport: adapter))
+        })
         let reader = ReadOperationCoordinator(
             pool: pool,
             client: liveClient,
@@ -145,7 +166,16 @@ public extension Kit {
             runtimeIdentifier: databaseRuntime.location.identity.rawValue,
             databaseWriter: databaseRuntime.pool,
             pendingRepository: pendingRepository,
-            publicationBarrier: publicationBarrier
+            publicationBarrier: publicationBarrier,
+            broadcastOperation: { familyID, transaction in
+                guard let client = broadcastClients[familyID] else { throw BroadcastTransportError.invalidEndpoint }
+                return try await client.broadcast(transaction: transaction)
+            },
+            lookupOperation: { familyID, transactionID in
+                guard let client = lookupClients[familyID] else { return .providerInconsistent }
+                return await client.lookup(transactionID: transactionID)
+            },
+            operationDeadline: endpoints.requestTimeout
         )
         let syncer = AccountSyncer(
             address: address,

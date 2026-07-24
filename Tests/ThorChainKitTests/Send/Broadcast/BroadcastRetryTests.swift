@@ -12,11 +12,11 @@ final class BroadcastRetryTests: XCTestCase {
             persistenceNamespace: fixture.namespace,
             runtimeIdentifier: fixture.namespace,
             databaseWriter: fixture.database.pool,
-            broadcastOperation: { transaction in
+            broadcastOperation: { _, transaction in
                 capture.append(transaction.txRaw)
                 return BroadcastResponse(txHash: transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil)
             },
-            lookupOperation: { _ in .notFound },
+            lookupOperation: { _, _ in .notFound },
             retryAccountOperation: { RetryAccountSnapshot(sequence: 4, nativeFee: Data([1])) },
             retryFamilySelection: { _ in },
             retryEndpointLeaseOperation: { _ in },
@@ -32,6 +32,63 @@ final class BroadcastRetryTests: XCTestCase {
         }
         XCTAssertEqual(capture.raws, [fixture.raw])
         XCTAssertEqual(events.values, [.operationHoldAcquired, .journalRead, .retryCAS, .publicationWait, .familySelection, .endpointLease, .lookup, .policyRead, .accountRead, .broadcast, .transport, .operationHoldReleased])
+    }
+
+    func testRetryLookupTimeoutReturnsUnknownAndIgnoresLateResult() async throws {
+        let fixture = try makeUnknownRecord(namespace: "retry-lookup-timeout-\(UUID().uuidString)")
+        let deferred = DeferredLookup()
+        let runtime = SendRuntime(
+            address: fixture.sender,
+            persistenceNamespace: fixture.namespace,
+            runtimeIdentifier: fixture.namespace,
+            databaseWriter: fixture.database.pool,
+            operationDeadline: 0.03,
+            broadcastOperation: { _, _ in
+                XCTFail("lookup timeout must not broadcast")
+                return BroadcastResponse(txHash: fixture.transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil)
+            },
+            lookupOperation: { _, _ in await deferred.wait() },
+            retryFamilySelection: { _ in },
+            retryEndpointLeaseOperation: { _ in }
+        )
+        await runtime.activate(generation: 1)
+
+        let submission = try await runtime.retryBroadcast(transactionId: fixture.transaction.transactionID, acceptingNativeFee: Data([1]))
+        guard case .unknown = submission.state else {
+            return XCTFail("lookup timeout must remain unknown")
+        }
+
+        deferred.resolve(.found(transactionID: fixture.transaction.transactionID, height: 1))
+        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(try fixture.journal.record(for: fixture.transaction.transactionID)?.state, .unknown)
+    }
+
+    func testRetryBroadcastTimeoutReturnsUnknownAndIgnoresLateResult() async throws {
+        let fixture = try makeUnknownRecord(namespace: "retry-broadcast-timeout-\(UUID().uuidString)")
+        let deferred = DeferredBroadcast()
+        let runtime = SendRuntime(
+            address: fixture.sender,
+            persistenceNamespace: fixture.namespace,
+            runtimeIdentifier: fixture.namespace,
+            databaseWriter: fixture.database.pool,
+            operationDeadline: 0.03,
+            broadcastOperation: { _, _ in await deferred.wait() },
+            lookupOperation: { _, _ in .notFound },
+            retryAccountOperation: { RetryAccountSnapshot(sequence: 4, nativeFee: Data([1])) },
+            retryFamilySelection: { _ in },
+            retryEndpointLeaseOperation: { _ in },
+            retryPolicyOperation: {}
+        )
+        await runtime.activate(generation: 1)
+
+        let submission = try await runtime.retryBroadcast(transactionId: fixture.transaction.transactionID, acceptingNativeFee: Data([1]))
+        guard case .unknown = submission.state else {
+            return XCTFail("broadcast timeout must remain unknown")
+        }
+
+        deferred.resolve(BroadcastResponse(txHash: fixture.transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil))
+        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(try fixture.journal.record(for: fixture.transaction.transactionID)?.state, .unknown)
     }
 
     func testSequenceAdvancedBlocksBeforeAnyIOAndSurvivesRestart() async throws {
@@ -52,12 +109,12 @@ final class BroadcastRetryTests: XCTestCase {
             persistenceNamespace: fixture.namespace,
             runtimeIdentifier: fixture.namespace,
             databaseWriter: fixture.database.pool,
-            broadcastOperation: { transaction in
+            broadcastOperation: { _, transaction in
                 firstCapture.append(transaction.txRaw)
                 firstCapture.transportCall()
                 return BroadcastResponse(txHash: transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil)
             },
-            lookupOperation: { _ in
+            lookupOperation: { _, _ in
                 firstCapture.lookupCalls += 1
                 return .notFound
             },
@@ -90,12 +147,12 @@ final class BroadcastRetryTests: XCTestCase {
             persistenceNamespace: fixture.namespace,
             runtimeIdentifier: fixture.namespace,
             databaseWriter: fixture.database.pool,
-            broadcastOperation: { transaction in
+            broadcastOperation: { _, transaction in
                 secondCapture.append(transaction.txRaw)
                 secondCapture.transportCall()
                 return BroadcastResponse(txHash: transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil)
             },
-            lookupOperation: { _ in
+            lookupOperation: { _, _ in
                 secondCapture.lookupCalls += 1
                 return .notFound
             },
@@ -132,12 +189,12 @@ final class BroadcastRetryTests: XCTestCase {
             persistenceNamespace: fixture.namespace,
             runtimeIdentifier: fixture.namespace,
             databaseWriter: fixture.database.pool,
-            broadcastOperation: { transaction in
+            broadcastOperation: { _, transaction in
                 capture.append(transaction.txRaw)
                 capture.transportCall()
                 return BroadcastResponse(txHash: transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil)
             },
-            lookupOperation: { _ in .notFound },
+            lookupOperation: { _, _ in .notFound },
             retryAccountOperation: { capture.accountRead(); return RetryAccountSnapshot(sequence: 5, nativeFee: Data([1])) },
             retryFamilySelection: { _ in capture.familySelection() },
             retryEndpointLeaseOperation: { _ in capture.endpointLease() },
@@ -191,12 +248,12 @@ final class BroadcastRetryTests: XCTestCase {
             persistenceNamespace: fixture.namespace,
             runtimeIdentifier: fixture.namespace,
             databaseWriter: fixture.database.pool,
-            broadcastOperation: { transaction in
+            broadcastOperation: { _, transaction in
                 capture.append(transaction.txRaw)
                 return BroadcastResponse(txHash: transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil)
             },
             publicationBarrier: barrier,
-            lookupOperation: { _ in
+            lookupOperation: { _, _ in
                 capture.lookupCalls += 1
                 return .notFound
             }
@@ -350,5 +407,47 @@ private final class RetryEvents: @unchecked Sendable {
 
     func append(_ event: SendRetryEvent) {
         lock.lock(); storedValues.append(event); lock.unlock()
+    }
+}
+
+private final class DeferredLookup: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<RetryLookupResponse, Never>?
+
+    func wait() async -> RetryLookupResponse {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            self.continuation = continuation
+            lock.unlock()
+        }
+    }
+
+    func resolve(_ response: RetryLookupResponse) {
+        lock.lock()
+        let continuation = self.continuation
+        self.continuation = nil
+        lock.unlock()
+        continuation?.resume(returning: response)
+    }
+}
+
+private final class DeferredBroadcast: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<BroadcastResponse, Error>?
+
+    func wait() async throws -> BroadcastResponse {
+        try await withCheckedThrowingContinuation { continuation in
+            lock.lock()
+            self.continuation = continuation
+            lock.unlock()
+        }
+    }
+
+    func resolve(_ response: BroadcastResponse) {
+        lock.lock()
+        let continuation = self.continuation
+        self.continuation = nil
+        lock.unlock()
+        continuation?.resume(returning: response)
     }
 }

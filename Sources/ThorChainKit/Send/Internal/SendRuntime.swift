@@ -65,8 +65,9 @@ actor SendRuntime {
     private let journal: SendJournal?
     private let pendingRepository: PendingTransactionRepository?
     private let publicationBarrier: PendingPublicationBarrier
-    private let broadcastOperation: (@Sendable (SignedTransaction) async throws -> BroadcastResponse)?
-    private let lookupOperation: (@Sendable (TransactionID) async -> RetryLookupResponse)?
+    private let broadcastOperation: (@Sendable (String, SignedTransaction) async throws -> BroadcastResponse)?
+    private let lookupOperation: (@Sendable (String, TransactionID) async -> RetryLookupResponse)?
+    private let operationRunner: EndpointOperationRunner
     private let retryAccountOperation: (@Sendable () async throws -> RetryAccountSnapshot)?
     private let retryFamilySelection: (@Sendable (String) async throws -> Void)?
     private let retryEndpointLeaseOperation: (@Sendable (String) async throws -> Void)?
@@ -84,10 +85,11 @@ actor SendRuntime {
         runtimeIdentifier: String = "memory",
         databaseWriter: DatabasePool? = nil,
         reservationStore: (any SequenceReservationManaging)? = nil,
-        broadcastOperation: (@Sendable (SignedTransaction) async throws -> BroadcastResponse)? = nil,
+        broadcastOperation: (@Sendable (String, SignedTransaction) async throws -> BroadcastResponse)? = nil,
         pendingRepository: PendingTransactionRepository? = nil,
         publicationBarrier: PendingPublicationBarrier = PendingPublicationBarrier(),
-        lookupOperation: (@Sendable (TransactionID) async -> RetryLookupResponse)? = nil,
+        lookupOperation: (@Sendable (String, TransactionID) async -> RetryLookupResponse)? = nil,
+        operationDeadline: TimeInterval = 15,
         retryAccountOperation: (@Sendable () async throws -> RetryAccountSnapshot)? = nil,
         retryFamilySelection: (@Sendable (String) async throws -> Void)? = nil,
         retryEndpointLeaseOperation: (@Sendable (String) async throws -> Void)? = nil,
@@ -110,6 +112,7 @@ actor SendRuntime {
         }
         self.broadcastOperation = broadcastOperation
         self.lookupOperation = lookupOperation
+        operationRunner = EndpointOperationRunner(deadline: operationDeadline)
         self.retryAccountOperation = retryAccountOperation
         self.retryFamilySelection = retryFamilySelection
         self.retryEndpointLeaseOperation = retryEndpointLeaseOperation
@@ -353,7 +356,9 @@ actor SendRuntime {
             return SendSubmission(transactionId: handoff.transaction.transactionID, state: .unknown)
         }
         do {
-            let response = try await broadcastOperation(handoff.transaction)
+            let response = try await operationRunner.run(familyID: handoff.providerFamilyID) {
+                try await broadcastOperation(handoff.providerFamilyID, handoff.transaction)
+            }
             switch BroadcastClassifier.classify(localHash: handoff.transaction.transactionID, response: response) {
             case .checkTxAccepted:
                 guard (try? journal.transition(transactionID: handoff.transaction.transactionID, from: .broadcasting, expectedGeneration: 1, to: .checkTxAccepted, generation: 1, code: response.code, codespace: response.codespace, sanitizedLog: response.sanitizedLog)) == true else {
@@ -427,7 +432,10 @@ actor SendRuntime {
                 try await retryEndpointLeaseOperation(record.providerFamilyID)
             }
             retryObservability.record(.lookup)
-            switch await lookupOperation(transactionId) {
+            let lookupResult = try await operationRunner.run(familyID: record.providerFamilyID) {
+                await lookupOperation(record.providerFamilyID, transactionId)
+            }
+            switch lookupResult {
             case let .found(foundID, _):
                 guard foundID == transactionId,
                       try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .checkTxAccepted, generation: nextGeneration) else { return SendSubmission(transactionId: transactionId, state: .unknown) }
@@ -476,7 +484,9 @@ actor SendRuntime {
             }
             retryObservability.record(.broadcast)
             retryObservability.record(.transport)
-            let response = try await broadcastOperation(transaction)
+            let response = try await operationRunner.run(familyID: record.providerFamilyID) {
+                try await broadcastOperation(record.providerFamilyID, transaction)
+            }
             switch BroadcastClassifier.classify(localHash: transactionId, response: response) {
             case .checkTxAccepted:
                 guard try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .checkTxAccepted, generation: nextGeneration, code: response.code, codespace: response.codespace, sanitizedLog: response.sanitizedLog) else { return SendSubmission(transactionId: transactionId, state: .unknown) }
