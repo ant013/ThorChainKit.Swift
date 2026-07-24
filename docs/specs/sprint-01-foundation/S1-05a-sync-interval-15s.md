@@ -95,4 +95,3 @@ must contain only the source file.
 
 None. The user selected EvmKit's 15-second cadence and explicitly limited the
 correction to the existing production default.
-
