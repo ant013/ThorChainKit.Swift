@@ -26,6 +26,15 @@ enum ThorChainMigrations {
                 table.primaryKey(["storage_key", "denom"])
             }
         }
+        migrator.registerMigration("v2-send-reservations") { db in
+            try db.create(table: "send_sequence_reservations") { table in
+                table.column("persistence_namespace", .text).notNull()
+                table.column("sender_payload", .blob).notNull()
+                table.column("sequence", .integer).notNull()
+                table.column("owner_token", .blob).notNull()
+                table.primaryKey(["persistence_namespace", "sender_payload", "sequence"])
+            }
+        }
         return migrator
     }
 }

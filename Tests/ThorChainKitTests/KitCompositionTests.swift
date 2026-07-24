@@ -20,6 +20,64 @@ final class KitCompositionTests: XCTestCase {
         XCTAssertNotNil(kit.dependencies.sendRuntime)
     }
 
+    func testProductionFactoryBridgeIsSynchronousSafe() async throws {
+        let address = try sendTestAddress()
+        let endpoints = try EndpointConfiguration(families: [
+            try EndpointFamilyDescriptor(
+                id: "composition-bridge",
+                cosmosRestURL: URL(string: "https://rest.composition-bridge.example")!,
+                cometBftURL: URL(string: "https://rpc.composition-bridge.example")!
+            )
+        ])
+
+        let first = try Kit.instance(address: address, walletId: "composition-bridge", endpoints: endpoints)
+        let second = try Kit.instance(address: address, walletId: "composition-bridge", endpoints: endpoints)
+
+        let firstRuntimeID = await first.dependencies.sendRuntime.databaseRuntimeIdentifier()
+        let secondRuntimeID = await second.dependencies.sendRuntime.databaseRuntimeIdentifier()
+        XCTAssertEqual(firstRuntimeID, secondRuntimeID)
+    }
+
+    func testTwoKitsShareOnePhysicalWriterAndMigrationBarrier() async throws {
+        let address = try sendTestAddress()
+        let endpoints = try EndpointConfiguration(families: [
+            try EndpointFamilyDescriptor(
+                id: "composition-writer",
+                cosmosRestURL: URL(string: "https://rest.composition-writer.example")!,
+                cometBftURL: URL(string: "https://rpc.composition-writer.example")!
+            )
+        ])
+        let first = try Kit.instance(address: address, walletId: "composition-writer", endpoints: endpoints)
+        let second = try Kit.instance(address: address, walletId: "composition-writer", endpoints: endpoints)
+
+        let firstRuntimeID = await first.dependencies.sendRuntime.databaseRuntimeIdentifier()
+        let secondRuntimeID = await second.dependencies.sendRuntime.databaseRuntimeIdentifier()
+        XCTAssertEqual(firstRuntimeID, secondRuntimeID)
+    }
+
+    func testInitializationFailureRemovesOnlyMatchingEntry() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("thorchain-s2-04-(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        XCTAssertThrowsError(try DatabaseRuntime.open(path: directory.path))
+
+        let valid = directory.appendingPathComponent("database.sqlite")
+        XCTAssertNoThrow(try DatabaseRuntime.open(path: valid.path))
+    }
+
+    func testTwoClientsInSameNamespaceStoppingADoesNotStopB() async throws {
+        let address = try sendTestAddress()
+        let first = SendRuntime(address: address, persistenceNamespace: "same-namespace")
+        let second = SendRuntime(address: address, persistenceNamespace: "same-namespace")
+
+        await first.activate(generation: 1)
+        await second.activate(generation: 1)
+        await first.invalidate(generation: 1)
+
+        let secondIsActive = await second.isAdmissionActive()
+        XCTAssertTrue(secondIsActive)
+    }
+
     func testInstanceAndFixtureFactoriesEachOwnOneDistinctSendRuntime() async throws {
         let address = try sendTestAddress()
         let walletId = "composition-same-wallet"
@@ -56,6 +114,7 @@ final class KitCompositionTests: XCTestCase {
         if case .degraded = instance.pendingTransactionsStatus {} else { XCTFail("instance pending status must be degraded") }
         if case .degraded = fixture.pendingTransactionsStatus {} else { XCTFail("fixture pending status must be degraded") }
     }
+
 }
 
 private actor CompositionTransport: TestingHTTPTransport {

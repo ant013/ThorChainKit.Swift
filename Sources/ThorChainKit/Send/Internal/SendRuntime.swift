@@ -1,5 +1,6 @@
 import BigInt
 import Foundation
+import GRDB
 
 fileprivate final class SendRuntimeAdmissionState: Sendable {
     private let stateQueue = DispatchQueue(label: "ThorChainKit.Send.Admission")
@@ -29,13 +30,31 @@ fileprivate final class SendRuntimeAdmissionState: Sendable {
 actor SendRuntime {
     private let address: Address?
     private let quoteStore: QuoteStore
+    private let clientID: UUID
+    private let sharedState: SendRuntimeSharedState
+    private let sequenceReservations: (any SequenceReservationManaging)?
+    private let network: Network?
     fileprivate nonisolated let admissionState = SendRuntimeAdmissionState()
     private var activeGeneration: UInt64?
     private var preflightAttempts = [UUID: (generation: UInt64, familyID: String?, routeID: String?)]()
 
-    init(address: Address? = nil, clientID: UUID = UUID()) {
+    init(
+        address: Address? = nil,
+        clientID: UUID = UUID(),
+        persistenceNamespace: String = UUID().uuidString,
+        runtimeIdentifier: String = "memory",
+        databaseWriter: DatabasePool? = nil,
+        reservationStore: (any SequenceReservationManaging)? = nil
+    ) {
         self.address = address
+        self.clientID = clientID
+        network = address?.network
         quoteStore = QuoteStore(clientID: clientID)
+        sequenceReservations = reservationStore ?? databaseWriter.map(SequenceReservationStore.init(writer:))
+        sharedState = SendRuntimeRegistry.shared.state(
+            for: persistenceNamespace,
+            runtimeIdentifier: runtimeIdentifier
+        )
     }
 
     func authorityClientID() -> UUID { quoteStore.clientID }
@@ -43,26 +62,85 @@ actor SendRuntime {
     func activate(generation: UInt64) {
         activeGeneration = generation
         admissionState.activate(generation: generation)
+        sharedState.activate(clientID: clientID)
     }
 
     func invalidate(generation: UInt64) {
         if activeGeneration == generation { activeGeneration = nil }
         admissionState.invalidate(generation: generation)
+        sharedState.invalidate(clientID: clientID)
         quoteStore.invalidate(generation: generation)
         preflightAttempts = preflightAttempts.filter { $0.value.generation != generation }
     }
 
     nonisolated func invalidateImmediately(generation: UInt64) {
         admissionState.invalidate(generation: generation)
+        sharedState.invalidate(clientID: clientID)
     }
 
     nonisolated func isAdmissionActive(generation: UInt64) -> Bool {
         admissionState.isActive(generation: generation)
     }
 
+    func isAdmissionActive() -> Bool {
+        guard let activeGeneration else { return false }
+        return admissionState.isActive(generation: activeGeneration)
+    }
+
+    func databaseRuntimeIdentifier() -> String {
+        sharedState.runtimeIdentifier
+    }
+
+    func acquireReservation(sender: String, sequence: UInt64, ownerToken: Data) throws -> Bool {
+        guard let sequenceReservations, let network else { return true }
+        let senderAddress = try Address(sender, network: network)
+        return try sequenceReservations.acquire(
+            SequenceReservationKey(
+                persistenceNamespace: sharedState.persistenceNamespace,
+                senderPayload: senderAddress.payload,
+                sequence: sequence
+            ),
+            ownerToken: ownerToken
+        )
+    }
+
+    func releaseReservation(sender: String, sequence: UInt64, ownerToken: Data) throws -> Bool {
+        guard let sequenceReservations, let network else { return true }
+        let senderAddress = try Address(sender, network: network)
+        return try sequenceReservations.release(
+            SequenceReservationKey(
+                persistenceNamespace: sharedState.persistenceNamespace,
+                senderPayload: senderAddress.payload,
+                sequence: sequence
+            ),
+            ownerToken: ownerToken
+        )
+    }
+
     func admittedGeneration() throws -> UInt64 {
         guard let activeGeneration else { throw SendError.kitNotStarted }
         return activeGeneration
+    }
+
+    func consumeQuote(_ quote: SendQuote) throws {
+        _ = try quoteStore.consume(quote, activeGeneration: try admittedGeneration())
+    }
+
+    func beginAccountAttempt(_ sender: String) -> Bool {
+        guard admissionState.isActive() else { return false }
+        return sharedState.beginAccount(sender)
+    }
+
+    func endAccountAttempt(_ sender: String) {
+        sharedState.endAccount(sender)
+    }
+
+    func beginSignerFence(_ sender: String) -> Bool {
+        sharedState.beginSignerFence(sender)
+    }
+
+    func endSignerFence(_ sender: String) {
+        sharedState.endSignerFence(sender)
     }
 
     func beginPreflight() throws -> SendPreflightAttempt {
