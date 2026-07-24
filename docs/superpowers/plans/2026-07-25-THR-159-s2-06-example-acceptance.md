@@ -1,0 +1,111 @@
+# THR-159 — S2-06 iOS Example Send Acceptance Plan
+
+Design revision 3 for `docs/specs/sprint-02-native-send/S2-06-example-acceptance.md`,
+based on architecture revision 10 at commit
+`518835315a65996b9321665213adb0516503df65`. The prior draft was superseded by
+the discovery-1/2 adversarial findings. Discovery is frozen at 2/2;
+implementation remains approval-gated. One operator decision remains open for
+the Live signer/derivation backend.
+
+## Goal
+
+Implement only the package-owned iOS Example live/fixture boundary and guarded
+five-flow Maestro acceptance described by the authoritative spec.
+
+## Steps
+
+- [ ] 1. Example targets and runtime composition
+  - Owner: ThorChainSwiftEngineer
+  - Acceptance: `ThorChainExampleLive` (Release) and `ThorChainExampleFixture`
+    (Debug) are separate app targets/products; `ThorChainExampleFixtureSupport`
+    is linked only by Fixture and contains exactly `FixtureSupport/**`.
+    Live/Archive/Profile dependency closure and source membership contain no
+    fixture target or source. The SwiftUI App composes the selected runtime
+    without UIKit, AppDelegate, view controllers, or representable wrappers.
+  - Paths: `iOS Example/iOS Example.xcodeproj/project.pbxproj`,
+    `iOS Example/iOS Example.xcworkspace`, `iOS Example/Sources/**`,
+    `iOS Example/FixtureSupport/**`.
+  - Depends on: none.
+  - Check: target-graph/source-membership audit; Live Release Archive/Profile
+    show-build-settings audit; both exact-destination xcodebuilds; resolved
+    Live executable fixture-symbol scan. Any unresolved artifact or unexpected
+    dependency fails closed.
+
+- [ ] 2. Send/review/pending projections
+  - Owner: ThorChainSwiftEngineer
+  - Acceptance: SwiftUI view models consume only public quote/send/retry and
+    both pending publishers; RUNE text uses exact 1e8 conversion, accepts only
+    `1...2^256-1` base units/32-byte magnitudes, and invalid input has no side
+    effects. Review expiry, CheckTx-accepted, unknown, changed-fee retry,
+    empty-versus-degraded restart state, and all fixed IDs including
+    `send.mode-badge` are visible with no sensitive values. Live remains
+    unavailable until the operator approves its secret format/derivation/
+    backend; then start/replace/logout atomically owns signer + derived address
+    + matching Kit and clears the input/model. Controlled LIVE stops before
+    confirmation/broadcast.
+  - Paths: `iOS Example/Sources/Send`, `iOS Example/Sources/Pending`, tests.
+  - Depends on: 1 and S2-01 through S2-05.
+  - Check: focused unit/component tests; runtime accessibility-tree/Maestro ID
+    assertions and sensitive-value negatives; controlled LIVE observation.
+
+- [ ] 3. Fixture signer, transport, scenarios, and namespace lifecycle
+  - Owner: ThorChainSwiftEngineer
+  - Acceptance: exact-digest signer, deterministic transport/clock, and a
+    strict ordered transcript (origin/method/path/query/body/order/extra-call)
+    drive the real Kit facade. Five scenarios use independent reset, with
+    restart-only namespace reuse; expected signed bytes/hash are asserted and
+    all invalid transcript/input cases fail closed. No private material is
+    present.
+  - Paths: `iOS Example/FixtureSupport`, `iOS Example/Sources/Signing`, tests.
+  - Depends on: 1 and 2.
+  - Check: signer-call, exact-hash, transcript, amount grammar/conversion,
+    retry, restart empty/degraded, namespace, and secret/artifact tests.
+
+- [ ] 4. Guarded Maestro runner and evidence
+  - Owner: ThorChainSwiftEngineer
+  - Acceptance: exact UDID is used for build/boot/install/launch/Maestro;
+    committed five-flow manifest has a non-trivial action/assertion matrix;
+    negative mutations for missing actions/assertions, expiry wording,
+    CheckTx wording, unknown/retry signer count, and restart cannot pass.
+    JUnit counts, byte canaries, full runtime-tree ID/sensitive-value checks
+    with an unlisted-node negative mutation, Vision/OCR screenshot self-test,
+    and resolved Release fixture-symbol exclusion all fail closed. A versioned
+    manifest records the complete tracked input inventory, per-file SHA-256
+    digests, clean-input result, exact HEAD, UDID, scheme/configuration,
+    resolved executable and artifact digests; wrong-head, dirty, missing,
+    extra, ambiguous, or tampered inputs/artifacts fail closed.
+  - Paths: `.maestro/sprint-02`, `Scripts/run-maestro.sh`,
+    `Scripts/test-run-maestro.sh`, `Tests/ThorChainKitTests/ExampleAcceptanceManifestTests.swift`.
+  - Depends on: 1–3.
+  - Check: runner shim/mutant tests; local exact-UDID Maestro; and an evidence
+    manifest under `artifacts/s2-06/<git-head>/<udid>/` containing exact head,
+    UDID, scheme/configuration, resolved executable, JUnit, logs, screenshot
+    inventory/OCR results, and failure artifacts. Missing, extra, ambiguous,
+    or wrong-head evidence fails closed.
+
+## Scope exclusions
+
+No Unstoppable changes, no Unstoppable Maestro, no library secret storage, no
+host integration, and no S2-07 work.
+
+## Discovery-2 blocker disposition
+
+- `THR-159-SEC-H01`: unresolved operator decision. Choose the secret format,
+  derivation path, and signing backend compatible with S2-04's host-owned
+  `Signer`; until then Live is explicitly unavailable and no send session is
+  constructed. The non-secret wallet ID rule is fixed as the domain prefix plus
+  SHA-256 of the canonical compressed public key.
+- `THR-159-SEC-H02`: resolved by the exact Example input bound
+  `1...2^256-1` base units and a canonical magnitude of at most 32 bytes.
+- `THR-159-UI-H01`: resolved by `send.mode-badge`, a full runtime accessibility
+  node/value scan, and an unlisted-node sensitive-value mutation.
+- `THR-159-VOP-H01`: resolved by the versioned digest-bound manifest and
+  fail-closed clean-input, wrong-head, extra/missing/tampered checks.
+- `THR-159-VOP-H02`: resolved by a purpose-created unfunded wallet and a
+  controlled LIVE checklist that terminates before confirmation/broadcast and
+  proves zero send/retry/broadcaster events.
+
+## Handoff gate
+
+Implementation starts only after this plan and the evidence-backed design pass
+adversarial review and receive explicit operator approval.
