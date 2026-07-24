@@ -46,6 +46,21 @@
   unavailable because SwiftPM stalls creating the cached `swift-protobuf`
   checkout before product compilation; no XCTest acceptance is claimed.
 
-No XCTest acceptance is claimed.
+## Closure 5 correction
+
+- Commit `8664b06` fixes the remaining direct call-site and XCTest compile
+  diagnostics at the exact engineer head.
+- The full named S2-05 selector set was run locally with the pinned iOS 26.2
+  simulator, `SWIFT_SUPPRESS_WARNINGS=NO`,
+  `-clonedSourcePackagesDirPath` bound to the verified `s2-03-review` cache,
+  `-disableAutomaticPackageResolution`, and
+  `-onlyUsePackageVersionsFromResolvedFile`.
+- Result: `TEST SUCCEEDED`; 31 selected tests executed with 0 failures.
+- The earlier SwiftPM-stall limitation is superseded for this route. The
+  simulator emitted only the known test-cleanup vnode-unlink diagnostics; all
+  selected tests passed.
+
+The full named S2-05 selector acceptance is green; the broader package suite
+was not run in this bounded closure.
 
 The unrelated pre-existing THR-104 report files were left untouched.
