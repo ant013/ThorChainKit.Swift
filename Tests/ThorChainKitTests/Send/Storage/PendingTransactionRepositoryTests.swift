@@ -80,7 +80,8 @@ final class PendingTransactionRepositoryTests: XCTestCase {
             generation: 7
         ))
 
-        XCTAssertTrue(await barrier.wait(transactionID: fixture.transaction.transactionID, generation: 7))
+        let acknowledged = await barrier.wait(transactionID: fixture.transaction.transactionID, generation: 7)
+        XCTAssertTrue(acknowledged)
         XCTAssertTrue(barrier.isAcknowledged(transactionID: fixture.transaction.transactionID, generation: 7))
         _ = repository
     }

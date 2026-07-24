@@ -53,8 +53,8 @@ public extension Kit {
             persistenceNamespace: namespace,
             runtimeIdentifier: databaseRuntime.location.identity.rawValue,
             databaseWriter: databaseRuntime.pool,
-            publicationBarrier: publicationBarrier,
-            pendingRepository: pendingRepository
+            pendingRepository: pendingRepository,
+            publicationBarrier: publicationBarrier
         )
         let syncer = AccountSyncer(
             address: address,
@@ -144,8 +144,8 @@ public extension Kit {
             persistenceNamespace: namespace,
             runtimeIdentifier: databaseRuntime.location.identity.rawValue,
             databaseWriter: databaseRuntime.pool,
-            publicationBarrier: publicationBarrier,
-            pendingRepository: pendingRepository
+            pendingRepository: pendingRepository,
+            publicationBarrier: publicationBarrier
         )
         let syncer = AccountSyncer(
             address: address,

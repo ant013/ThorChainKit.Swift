@@ -34,7 +34,8 @@ final class PendingPublicationBarrierTests: XCTestCase {
         barrier.fail(transactionID: transactionID, generation: 1)
 
         barrier.publish(transactionID: transactionID, generation: 1)
-        XCTAssertFalse(await barrier.wait(transactionID: transactionID, generation: 1))
+        let acknowledged = await barrier.wait(transactionID: transactionID, generation: 1)
+        XCTAssertFalse(acknowledged)
         XCTAssertFalse(barrier.isAcknowledged(transactionID: transactionID, generation: 1))
     }
 }

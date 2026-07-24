@@ -17,10 +17,10 @@ final class BroadcastRetryTests: XCTestCase {
                 return BroadcastResponse(txHash: transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil)
             },
             lookupOperation: { _ in .notFound },
+            retryAccountOperation: { RetryAccountSnapshot(sequence: 4, nativeFee: Data([1])) },
             retryFamilySelection: { _ in },
             retryEndpointLeaseOperation: { _ in },
             retryPolicyOperation: {},
-            retryAccountOperation: { RetryAccountSnapshot(sequence: 4, nativeFee: Data([1])) },
             retryObservability: SendRetryObservability { events.append($0) }
         )
         await runtime.activate(generation: 1)
@@ -61,10 +61,10 @@ final class BroadcastRetryTests: XCTestCase {
                 firstCapture.lookupCalls += 1
                 return .notFound
             },
+            retryAccountOperation: { firstCapture.accountRead(); return RetryAccountSnapshot(sequence: 4, nativeFee: Data([1])) },
             retryFamilySelection: { _ in firstCapture.familySelection() },
             retryEndpointLeaseOperation: { _ in firstCapture.endpointLease() },
             retryPolicyOperation: { firstCapture.policyRead() },
-            retryAccountOperation: { firstCapture.accountRead(); return RetryAccountSnapshot(sequence: 4, nativeFee: Data([1])) },
             retryObservability: SendRetryObservability { firstEvents.append($0) }
         )
         await firstRuntime.activate(generation: 1)
@@ -99,10 +99,10 @@ final class BroadcastRetryTests: XCTestCase {
                 secondCapture.lookupCalls += 1
                 return .notFound
             },
+            retryAccountOperation: { secondCapture.accountRead(); return RetryAccountSnapshot(sequence: 4, nativeFee: Data([1])) },
             retryFamilySelection: { _ in secondCapture.familySelection() },
             retryEndpointLeaseOperation: { _ in secondCapture.endpointLease() },
             retryPolicyOperation: { secondCapture.policyRead() },
-            retryAccountOperation: { secondCapture.accountRead(); return RetryAccountSnapshot(sequence: 4, nativeFee: Data([1])) },
             retryObservability: SendRetryObservability { secondEvents.append($0) }
         )
         await secondRuntime.activate(generation: 1)
@@ -138,10 +138,10 @@ final class BroadcastRetryTests: XCTestCase {
                 return BroadcastResponse(txHash: transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil)
             },
             lookupOperation: { _ in .notFound },
+            retryAccountOperation: { capture.accountRead(); return RetryAccountSnapshot(sequence: 5, nativeFee: Data([1])) },
             retryFamilySelection: { _ in capture.familySelection() },
             retryEndpointLeaseOperation: { _ in capture.endpointLease() },
             retryPolicyOperation: { capture.policyRead() },
-            retryAccountOperation: { capture.accountRead(); return RetryAccountSnapshot(sequence: 5, nativeFee: Data([1])) },
             retryObservability: SendRetryObservability { events.append($0) }
         )
         await runtime.activate(generation: 1)
@@ -191,11 +191,11 @@ final class BroadcastRetryTests: XCTestCase {
             persistenceNamespace: fixture.namespace,
             runtimeIdentifier: fixture.namespace,
             databaseWriter: fixture.database.pool,
-            publicationBarrier: barrier,
             broadcastOperation: { transaction in
                 capture.append(transaction.txRaw)
                 return BroadcastResponse(txHash: transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil)
             },
+            publicationBarrier: barrier,
             lookupOperation: { _ in
                 capture.lookupCalls += 1
                 return .notFound

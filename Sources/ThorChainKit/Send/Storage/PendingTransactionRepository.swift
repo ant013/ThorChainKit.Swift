@@ -3,8 +3,8 @@ import Foundation
 import GRDB
 
 typealias PendingObservationStarter = (
-    ([SendJournalRecord]) -> Void,
-    () -> Void,
+    @escaping ([SendJournalRecord]) -> Void,
+    @escaping () -> Void,
     DispatchQueue
 ) -> AnyCancellable
 
@@ -101,7 +101,8 @@ final class PendingTransactionRepository: @unchecked Sendable {
                     self.statusSubject.send(.degraded)
                     self.installObservation()
                 }
-            }
+            },
+            stateQueue
         )
         self.observation = cancellable
     }

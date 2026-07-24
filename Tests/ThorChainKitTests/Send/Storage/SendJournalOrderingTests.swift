@@ -15,7 +15,7 @@ final class SendJournalOrderingTests: XCTestCase {
         let key = SequenceReservationKey(persistenceNamespace: namespace, senderPayload: sender.payload, sequence: 1)
         XCTAssertTrue(try reservations.acquire(key, ownerToken: owner))
 
-        var transportCalls = 0
+        let transportCalls = 0
         let journal = SendJournal(writer: database.pool, persistenceNamespace: namespace)
         let raw = Data([0xAA])
         let transaction = SignedTransaction(txRaw: raw, transactionID: DirectSignCodec.transactionId(txRaw: raw))
