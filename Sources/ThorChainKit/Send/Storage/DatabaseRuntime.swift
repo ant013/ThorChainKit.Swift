@@ -16,9 +16,15 @@ final class DatabaseRuntime: @unchecked Sendable {
     static func open(path: String) throws -> DatabaseRuntime {
         let location = try DatabaseLocation.resolve(path: path)
         let entry: DatabaseRuntimeRegistry.Entry
+        let initializingTaskID: UUID?
         registry.lock.lock()
         if let existing = registry.entries[location.identity] {
             entry = existing
+            if case let .initializing(task) = existing {
+                initializingTaskID = task.id
+            } else {
+                initializingTaskID = nil
+            }
         } else {
             let initializing = DatabaseInitializationTask {
                 initializationControl.wait(for: location.identity)
@@ -28,8 +34,12 @@ final class DatabaseRuntime: @unchecked Sendable {
             registry.entries[location.identity] = created
             initializing.start()
             entry = created
+            initializingTaskID = initializing.id
         }
         registry.lock.unlock()
+        if let initializingTaskID {
+            initializationControl.selected(identity: location.identity, taskID: initializingTaskID)
+        }
 
         do {
             let runtime: DatabaseRuntime
@@ -72,6 +82,7 @@ private final class DatabaseRuntimeRegistry: @unchecked Sendable {
 }
 
 private final class DatabaseInitializationTask: @unchecked Sendable {
+    let id = UUID()
     private let group = DispatchGroup()
     private let stateQueue = DispatchQueue(label: "ThorChainKit.DatabaseInitialization")
     private var result: Result<DatabaseRuntime, Error>?
@@ -104,6 +115,7 @@ private final class DatabaseInitializationTask: @unchecked Sendable {
 final class DatabaseInitializationControl: @unchecked Sendable {
     private let lock = NSLock()
     private var callback: (@Sendable (DatabaseFileIdentity) -> Void)?
+    private var selectionObserver: (@Sendable (DatabaseFileIdentity, UUID) -> Void)?
 
     func install(_ callback: @escaping @Sendable (DatabaseFileIdentity) -> Void) {
         lock.lock()
@@ -114,6 +126,7 @@ final class DatabaseInitializationControl: @unchecked Sendable {
     func clear() {
         lock.lock()
         callback = nil
+        selectionObserver = nil
         lock.unlock()
     }
 
@@ -122,5 +135,18 @@ final class DatabaseInitializationControl: @unchecked Sendable {
         let callback = self.callback
         lock.unlock()
         callback?(identity)
+    }
+
+    func installSelectionObserver(_ observer: @escaping @Sendable (DatabaseFileIdentity, UUID) -> Void) {
+        lock.lock()
+        selectionObserver = observer
+        lock.unlock()
+    }
+
+    func selected(identity: DatabaseFileIdentity, taskID: UUID) {
+        lock.lock()
+        let observer = selectionObserver
+        lock.unlock()
+        observer?(identity, taskID)
     }
 }

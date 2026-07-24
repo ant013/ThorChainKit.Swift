@@ -12,7 +12,7 @@ actor SendCoordinator {
         preflight: SendPreflightCoordinator? = nil,
         persistenceNamespace: String = "",
         network: Network = .mainnet,
-        now: @escaping @Sendable () -> Date = Date.init
+        now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.runtime = runtime
         self.preflight = preflight

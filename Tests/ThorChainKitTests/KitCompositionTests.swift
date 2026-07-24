@@ -90,6 +90,9 @@ final class KitCompositionTests: XCTestCase {
         let invalidIdentity = try DatabaseLocation.resolve(path: invalid.path).identity
         let probe = InitializationProbe(identity: invalidIdentity)
         DatabaseRuntime.initializationControl.install { identity in probe.wait(for: identity) }
+        DatabaseRuntime.initializationControl.installSelectionObserver { identity, taskID in
+            probe.selected(identity: identity, taskID: taskID)
+        }
         defer { DatabaseRuntime.initializationControl.clear() }
 
         let failures = await withTaskGroup(of: Bool.self, returning: [Bool].self) { group in
@@ -98,6 +101,10 @@ final class KitCompositionTests: XCTestCase {
             group.addTask { (try? DatabaseRuntime.open(path: invalidAlias.path)) == nil }
             group.addTask { (try? DatabaseRuntime.open(path: invalid.path)) == nil }
             group.addTask { (try? DatabaseRuntime.open(path: invalidAlias.path)) == nil }
+            for _ in 0..<4 {
+                XCTAssertEqual(probe.selection.wait(timeout: .now() + 1), .success)
+            }
+            XCTAssertEqual(probe.uniqueTaskCount, 1)
             probe.release()
             var results = [Bool]()
             for await result in group { results.append(result) }
@@ -189,7 +196,9 @@ private final class InitializationProbe: @unchecked Sendable {
     private let identity: DatabaseFileIdentity
     private let lock = NSLock()
     private(set) var callbackCount = 0
+    private var taskIDs = Set<UUID>()
     let started = DispatchSemaphore(value: 0)
+    let selection = DispatchSemaphore(value: 0)
     private let gate = DispatchSemaphore(value: 0)
 
     init(identity: DatabaseFileIdentity) {
@@ -207,6 +216,19 @@ private final class InitializationProbe: @unchecked Sendable {
 
     func release() {
         gate.signal()
+    }
+
+    func selected(identity: DatabaseFileIdentity, taskID: UUID) {
+        guard identity == self.identity else { return }
+        lock.lock()
+        taskIDs.insert(taskID)
+        lock.unlock()
+        selection.signal()
+    }
+
+    var uniqueTaskCount: Int {
+        lock.lock(); defer { lock.unlock() }
+        return taskIDs.count
     }
 }
 

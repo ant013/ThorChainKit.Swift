@@ -116,7 +116,7 @@ final class SendCoordinatorTests: XCTestCase {
             quote: PreparedQuote(quote: vector.quote, snapshot: vector.snapshot),
             publicKey: vector.publicKey
         )
-        XCTAssertEqual(payload.digest.hex, vector.digestHex)
+        XCTAssertEqual(payload.digest.coordinatorHex, vector.digestHex)
 
         let compact = try SignerVerifier().verify(
             signature: vector.signature,
@@ -124,9 +124,9 @@ final class SendCoordinatorTests: XCTestCase {
             publicKey: vector.publicKey
         )
         let signed = try DirectSignCodec.makeTxRaw(payload: payload, compactSignature: compact.rawValue)
-        XCTAssertEqual(signed.txRaw.hex, vector.txRawHex)
+        XCTAssertEqual(signed.txRaw.coordinatorHex, vector.txRawHex)
 
-        let changedSnapshot = try changed(vector.snapshot, sequence: 2)
+        let changedSnapshot = try coordinatorChanged(vector.snapshot, sequence: 2)
         let changedQuote = try QuoteStore(clock: TestSendClock()).issue(
             sender: try Address(vector.snapshot.sender, network: .mainnet),
             recipient: try Address(vector.snapshot.recipient, network: .mainnet),
@@ -157,8 +157,8 @@ final class SendCoordinatorTests: XCTestCase {
 
     func testH2RejectsChangedStaleCancelledExpiredAndLateResults() async throws {
         for (name, mutation, expectedChange) in [
-            ("changed", { try changed($0, sequence: 3) }, QuoteChange.sequence),
-            ("stale", { try changed($0, height: 11) }, QuoteChange.heightRollback)
+            ("changed", { try coordinatorChanged($0, sequence: 3) }, QuoteChange.sequence),
+            ("stale", { try coordinatorChanged($0, height: 11) }, QuoteChange.heightRollback)
         ] as [(String, (SendSnapshot) throws -> SendSnapshot, QuoteChange)] {
             let (runtime, quote, publicKey, snapshot) = try await makeBlockingQuote(namespace: "coordinator-h2-" + name)
             let provider = try CoordinatorH2Provider(
@@ -327,7 +327,7 @@ final class SendCoordinatorTests: XCTestCase {
             publicKey: publicKey,
             signature: Data(hex: "23103daa64330d051da3bfa85ea7c8af9080edf19b19a306403303634b0992a32cc1b9061b2e76cd245edb2976bb437bc6636dfb23deae31e38508c5478dae45"),
             digestHex: "1ff56dd4c3627af0cee040965178f50c8d7c854e909d7b54aedbd1b7bf110b68",
-            txRawHex: "0a530a510a0e2f74797065732e4d736753656e64123f0a14751e76e8199196d454941c45d1b3a323f1433bd612145a0dba49dab8fec87c6dd7c01b564ee72a8515a61a110a0472756e65120931303030303030303012590a500a460a1f2f636f736d6f732e63727970746f2e736563703235366b312e5075626b7912230a210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179812040a0208011801120510c08db7011a4023103daa64330d051da3bfa85ea7c8af9080edf19b19a306403303634b0992a32cc1b9061b2e76cd245edb2976bb437bc6636dfb23deae31e38508c5478dae45"
+            txRawHex: "0a530a510a0e2f74797065732e4d736753656e64123f0a14751e76e8199196d454941c45d1b3a323f1433bd612145a0dba49dab8fec87c6dd7c01b564ee72a8515a61a110a0472756e65120931303030303030303012590a500a460a1f2f636f736d6f732e63727970746f2e736563703235366b312e5075624b657912230a210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179812040a0208011801120510c08db7011a4023103daa64330d051da3bfa85ea7c8af9080edf19b19a306403303634b0992a32cc1b9061b2e76cd245edb2976bb437bc6636dfb23deae31e38508c5478dae45"
         )
     }
 }
@@ -373,7 +373,7 @@ private final class CoordinatorH2Provider: SendPreflightProviding, @unchecked Se
     }
 
     func lease(minimumHeight: Int64?) async throws -> EndpointLease {
-        lock.lock(); leasesIssued += 1; lock.unlock()
+        withLock { leasesIssued += 1 }
         return EndpointLease(family: family, verifiedChainId: base.chainID, cosmosReadHeight: base.height, cometReferenceHeight: base.height, poolGeneration: 1)
     }
 
@@ -491,6 +491,8 @@ private final class FailingReservationStore: SequenceReservationManaging, @unche
 }
 
 private extension Data {
+    var coordinatorHex: String { map { String(format: "%02x", $0) }.joined() }
+
     init(hex: String) {
         self.init(stride(from: 0, to: hex.count, by: 2).map { index in
             let start = hex.index(hex.startIndex, offsetBy: index)
@@ -498,4 +500,30 @@ private extension Data {
             return UInt8(hex[start..<end], radix: 16)!
         })
     }
+}
+
+private func coordinatorChanged(_ snapshot: SendSnapshot, height: Int64? = nil, sequence: UInt64? = nil) throws -> SendSnapshot {
+    try SendSnapshot(
+        familyID: snapshot.familyID,
+        chainID: snapshot.chainID,
+        height: height ?? snapshot.height,
+        sender: snapshot.sender,
+        recipient: snapshot.recipient,
+        accountNumber: snapshot.accountNumber,
+        sequence: sequence ?? snapshot.sequence,
+        amount: snapshot.amount,
+        nativeFee: snapshot.nativeFee,
+        spendableRune: snapshot.spendableRune,
+        mimir: snapshot.mimir,
+        memoMaximumBytes: snapshot.memoMaximumBytes,
+        nodeVersion: snapshot.nodeVersion,
+        querierVersion: snapshot.querierVersion,
+        recipientClassification: snapshot.recipientClassification,
+        policyRevision: snapshot.policyRevision,
+        accountPublicKey: snapshot.accountPublicKey,
+        accountPublicKeyData: snapshot.accountPublicKeyData,
+        restEndpoint: snapshot.restEndpoint,
+        rpcEndpoint: snapshot.rpcEndpoint,
+        manifestRevision: snapshot.manifestRevision
+    )
 }
