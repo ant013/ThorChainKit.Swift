@@ -94,14 +94,14 @@ The table freezes the exact eight-file review bundle before adversarial review. 
 <!-- SPEC_HASHES_START -->
 | Artifact | SHA-256 |
 |---|---|
-| `S2-01-send-domain-quote-contract.md` | `ab208e64a7498644c0c9582e326286adb934fc72ea51ca4d5811fc0b5b663bc0` |
-| `S2-02-pinned-preflight.md` | `23041f2426584df75e0a477c129c92afd15565ec0a185ac191d9dc55df02e554` |
-| `S2-03-direct-sign-codec.md` | `1d651ddf249016888b053997f3ff7541c95902f2127cd33d8bf5ebcff019038e` |
-| `S2-04-external-signer-coordinator.md` | `e208a20b81f1129d680f649663d5fc485003814902b788a897c6eb78d336aab7` |
-| `S2-05-durable-broadcast-pending.md` | `b6afab639b1ab0afd5c43918929d66d5e249f7b4d51ec12eef09fc2ebb2252fc` |
+| `S2-01-send-domain-quote-contract.md` | `c8153756f11627e855b30fe9926fa349ff62358c7b7ce5f3912080b44915c7d0` |
+| `S2-02-pinned-preflight.md` | `7c8a348905707aa4446d7f536140ae49168855cf1f76b0c42faf375337bde414` |
+| `S2-03-direct-sign-codec.md` | `2b456ae013b5614e096b68242531e80d7d4c4a59ffd5fa7940fd6282a0c4f157` |
+| `S2-04-external-signer-coordinator.md` | `15f1013411d8ce9a6d0950f712456c1029cbc2e7ec0617163da5741680ff0fc2` |
+| `S2-05-durable-broadcast-pending.md` | `bea62d003798aca8c7aa29c5716f0ea6fcf1732448888a3235011fe4aec4fc66` |
 | `S2-06-example-acceptance.md` | `d482a62d2ed9b349ba9316b539df6e262879d2cee316399d13f6220be176e23c` |
 | `S2-07-unstoppable-integration.md` | `e12500f66891ac508e81af1f2c8b2b7711eea00125ef18054309de3f05043302` |
-| `test-plan.md` | `0249a4e4a17d1905a76b74eabecd62895a149cafb41c91208a60a54da60d43fb` |
+| `test-plan.md` | `2b5f1d6f051465c782feb2cb88d3f7f2a116e10636ce760e29be440064f013cd` |
 <!-- SPEC_HASHES_END -->
 
-Canonical revision 10 bundle digest: `a843ca732687e70264bd0b6a961fd9a0a5219917e1f6ee71aa61060d94602bcc`. Reproduce it from the repository root with `sha256sum docs/specs/sprint-02-native-send/S2-*.md docs/specs/sprint-02-native-send/test-plan.md | sha256sum`.
+Canonical revision 10 bundle digest: `b79d6320d94807bddc33686838b174a0f9e55775c165cc7e15626b3c9306f5ae`. Reproduce it from the repository root with `sha256sum docs/specs/sprint-02-native-send/S2-*.md docs/specs/sprint-02-native-send/test-plan.md | sha256sum`.

@@ -29,6 +29,12 @@ public extension Kit {
             clientId: endpoints.clientId,
             maximumBalancePageCount: endpoints.policy.maximumBalancePageCount
         )
+        let broadcastClients = Dictionary(uniqueKeysWithValues: endpoints.families.map { family in
+            (family.id, CosmosTransactionBroadcaster(baseURL: family.cosmosRestURL))
+        })
+        let lookupClients = Dictionary(uniqueKeysWithValues: endpoints.families.map { family in
+            (family.id, CosmosTransactionLookupClient(baseURL: family.cosmosRestURL))
+        })
         let reader = ReadOperationCoordinator(
             pool: pool,
             client: liveClient,
@@ -42,11 +48,28 @@ public extension Kit {
             storage: storage,
             publishing: publishing
         )
+        let publicationBarrier = PendingPublicationBarrier()
+        let pendingRepository = PendingTransactionRepository(
+            journal: SendJournal(writer: databaseRuntime.pool, persistenceNamespace: namespace),
+            network: address.network,
+            publicationBarrier: publicationBarrier
+        )
         let sendRuntime = SendRuntime(
             address: address,
             persistenceNamespace: namespace,
             runtimeIdentifier: databaseRuntime.location.identity.rawValue,
-            databaseWriter: databaseRuntime.pool
+            databaseWriter: databaseRuntime.pool,
+            broadcastOperation: { familyID, transaction in
+                guard let client = broadcastClients[familyID] else { throw BroadcastTransportError.invalidEndpoint }
+                return try await client.broadcast(transaction: transaction)
+            },
+            pendingRepository: pendingRepository,
+            publicationBarrier: publicationBarrier,
+            lookupOperation: { familyID, transactionID in
+                guard let client = lookupClients[familyID] else { return .providerInconsistent }
+                return await client.lookup(transactionID: transactionID)
+            },
+            operationDeadline: endpoints.requestTimeout
         )
         let syncer = AccountSyncer(
             address: address,
@@ -70,7 +93,8 @@ public extension Kit {
             dependencies: KitDependencies(
                 lifecycle: bridge,
                 sendRuntime: sendRuntime,
-                preflight: preflight
+                preflight: preflight,
+                pendingRepository: pendingRepository
             ),
             persistenceNamespace: namespace,
             facadeDispatcher: facadeDispatcher,
@@ -110,6 +134,12 @@ public extension Kit {
             clientId: endpoints.clientId,
             maximumBalancePageCount: endpoints.policy.maximumBalancePageCount
         )
+        let broadcastClients = Dictionary(uniqueKeysWithValues: endpoints.families.map { family in
+            (family.id, CosmosTransactionBroadcaster(baseURL: family.cosmosRestURL, transport: adapter))
+        })
+        let lookupClients = Dictionary(uniqueKeysWithValues: endpoints.families.map { family in
+            (family.id, CosmosTransactionLookupClient(baseURL: family.cosmosRestURL, transport: adapter))
+        })
         let reader = ReadOperationCoordinator(
             pool: pool,
             client: liveClient,
@@ -124,11 +154,28 @@ public extension Kit {
             storage: storage,
             publishing: publishing
         )
+        let publicationBarrier = PendingPublicationBarrier()
+        let pendingRepository = PendingTransactionRepository(
+            journal: SendJournal(writer: databaseRuntime.pool, persistenceNamespace: namespace),
+            network: address.network,
+            publicationBarrier: publicationBarrier
+        )
         let sendRuntime = SendRuntime(
             address: address,
             persistenceNamespace: namespace,
             runtimeIdentifier: databaseRuntime.location.identity.rawValue,
-            databaseWriter: databaseRuntime.pool
+            databaseWriter: databaseRuntime.pool,
+            broadcastOperation: { familyID, transaction in
+                guard let client = broadcastClients[familyID] else { throw BroadcastTransportError.invalidEndpoint }
+                return try await client.broadcast(transaction: transaction)
+            },
+            pendingRepository: pendingRepository,
+            publicationBarrier: publicationBarrier,
+            lookupOperation: { familyID, transactionID in
+                guard let client = lookupClients[familyID] else { return .providerInconsistent }
+                return await client.lookup(transactionID: transactionID)
+            },
+            operationDeadline: endpoints.requestTimeout
         )
         let syncer = AccountSyncer(
             address: address,
@@ -151,7 +198,8 @@ public extension Kit {
             dependencies: KitDependencies(
                 lifecycle: LifecycleCommandBridge(syncer: syncer, gate: gate, sendRuntime: sendRuntime),
                 sendRuntime: sendRuntime,
-                preflight: preflight
+                preflight: preflight,
+                pendingRepository: pendingRepository
             ),
             persistenceNamespace: namespace,
             facadeDispatcher: facadeDispatcher,

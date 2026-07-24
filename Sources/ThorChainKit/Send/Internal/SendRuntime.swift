@@ -27,12 +27,52 @@ fileprivate final class SendRuntimeAdmissionState: Sendable {
     }
 }
 
+struct RetryAccountSnapshot: Sendable {
+    let sequence: UInt64
+    let nativeFee: Data
+}
+
+enum SendRetryEvent: Sendable, Equatable {
+    case operationHoldAcquired
+    case journalRead
+    case retryCAS
+    case publicationWait
+    case familySelection
+    case endpointLease
+    case lookup
+    case policyRead
+    case accountRead
+    case broadcast
+    case transport
+    case sequenceAdvancedMutation
+    case operationHoldReleased
+}
+
+struct SendRetryObservability: Sendable {
+    let record: @Sendable (SendRetryEvent) -> Void
+
+    init(record: @escaping @Sendable (SendRetryEvent) -> Void = { _ in }) {
+        self.record = record
+    }
+}
+
 actor SendRuntime {
     private let address: Address?
     private let quoteStore: QuoteStore
     private let clientID: UUID
     private let sharedState: SendRuntimeSharedState
     private let sequenceReservations: (any SequenceReservationManaging)?
+    private let journal: SendJournal?
+    private let pendingRepository: PendingTransactionRepository?
+    private let publicationBarrier: PendingPublicationBarrier
+    private let broadcastOperation: (@Sendable (String, SignedTransaction) async throws -> BroadcastResponse)?
+    private let lookupOperation: (@Sendable (String, TransactionID) async -> RetryLookupResponse)?
+    private let operationRunner: EndpointOperationRunner
+    private let retryAccountOperation: (@Sendable () async throws -> RetryAccountSnapshot)?
+    private let retryFamilySelection: (@Sendable (String) async throws -> Void)?
+    private let retryEndpointLeaseOperation: (@Sendable (String) async throws -> Void)?
+    private let retryPolicyOperation: (@Sendable () async throws -> Void)?
+    private let retryObservability: SendRetryObservability
     private let network: Network?
     fileprivate nonisolated let admissionState = SendRuntimeAdmissionState()
     private var activeGeneration: UInt64?
@@ -44,17 +84,53 @@ actor SendRuntime {
         persistenceNamespace: String = UUID().uuidString,
         runtimeIdentifier: String = "memory",
         databaseWriter: DatabasePool? = nil,
-        reservationStore: (any SequenceReservationManaging)? = nil
+        reservationStore: (any SequenceReservationManaging)? = nil,
+        broadcastOperation: (@Sendable (String, SignedTransaction) async throws -> BroadcastResponse)? = nil,
+        pendingRepository: PendingTransactionRepository? = nil,
+        publicationBarrier: PendingPublicationBarrier = PendingPublicationBarrier(),
+        lookupOperation: (@Sendable (String, TransactionID) async -> RetryLookupResponse)? = nil,
+        operationDeadline: TimeInterval = 15,
+        retryAccountOperation: (@Sendable () async throws -> RetryAccountSnapshot)? = nil,
+        retryFamilySelection: (@Sendable (String) async throws -> Void)? = nil,
+        retryEndpointLeaseOperation: (@Sendable (String) async throws -> Void)? = nil,
+        retryPolicyOperation: (@Sendable () async throws -> Void)? = nil,
+        retryObservability: SendRetryObservability = SendRetryObservability()
     ) {
         self.address = address
         self.clientID = clientID
         network = address?.network
         quoteStore = QuoteStore(clientID: clientID)
         sequenceReservations = reservationStore ?? databaseWriter.map(SequenceReservationStore.init(writer:))
+        journal = databaseWriter.map { SendJournal(writer: $0, persistenceNamespace: persistenceNamespace) }
+        self.publicationBarrier = publicationBarrier
+        self.pendingRepository = pendingRepository ?? journal.map {
+            PendingTransactionRepository(
+                journal: $0,
+                network: address?.network ?? .mainnet,
+                publicationBarrier: publicationBarrier
+            )
+        }
+        self.broadcastOperation = broadcastOperation
+        self.lookupOperation = lookupOperation
+        operationRunner = EndpointOperationRunner(deadline: operationDeadline)
+        self.retryAccountOperation = retryAccountOperation
+        self.retryFamilySelection = retryFamilySelection
+        self.retryEndpointLeaseOperation = retryEndpointLeaseOperation
+        self.retryPolicyOperation = retryPolicyOperation
+        self.retryObservability = retryObservability
         sharedState = SendRuntimeRegistry.shared.state(
             for: persistenceNamespace,
             runtimeIdentifier: runtimeIdentifier
         )
+        if sharedState.claimRecovery() {
+            do {
+                _ = try journal?.removeUnlinkedReservations()
+                _ = try journal?.normalizeBroadcastingToUnknown()
+            } catch {
+                sharedState.releaseRecovery()
+            }
+        }
+        _ = self.pendingRepository?.refresh()
     }
 
     func authorityClientID() -> UUID { quoteStore.clientID }
@@ -229,21 +305,227 @@ actor SendRuntime {
         )
     }
 
-    func send(quote: SendQuote, signer: any Signer) throws -> SendSubmission {
+    func send(quote: SendQuote, signer: any Signer) async throws -> SendSubmission {
         try admit()
-        _ = quote
-        _ = signer
-        throw SendError.operationUnavailable
+        guard journal != nil else { throw SendError.operationUnavailable }
+        let result = await SendCoordinator(
+            runtime: self,
+            persistenceNamespace: sharedState.persistenceNamespace,
+            network: network ?? .mainnet
+        ).execute(quote: quote, signer: signer)
+        guard case let .handoff(handoff) = result else {
+            switch result {
+            case let .failure(error): throw error
+            case .repairPending: throw SendError.storageUnavailable
+            case .handoff: fatalError("unreachable")
+            }
+        }
+        guard let journal else {
+            _ = releaseOperationHold(handoff.operationHold, ownerToken: handoff.reservationOwnerToken)
+            throw SendError.operationUnavailable
+        }
+        do {
+            try journal.insertBroadcasting(
+                transaction: handoff.transaction,
+                senderPayload: try Address(handoff.sender, network: network ?? .mainnet).payload,
+                recipientPayload: handoff.recipientPayload,
+                sender: handoff.sender,
+                recipient: handoff.recipient,
+                amount: handoff.amount,
+                quotedNativeFee: handoff.quotedNativeFee,
+                memo: handoff.memo,
+                accountNumber: handoff.accountNumber,
+                sequence: handoff.sequence,
+                providerFamilyID: handoff.providerFamilyID,
+                quoteHeight: handoff.quoteHeight,
+                reservationOwnerToken: handoff.reservationOwnerToken
+            )
+            guard await publicationBarrier.wait(transactionID: handoff.transaction.transactionID, generation: 1) else {
+                _ = try? journal.transition(transactionID: handoff.transaction.transactionID, from: .broadcasting, expectedGeneration: 1, to: .unknown, generation: 0)
+                _ = pendingRepository?.refresh()
+                return SendSubmission(transactionId: handoff.transaction.transactionID, state: .unknown)
+            }
+        } catch {
+            _ = releaseOperationHold(handoff.operationHold, ownerToken: handoff.reservationOwnerToken)
+            throw SendError.storageUnavailable
+        }
+        defer { _ = releaseOperationHold(handoff.operationHold, ownerToken: handoff.reservationOwnerToken) }
+        guard let broadcastOperation else {
+            _ = try? journal.transition(transactionID: handoff.transaction.transactionID, from: .broadcasting, expectedGeneration: 1, to: .unknown, generation: 0)
+            _ = pendingRepository?.refresh()
+            return SendSubmission(transactionId: handoff.transaction.transactionID, state: .unknown)
+        }
+        do {
+            let response = try await operationRunner.run(familyID: handoff.providerFamilyID) {
+                try await broadcastOperation(handoff.providerFamilyID, handoff.transaction)
+            }
+            switch BroadcastClassifier.classify(localHash: handoff.transaction.transactionID, response: response) {
+            case .checkTxAccepted:
+                guard (try? journal.transition(transactionID: handoff.transaction.transactionID, from: .broadcasting, expectedGeneration: 1, to: .checkTxAccepted, generation: 1, code: response.code, codespace: response.codespace, sanitizedLog: response.sanitizedLog)) == true else {
+                    return SendSubmission(transactionId: handoff.transaction.transactionID, state: .unknown)
+                }
+                _ = pendingRepository?.refresh()
+                return SendSubmission(transactionId: handoff.transaction.transactionID, state: .checkTxAccepted)
+            case let .rejected(rejection):
+                guard (try? journal.transition(transactionID: handoff.transaction.transactionID, from: .broadcasting, expectedGeneration: 1, to: .rejected, generation: 0, code: rejection.code, codespace: response.codespace, sanitizedLog: response.sanitizedLog)) == true else {
+                    return SendSubmission(transactionId: handoff.transaction.transactionID, state: .unknown)
+                }
+                _ = pendingRepository?.refresh()
+                throw SendError.broadcastRejected(rejection)
+            case .unknown:
+                _ = try? journal.transition(transactionID: handoff.transaction.transactionID, from: .broadcasting, expectedGeneration: 1, to: .unknown, generation: 0, code: response.code, codespace: response.codespace, sanitizedLog: response.sanitizedLog)
+                _ = pendingRepository?.refresh()
+                return SendSubmission(transactionId: handoff.transaction.transactionID, state: .unknown)
+            }
+        } catch is CancellationError {
+            _ = try? journal.transition(transactionID: handoff.transaction.transactionID, from: .broadcasting, expectedGeneration: 1, to: .unknown, generation: 0)
+            _ = pendingRepository?.refresh()
+            return SendSubmission(transactionId: handoff.transaction.transactionID, state: .unknown)
+        } catch let error as SendError {
+            throw error
+        } catch {
+            _ = try? journal.transition(transactionID: handoff.transaction.transactionID, from: .broadcasting, expectedGeneration: 1, to: .unknown, generation: 0)
+            _ = pendingRepository?.refresh()
+            return SendSubmission(transactionId: handoff.transaction.transactionID, state: .unknown)
+        }
     }
 
-    func retryBroadcast(transactionId: TransactionID, acceptingNativeFee: Data?) throws -> SendSubmission {
+    func retryBroadcast(transactionId: TransactionID, acceptingNativeFee: Data?) async throws -> SendSubmission {
         try admit()
-        _ = transactionId
-        _ = acceptingNativeFee
-        throw SendError.operationUnavailable
+        guard journal != nil else { throw SendError.operationUnavailable }
+        guard let address else { throw SendError.operationUnavailable }
+        let ownerToken = Data(UUID().uuidString.utf8)
+        guard let operationHold = acquireAccountAttempt(address.raw, ownerToken: ownerToken) else { throw SendError.sendInProgress }
+        retryObservability.record(.operationHoldAcquired)
+        defer {
+            _ = releaseOperationHold(operationHold, ownerToken: ownerToken)
+            retryObservability.record(.operationHoldReleased)
+        }
+        guard let journal, let record = try journal.record(for: transactionId) else { throw SendError.retryRecordMissing }
+        retryObservability.record(.journalRead)
+        if record.state == .checkTxAccepted || record.state == .rejected { throw SendError.retryTerminal }
+        if record.retryBlockedReason == .sequenceAdvanced { throw SendError.retryBlocked(.sequenceAdvanced) }
+        guard let lookupOperation, let broadcastOperation else { throw SendError.operationUnavailable }
+        if retryAccountOperation == nil,
+           let acceptingNativeFee, acceptingNativeFee != record.quotedNativeFee {
+            throw SendError.retryFeeChanged(NativeFeeChange(previous: BigUInt(record.quotedNativeFee), current: BigUInt(acceptingNativeFee)))
+        }
+        let nextGeneration = max(1, record.broadcastGeneration &+ 1)
+        guard record.state == .unknown,
+              retryCAS(journal: journal, transactionId: transactionId, expectedGeneration: record.broadcastGeneration, nextGeneration: nextGeneration) else {
+            throw SendError.sendInProgress
+        }
+        retryObservability.record(.publicationWait)
+        guard await publicationBarrier.wait(transactionID: transactionId, generation: nextGeneration) else {
+            _ = try? journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration)
+            _ = pendingRepository?.refresh()
+            return SendSubmission(transactionId: transactionId, state: .unknown)
+        }
+        let transaction = SignedTransaction(txRaw: record.signedTxRaw, transactionID: transactionId)
+        do {
+            if let retryFamilySelection {
+                retryObservability.record(.familySelection)
+                try await retryFamilySelection(record.providerFamilyID)
+            }
+            if let retryEndpointLeaseOperation {
+                retryObservability.record(.endpointLease)
+                try await retryEndpointLeaseOperation(record.providerFamilyID)
+            }
+            retryObservability.record(.lookup)
+            let lookupResult = try await operationRunner.run(familyID: record.providerFamilyID) {
+                await lookupOperation(record.providerFamilyID, transactionId)
+            }
+            switch lookupResult {
+            case let .found(foundID, _):
+                guard foundID == transactionId,
+                      try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .checkTxAccepted, generation: nextGeneration) else { return SendSubmission(transactionId: transactionId, state: .unknown) }
+                _ = pendingRepository?.refresh()
+                return SendSubmission(transactionId: transactionId, state: .checkTxAccepted)
+            case .providerInconsistent:
+                _ = try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration, blockedReason: .providerInconsistent)
+                _ = pendingRepository?.refresh()
+                throw SendError.retryBlocked(.providerInconsistent)
+            case .transportFailure:
+                _ = try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration)
+                _ = pendingRepository?.refresh()
+                return SendSubmission(transactionId: transactionId, state: .unknown)
+            case .notFound:
+                if let retryPolicyOperation {
+                    retryObservability.record(.policyRead)
+                    try await retryPolicyOperation()
+                }
+                if let retryAccountOperation {
+                    retryObservability.record(.accountRead)
+                    let snapshot = try await retryAccountOperation()
+                    if snapshot.sequence < record.sequence {
+                        _ = try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration, blockedReason: .providerInconsistent)
+                        _ = pendingRepository?.refresh()
+                        throw SendError.retryBlocked(.providerInconsistent)
+                    }
+                    if snapshot.sequence > record.sequence {
+                        retryObservability.record(.sequenceAdvancedMutation)
+                        _ = try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration, blockedReason: .sequenceAdvanced)
+                        _ = pendingRepository?.refresh()
+                        throw SendError.retryBlocked(.sequenceAdvanced)
+                    }
+                    if snapshot.nativeFee != record.quotedNativeFee,
+                       acceptingNativeFee != snapshot.nativeFee {
+                        _ = try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration)
+                        _ = pendingRepository?.refresh()
+                        throw SendError.retryFeeChanged(NativeFeeChange(previous: BigUInt(record.quotedNativeFee), current: BigUInt(snapshot.nativeFee)))
+                    }
+                    if snapshot.nativeFee == record.quotedNativeFee,
+                       let acceptingNativeFee, acceptingNativeFee != snapshot.nativeFee {
+                        _ = try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration)
+                        _ = pendingRepository?.refresh()
+                        throw SendError.retryFeeChanged(NativeFeeChange(previous: BigUInt(record.quotedNativeFee), current: BigUInt(snapshot.nativeFee)))
+                    }
+                }
+            }
+            retryObservability.record(.broadcast)
+            retryObservability.record(.transport)
+            let response = try await operationRunner.run(familyID: record.providerFamilyID) {
+                try await broadcastOperation(record.providerFamilyID, transaction)
+            }
+            switch BroadcastClassifier.classify(localHash: transactionId, response: response) {
+            case .checkTxAccepted:
+                guard try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .checkTxAccepted, generation: nextGeneration, code: response.code, codespace: response.codespace, sanitizedLog: response.sanitizedLog) else { return SendSubmission(transactionId: transactionId, state: .unknown) }
+                _ = pendingRepository?.refresh()
+                return SendSubmission(transactionId: transactionId, state: .checkTxAccepted)
+            case let .rejected(rejection):
+                guard try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .rejected, generation: nextGeneration, code: rejection.code, codespace: response.codespace, sanitizedLog: response.sanitizedLog) else { return SendSubmission(transactionId: transactionId, state: .unknown) }
+                _ = pendingRepository?.refresh()
+                throw SendError.broadcastRejected(rejection)
+            case .unknown:
+                _ = try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration, code: response.code, codespace: response.codespace, sanitizedLog: response.sanitizedLog)
+                _ = pendingRepository?.refresh()
+                return SendSubmission(transactionId: transactionId, state: .unknown)
+            }
+        } catch let error as SendError { throw error }
+        catch {
+            _ = try? journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration)
+            _ = pendingRepository?.refresh()
+            return SendSubmission(transactionId: transactionId, state: .unknown)
+        }
     }
 
     private func admit() throws {
         guard activeGeneration != nil, admissionState.isActive() else { throw SendError.kitNotStarted }
+    }
+
+    private func retryCAS(
+        journal: SendJournal,
+        transactionId: TransactionID,
+        expectedGeneration: UInt64,
+        nextGeneration: UInt64
+    ) -> Bool {
+        retryObservability.record(.retryCAS)
+        return (try? journal.transition(
+            transactionID: transactionId,
+            from: .unknown,
+            expectedGeneration: expectedGeneration,
+            to: .broadcasting,
+            generation: nextGeneration
+        )) == true
     }
 }

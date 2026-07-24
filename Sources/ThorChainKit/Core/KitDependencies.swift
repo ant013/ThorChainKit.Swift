@@ -9,13 +9,15 @@ struct KitDependencies {
     let lifecycle: any KitLifecycle
     let sendRuntime: SendRuntime
     let preflight: SendPreflightCoordinator?
+    let pendingRepository: PendingTransactionRepository?
 
     init(
         lifecycle: any KitLifecycle,
         sendRuntime: SendRuntime = SendRuntime(),
-        preflight: SendPreflightCoordinator? = nil
+        preflight: SendPreflightCoordinator? = nil,
+        pendingRepository: PendingTransactionRepository? = nil
     ) {
-        self.lifecycle = lifecycle; self.sendRuntime = sendRuntime; self.preflight = preflight
+        self.lifecycle = lifecycle; self.sendRuntime = sendRuntime; self.preflight = preflight; self.pendingRepository = pendingRepository
     }
 }
 
