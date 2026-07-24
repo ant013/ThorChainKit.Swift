@@ -3,6 +3,80 @@ import XCTest
 @testable import ThorChainKit
 
 final class SendJournalOrderingTests: XCTestCase {
+    func testFailedInitialCommitMakesZeroTransportCalls() throws {
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("journal-order-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: path) }
+        let database = try DatabaseRuntime.open(path: path.path)
+        let namespace = "journal-order-test"
+        let sender = try sendTestAddress()
+        let recipient = try sendOtherAddress()
+        let reservations = SequenceReservationStore(writer: database.pool)
+        let owner = Data([9])
+        let key = SequenceReservationKey(persistenceNamespace: namespace, senderPayload: sender.payload, sequence: 1)
+        XCTAssertTrue(try reservations.acquire(key, ownerToken: owner))
+
+        var transportCalls = 0
+        let journal = SendJournal(writer: database.pool, persistenceNamespace: namespace)
+        let raw = Data([0xAA])
+        let transaction = SignedTransaction(txRaw: raw, transactionID: DirectSignCodec.transactionId(txRaw: raw))
+        XCTAssertThrowsError(try journal.insertBroadcasting(
+            transaction: transaction,
+            senderPayload: sender.payload,
+            recipientPayload: recipient.payload,
+            sender: sender.raw,
+            recipient: recipient.raw,
+            amount: Data([1]),
+            quotedNativeFee: Data([1]),
+            memo: nil,
+            accountNumber: 1,
+            sequence: 1,
+            providerFamilyID: "fixture",
+            quoteHeight: 1,
+            reservationOwnerToken: Data([8])
+        ))
+        XCTAssertEqual(transportCalls, 0)
+        XCTAssertNil(try journal.record(for: transaction.transactionID))
+    }
+
+    func testSignedBytesAndHashAreImmutable() throws {
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("journal-immutable-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: path) }
+        let database = try DatabaseRuntime.open(path: path.path)
+        let namespace = "journal-immutable-test"
+        let sender = try sendTestAddress()
+        let recipient = try sendOtherAddress()
+        let owner = Data([3, 4])
+        let reservations = SequenceReservationStore(writer: database.pool)
+        XCTAssertTrue(try reservations.acquire(
+            SequenceReservationKey(persistenceNamespace: namespace, senderPayload: sender.payload, sequence: 2),
+            ownerToken: owner
+        ))
+
+        var raw = Data([0x10, 0x20, 0x30])
+        let original = raw
+        let transaction = SignedTransaction(txRaw: raw, transactionID: DirectSignCodec.transactionId(txRaw: raw))
+        raw[0] = 0xFF
+        let journal = SendJournal(writer: database.pool, persistenceNamespace: namespace)
+        try journal.insertBroadcasting(
+            transaction: transaction,
+            senderPayload: sender.payload,
+            recipientPayload: recipient.payload,
+            sender: sender.raw,
+            recipient: recipient.raw,
+            amount: Data([1]),
+            quotedNativeFee: Data([1]),
+            memo: nil,
+            accountNumber: 1,
+            sequence: 2,
+            providerFamilyID: "fixture",
+            quoteHeight: 1,
+            reservationOwnerToken: owner
+        )
+        let record = try XCTUnwrap(journal.record(for: transaction.transactionID))
+        XCTAssertEqual(record.signedTxRaw, original)
+        XCTAssertEqual(record.transactionID, transaction.transactionID)
+    }
+
     func testReservationLinkCommitsAtomically() throws {
         let path = FileManager.default.temporaryDirectory.appendingPathComponent("journal-\(UUID().uuidString).sqlite")
         defer { try? FileManager.default.removeItem(at: path) }

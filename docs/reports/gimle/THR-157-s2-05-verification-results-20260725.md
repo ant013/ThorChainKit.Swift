@@ -11,6 +11,10 @@
 - The protobuf checkout was recovered from the verified local cache; both nested
   submodules match the required gitlinks and are clean.
 - `xcrun swift test --list-tests` discovers the named journal tests.
+- The required retry, lookup, pending-publication, restart, ownership, and
+  redaction test sources plus both S2-05 harness scripts are force-added and
+  present in the staged diff; no XCTest acceptance is inferred from source
+  presence.
 - `xcrun swift test --filter SendJournalOrderingTests` reaches compilation but
   exits before XCTest discovery because the existing `HsExtensions` dependency
   is compiled below macOS 10.15 and rejects `Task` and Combine availability.
@@ -19,6 +23,10 @@
 - An explicit `arm64-apple-macosx10.15` target advances beyond that failure but
   exits on the host Xcode 26 SDK conflict with `/usr/local/include/IOKit`;
   this is an environment failure, not a passing test result.
+- `xcrun swift test --skip-update -Xswiftc -Xfrontend -Xswiftc
+  -disable-availability-checking --list-tests` advances beyond the dependency
+  availability diagnostics but exits on the same host Xcode 26 SDK `IOKit`
+  conflict before XCTest discovery.
 
 No XCTest acceptance is claimed.
 
