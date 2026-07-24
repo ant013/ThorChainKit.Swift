@@ -28,6 +28,24 @@
   availability diagnostics but exits on the same host Xcode 26 SDK `IOKit`
   conflict before XCTest discovery.
 
+## Closure 4 correction
+
+- Commit `57612a8` removes the nested GRDB transaction and keeps the insert,
+  reservation-link update, and rollback guard in the single `DatabasePool.write`
+  transaction.
+- Retry tests now observe operation-hold release, journal read, CAS,
+  publication acknowledgement, lookup, and broadcast ordering; the persisted
+  `sequence_advanced` path asserts no CAS/publication/endpoint activity across
+  a second runtime.
+- `PendingTransactionRepository` uses generation-scoped GRDB
+  `ValueObservation`; observation errors retain the last snapshot and a later
+  successful refresh installs a replacement observation.
+- `xcrun swiftc -parse` over all changed Swift files, both S2-05 `zsh -n`
+  harness checks, and `git diff --check` pass on `57612a8`.
+- Focused `swift test`, `xcodebuild test`, and strict `swift build` remain
+  unavailable because SwiftPM stalls creating the cached `swift-protobuf`
+  checkout before product compilation; no XCTest acceptance is claimed.
+
 No XCTest acceptance is claimed.
 
 The unrelated pre-existing THR-104 report files were left untouched.
