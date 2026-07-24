@@ -27,4 +27,14 @@ final class PendingPublicationBarrierTests: XCTestCase {
         XCTAssertTrue(barrier.acknowledge(transactionID: transactionID, generation: 2))
         XCTAssertFalse(barrier.acknowledge(transactionID: transactionID, generation: 1))
     }
+
+    func testFailedPublicationAcknowledgementDoesNotPermitTransport() async throws {
+        let transactionID = try XCTUnwrap(TransactionID(hash: String(repeating: "C", count: 64)))
+        let barrier = PendingPublicationBarrier()
+        barrier.fail(transactionID: transactionID, generation: 1)
+
+        barrier.publish(transactionID: transactionID, generation: 1)
+        XCTAssertFalse(await barrier.wait(transactionID: transactionID, generation: 1))
+        XCTAssertFalse(barrier.acknowledge(transactionID: transactionID, generation: 1))
+    }
 }

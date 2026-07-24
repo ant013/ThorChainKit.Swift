@@ -6,6 +6,7 @@ final class BroadcastRetryTests: XCTestCase {
     func testRetryUsesByteIdenticalTxRawWithoutSignerOrCodec() async throws {
         let fixture = try makeUnknownRecord(namespace: "retry-bytes-\(UUID().uuidString)")
         let capture = RetryCapture()
+        let events = RetryEvents()
         let runtime = SendRuntime(
             address: fixture.sender,
             persistenceNamespace: fixture.namespace,
@@ -15,7 +16,8 @@ final class BroadcastRetryTests: XCTestCase {
                 capture.append(transaction.txRaw)
                 return BroadcastResponse(txHash: transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil)
             },
-            lookupOperation: { _ in .notFound }
+            lookupOperation: { _ in .notFound },
+            retryObservability: SendRetryObservability { events.append($0) }
         )
         await runtime.activate(generation: 1)
 
@@ -25,6 +27,7 @@ final class BroadcastRetryTests: XCTestCase {
             return XCTFail("matching CheckTx response must terminalize as accepted")
         }
         XCTAssertEqual(capture.raws, [fixture.raw])
+        XCTAssertEqual(events.values, [.operationHoldAcquired, .journalRead, .retryCAS, .publicationWait, .lookup, .broadcast, .operationHoldReleased])
     }
 
     func testSequenceAdvancedBlocksBeforeAnyIOAndSurvivesRestart() async throws {
@@ -39,6 +42,7 @@ final class BroadcastRetryTests: XCTestCase {
         ))
 
         let firstCapture = RetryCapture()
+        let firstEvents = RetryEvents()
         let firstRuntime = SendRuntime(
             address: fixture.sender,
             persistenceNamespace: fixture.namespace,
@@ -51,7 +55,8 @@ final class BroadcastRetryTests: XCTestCase {
             lookupOperation: { _ in
                 firstCapture.lookupCalls += 1
                 return .notFound
-            }
+            },
+            retryObservability: SendRetryObservability { firstEvents.append($0) }
         )
         await firstRuntime.activate(generation: 1)
         do {
@@ -62,8 +67,10 @@ final class BroadcastRetryTests: XCTestCase {
         }
         XCTAssertEqual(firstCapture.lookupCalls, 0)
         XCTAssertEqual(firstCapture.raws, [])
+        XCTAssertEqual(firstEvents.values, [.operationHoldAcquired, .journalRead, .operationHoldReleased])
 
         let secondCapture = RetryCapture()
+        let secondEvents = RetryEvents()
         let secondRuntime = SendRuntime(
             address: fixture.sender,
             persistenceNamespace: fixture.namespace,
@@ -76,7 +83,8 @@ final class BroadcastRetryTests: XCTestCase {
             lookupOperation: { _ in
                 secondCapture.lookupCalls += 1
                 return .notFound
-            }
+            },
+            retryObservability: SendRetryObservability { secondEvents.append($0) }
         )
         await secondRuntime.activate(generation: 1)
         do {
@@ -87,17 +95,20 @@ final class BroadcastRetryTests: XCTestCase {
         }
         XCTAssertEqual(secondCapture.lookupCalls, 0)
         XCTAssertEqual(secondCapture.raws, [])
+        XCTAssertEqual(secondEvents.values, [.operationHoldAcquired, .journalRead, .operationHoldReleased])
         XCTAssertEqual(try fixture.journal.record(for: fixture.transaction.transactionID)?.retryBlockedReason, .sequenceAdvanced)
     }
 
     func testUnapprovedProductionFamilyIsUnavailableWithoutIO() async throws {
         let fixture = try makeUnknownRecord(namespace: "retry-unavailable-\(UUID().uuidString)")
         let capture = RetryCapture()
+        let events = RetryEvents()
         let runtime = SendRuntime(
             address: fixture.sender,
             persistenceNamespace: fixture.namespace,
             runtimeIdentifier: fixture.namespace,
-            databaseWriter: fixture.database.pool
+            databaseWriter: fixture.database.pool,
+            retryObservability: SendRetryObservability { events.append($0) }
         )
         await runtime.activate(generation: 1)
 
@@ -109,6 +120,39 @@ final class BroadcastRetryTests: XCTestCase {
         }
         XCTAssertEqual(capture.lookupCalls, 0)
         XCTAssertEqual(capture.raws, [])
+        XCTAssertEqual(events.values, [.operationHoldAcquired, .journalRead, .operationHoldReleased])
+    }
+
+    func testPublicationFailureNormalizesBeforeAnyEndpointIO() async throws {
+        let fixture = try makeUnknownRecord(namespace: "retry-publication-\(UUID().uuidString)")
+        let barrier = PendingPublicationBarrier()
+        barrier.fail(transactionID: fixture.transaction.transactionID, generation: 1)
+        let capture = RetryCapture()
+        let runtime = SendRuntime(
+            address: fixture.sender,
+            persistenceNamespace: fixture.namespace,
+            runtimeIdentifier: fixture.namespace,
+            databaseWriter: fixture.database.pool,
+            publicationBarrier: barrier,
+            broadcastOperation: { transaction in
+                capture.append(transaction.txRaw)
+                return BroadcastResponse(txHash: transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil)
+            },
+            lookupOperation: { _ in
+                capture.lookupCalls += 1
+                return .notFound
+            }
+        )
+        await runtime.activate(generation: 1)
+
+        let submission = try await runtime.retryBroadcast(transactionId: fixture.transaction.transactionID, acceptingNativeFee: Data([1]))
+
+        guard case .unknown = submission.state else {
+            return XCTFail("failed publication must remain unknown")
+        }
+        XCTAssertEqual(capture.lookupCalls, 0)
+        XCTAssertEqual(capture.raws, [])
+        XCTAssertEqual(try fixture.journal.record(for: fixture.transaction.transactionID)?.state, .unknown)
     }
 
     func testLateGenerationCannotOverwriteTerminalState() throws {
@@ -208,5 +252,19 @@ private final class RetryCapture: @unchecked Sendable {
 
     func append(_ raw: Data) {
         lock.lock(); storedRaws.append(raw); lock.unlock()
+    }
+}
+
+private final class RetryEvents: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedValues = [SendRetryEvent]()
+
+    var values: [SendRetryEvent] {
+        lock.lock(); defer { lock.unlock() }
+        return storedValues
+    }
+
+    func append(_ event: SendRetryEvent) {
+        lock.lock(); storedValues.append(event); lock.unlock()
     }
 }

@@ -118,7 +118,7 @@ final class SendJournalOrderingTests: XCTestCase {
     }
 
     func testFailedReservationLinkRollsBackJournalInsert() throws {
-        let path = FileManager.default.temporaryDirectory.appendingPathComponent("journal-(UUID().uuidString).sqlite")
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("journal-\(UUID().uuidString).sqlite")
         defer { try? FileManager.default.removeItem(at: path) }
         let database = try DatabaseRuntime.open(path: path.path)
         let namespace = "journal-rollback-test"

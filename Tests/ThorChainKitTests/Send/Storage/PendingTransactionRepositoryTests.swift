@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import XCTest
 @testable import ThorChainKit
@@ -41,6 +42,30 @@ final class PendingTransactionRepositoryTests: XCTestCase {
             return XCTFail("observation failure must install degraded status")
         }
         XCTAssertEqual(repository.snapshot.count, 1)
+    }
+
+    func testObservationPublishesCommittedTransition() throws {
+        let fixture = try makeJournal()
+        let repository = PendingTransactionRepository(journal: fixture.journal)
+        XCTAssertEqual(repository.refresh(), .ready)
+        let expectation = expectation(description: "pending observation")
+        var cancellable: AnyCancellable?
+        cancellable = repository.publisher.sink { snapshot in
+            if let transaction = snapshot.first,
+               case .notApplicable = transaction.retryAvailability {
+                expectation.fulfill()
+                cancellable?.cancel()
+            }
+        }
+
+        XCTAssertTrue(try fixture.journal.transition(
+            transactionID: fixture.transaction.transactionID,
+            from: .unknown,
+            expectedGeneration: 0,
+            to: .checkTxAccepted,
+            generation: 1
+        ))
+        wait(for: [expectation], timeout: 2)
     }
 
     private func makeJournal() throws -> RepositoryFixture {

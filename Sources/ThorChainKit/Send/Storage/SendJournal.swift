@@ -42,6 +42,8 @@ final class SendJournal: @unchecked Sendable {
         self.now = now
     }
 
+    var databaseWriter: DatabasePool { writer }
+
     func insertBroadcasting(
         transaction: SignedTransaction,
         senderPayload: Data,
@@ -66,34 +68,31 @@ final class SendJournal: @unchecked Sendable {
         }
         let timestamp = now()
         try writer.write { db in
-            try db.inTransaction {
-                try db.execute(
-                    sql: """
-                    INSERT INTO send_journal
-                    (persistence_namespace, local_hash, signed_tx_raw, sender_payload, recipient_payload,
-                     sender, recipient, amount, quoted_native_fee, memo, account_number, sequence,
-                     provider_family_id, quote_height, state, broadcast_generation, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    arguments: [
-                        persistenceNamespace, transaction.transactionID.hash, transaction.txRaw,
-                        senderPayload, recipientPayload, sender, recipient, amount,
-                        quotedNativeFee, memo, String(accountNumber), String(sequence),
-                        providerFamilyID, String(quoteHeight), SendJournalState.broadcasting.rawValue,
-                        Int64(generation), timestamp, timestamp
-                    ]
-                )
-                try db.execute(
-                    sql: """
-                    UPDATE send_sequence_reservations
-                    SET local_hash = ?
-                    WHERE persistence_namespace = ? AND sender_payload = ? AND sequence = ? AND owner_token = ?
-                    """,
-                    arguments: [transaction.transactionID.hash, persistenceNamespace, senderPayload, Int64(sequence), reservationOwnerToken]
-                )
-                guard db.changesCount == 1 else { throw SendError.storageUnavailable }
-                return .commit
-            }
+            try db.execute(
+                sql: """
+                INSERT INTO send_journal
+                (persistence_namespace, local_hash, signed_tx_raw, sender_payload, recipient_payload,
+                 sender, recipient, amount, quoted_native_fee, memo, account_number, sequence,
+                 provider_family_id, quote_height, state, broadcast_generation, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    persistenceNamespace, transaction.transactionID.hash, transaction.txRaw,
+                    senderPayload, recipientPayload, sender, recipient, amount,
+                    quotedNativeFee, memo, String(accountNumber), String(sequence),
+                    providerFamilyID, String(quoteHeight), SendJournalState.broadcasting.rawValue,
+                    Int64(generation), timestamp, timestamp
+                ]
+            )
+            try db.execute(
+                sql: """
+                UPDATE send_sequence_reservations
+                SET local_hash = ?
+                WHERE persistence_namespace = ? AND sender_payload = ? AND sequence = ? AND owner_token = ?
+                """,
+                arguments: [transaction.transactionID.hash, persistenceNamespace, senderPayload, Int64(sequence), reservationOwnerToken]
+            )
+            guard db.changesCount == 1 else { throw SendError.storageUnavailable }
         }
     }
 
@@ -163,13 +162,17 @@ final class SendJournal: @unchecked Sendable {
 
     func pendingRecords() throws -> [SendJournalRecord] {
         try writer.read { db in
-            let rows = try Row.fetchAll(
-                db,
-                sql: "SELECT * FROM send_journal WHERE persistence_namespace = ? AND state IN (?, ?, ?) ORDER BY created_at DESC, local_hash DESC",
-                arguments: [persistenceNamespace, SendJournalState.unknown.rawValue, SendJournalState.broadcasting.rawValue, SendJournalState.checkTxAccepted.rawValue]
-            )
-            return try rows.map(makeRecord)
+            try pendingRecords(in: db)
         }
+    }
+
+    func pendingRecords(in db: Database) throws -> [SendJournalRecord] {
+        let rows = try Row.fetchAll(
+            db,
+            sql: "SELECT * FROM send_journal WHERE persistence_namespace = ? AND state IN (?, ?, ?) ORDER BY created_at DESC, local_hash DESC",
+            arguments: [persistenceNamespace, SendJournalState.unknown.rawValue, SendJournalState.broadcasting.rawValue, SendJournalState.checkTxAccepted.rawValue]
+        )
+        return try rows.map(makeRecord)
     }
 
     private func row(for transactionID: TransactionID, db: Database) throws -> Row? {
