@@ -55,6 +55,27 @@ final class KitCompositionTests: XCTestCase {
         XCTAssertEqual(firstRuntimeID, secondRuntimeID)
     }
 
+    func testDatabaseAliasesConvergeOnOnePhysicalIdentity() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("thorchain-s2-04-alias-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let original = directory.appendingPathComponent("database.sqlite")
+        let hardLink = directory.appendingPathComponent("database-hard.sqlite")
+        let symlink = directory.appendingPathComponent("database-link.sqlite")
+        XCTAssertTrue(FileManager.default.createFile(atPath: original.path, contents: nil))
+        try FileManager.default.linkItem(at: original, to: hardLink)
+        try FileManager.default.createSymbolicLink(at: symlink, withDestinationURL: original)
+
+        let first = try DatabaseRuntime.open(path: original.path)
+        let second = try DatabaseRuntime.open(path: hardLink.path)
+        let third = try DatabaseRuntime.open(path: symlink.path)
+
+        XCTAssertTrue(first === second)
+        XCTAssertTrue(second === third)
+        XCTAssertEqual(first.location.identity, second.location.identity)
+    }
+
     func testInitializationFailureRemovesOnlyMatchingEntry() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("thorchain-s2-04-(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

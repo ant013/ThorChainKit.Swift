@@ -131,8 +131,25 @@ actor SendRuntime {
         return sharedState.beginAccount(sender)
     }
 
+    func acquireAccountAttempt(_ sender: String, ownerToken: Data) -> OperationHold? {
+        guard admissionState.isActive() else { return nil }
+        let hold = OperationHold(
+            id: UUID(),
+            accountGate: AccountGate(
+                persistenceNamespace: sharedState.persistenceNamespace,
+                sender: sender
+            )
+        )
+        guard sharedState.beginAccount(sender, hold: hold, ownerToken: ownerToken) else { return nil }
+        return hold
+    }
+
     func endAccountAttempt(_ sender: String) {
         sharedState.endAccount(sender)
+    }
+
+    func releaseOperationHold(_ hold: OperationHold, ownerToken: Data) -> Bool {
+        sharedState.releaseAccount(hold, ownerToken: ownerToken)
     }
 
     func beginSignerFence(_ sender: String) -> Bool {

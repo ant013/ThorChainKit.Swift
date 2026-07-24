@@ -20,14 +20,30 @@ actor SendCoordinator {
 
     func execute(quote: SendQuote, signer: any Signer) async -> SendCoordinatorResult {
         let sender = quote.internalAuthorityRecord.snapshot.sender
+        guard !Task.isCancelled else { return .failure(.signerCancelled) }
         guard await runtime.isAdmissionActive() else { return .failure(.kitNotStarted) }
-        guard await runtime.beginAccountAttempt(sender) else { return .failure(.sendInProgress) }
 
         let ownerToken = Self.makeOwnerToken()
-        let operationHold = OperationHold(id: UUID())
+        guard let operationHold = await runtime.acquireAccountAttempt(sender, ownerToken: ownerToken) else {
+            return .failure(.sendInProgress)
+        }
+        guard !Task.isCancelled else {
+            return await finalize(
+                result: .failure(.signerCancelled),
+                runtime: runtime,
+                sender: sender,
+                sequence: quote.internalAuthorityRecord.snapshot.sequence,
+                ownerToken: ownerToken,
+                operationHold: operationHold,
+                reservationAcquired: false,
+                signerFenceAcquired: false
+            )
+        }
+
         var reservationAcquired = false
         var ownershipTransferred = false
         var signerFenceAcquired = false
+        var retainSignerFence = false
         let result: SendCoordinatorResult
 
         do {
@@ -51,9 +67,23 @@ actor SendCoordinator {
             let (request, payload) = try SigningRequestFactory().make(snapshot: h1, prepared: prepared, publicKey: publicKey)
             guard await runtime.beginSignerFence(sender) else { throw SendError.sendInProgress }
             signerFenceAcquired = true
-            let signature = try await signer.sign(request)
-            await runtime.endSignerFence(sender)
-            signerFenceAcquired = false
+            let signerResult = await runSigner(
+                signer,
+                request: request,
+                sender: sender,
+                expiresAt: quote.expiresAt
+            )
+            if signerResult.signerFinished {
+                await runtime.endSignerFence(sender)
+                signerFenceAcquired = false
+            } else {
+                retainSignerFence = true
+            }
+            let signature: Data
+            switch signerResult.outcome {
+            case let .success(value): signature = value
+            case let .failure(error): throw error
+            }
 
             let h2: SendSnapshot
             if let preflight, let context = quote.preflightContext {
@@ -77,6 +107,7 @@ actor SendCoordinator {
             ownershipTransferred = true
             result = .handoff(SendAttemptHandoff(
                 transaction: transaction,
+                accountGate: operationHold.accountGate,
                 persistenceNamespace: persistenceNamespace,
                 sequence: h1.sequence,
                 reservationOwnerToken: ownerToken,
@@ -85,39 +116,92 @@ actor SendCoordinator {
             ))
         } catch is CancellationError {
             result = .failure(.signerCancelled)
+        } catch let error as SignerRaceFailure {
+            switch error {
+            case .signerCancelled: result = .failure(.signerCancelled)
+            case .quoteExpired: result = .failure(.quoteExpired)
+            case .signerFailed: result = .failure(.signerFailed)
+            }
         } catch let error as SendError {
             result = .failure(error)
         } catch {
             result = .failure(.signerFailed)
         }
 
-        if signerFenceAcquired { await runtime.endSignerFence(sender) }
+        return await finalize(
+            result: result,
+            runtime: runtime,
+            sender: sender,
+            sequence: quote.internalAuthorityRecord.snapshot.sequence,
+            ownerToken: ownerToken,
+            operationHold: operationHold,
+            reservationAcquired: reservationAcquired,
+            signerFenceAcquired: signerFenceAcquired,
+            retainSignerFence: retainSignerFence,
+            ownershipTransferred: ownershipTransferred
+        )
+    }
+
+    private func runSigner(
+        _ signer: any Signer,
+        request: SigningRequest,
+        sender: String,
+        expiresAt: Date
+    ) async -> SignerRaceResult {
+        let operation = SignerOperation(signer: signer, request: request, runtime: runtime, sender: sender)
+        operation.start()
+        let expiryTask = Task { [operation] in
+            let remaining = max(0, expiresAt.timeIntervalSinceNow)
+            do {
+                try await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
+                operation.cancel(.quoteExpired)
+            } catch {}
+        }
+        defer { expiryTask.cancel() }
+        return await withTaskCancellationHandler(operation: {
+            await operation.wait()
+        }, onCancel: {
+            operation.cancel(.signerCancelled)
+        })
+    }
+
+    private func finalize(
+        result: SendCoordinatorResult,
+        runtime: SendRuntime,
+        sender: String,
+        sequence: UInt64,
+        ownerToken: Data,
+        operationHold: OperationHold,
+        reservationAcquired: Bool,
+        signerFenceAcquired: Bool,
+        retainSignerFence: Bool = false,
+        ownershipTransferred: Bool = false
+    ) async -> SendCoordinatorResult {
+        if signerFenceAcquired && !retainSignerFence { await runtime.endSignerFence(sender) }
         guard !ownershipTransferred else { return result }
         if reservationAcquired {
             do {
-                guard try await runtime.releaseReservation(
-                    sender: sender,
-                    sequence: quote.internalAuthorityRecord.snapshot.sequence,
-                    ownerToken: ownerToken
-                ) else {
-                    return .repairPending(RepairIntent(
-                        persistenceNamespace: persistenceNamespace,
-                        sequence: quote.internalAuthorityRecord.snapshot.sequence,
-                        reservationOwnerToken: ownerToken,
-                        operationHold: operationHold
-                    ))
+                guard try await runtime.releaseReservation(sender: sender, sequence: sequence, ownerToken: ownerToken) else {
+                    return repairIntent(operationHold: operationHold, sequence: sequence, ownerToken: ownerToken)
                 }
             } catch {
-                return .repairPending(RepairIntent(
-                    persistenceNamespace: persistenceNamespace,
-                    sequence: quote.internalAuthorityRecord.snapshot.sequence,
-                    reservationOwnerToken: ownerToken,
-                    operationHold: operationHold
-                ))
+                return repairIntent(operationHold: operationHold, sequence: sequence, ownerToken: ownerToken)
             }
         }
-        await runtime.endAccountAttempt(sender)
+        guard await runtime.releaseOperationHold(operationHold, ownerToken: ownerToken) else {
+            return repairIntent(operationHold: operationHold, sequence: sequence, ownerToken: ownerToken)
+        }
         return result
+    }
+
+    private func repairIntent(operationHold: OperationHold, sequence: UInt64, ownerToken: Data) -> SendCoordinatorResult {
+        .repairPending(RepairIntent(
+            accountGate: operationHold.accountGate,
+            persistenceNamespace: persistenceNamespace,
+            sequence: sequence,
+            reservationOwnerToken: ownerToken,
+            operationHold: operationHold
+        ))
     }
 
     private func bind(publicKey: Data, snapshot: SendSnapshot) throws {
@@ -136,5 +220,103 @@ actor SendCoordinator {
     private static func makeOwnerToken() -> Data {
         var value = UUID().uuid
         return withUnsafeBytes(of: &value) { Data($0) }
+    }
+}
+
+private enum SignerRaceFailure: Error, Sendable {
+    case signerCancelled
+    case quoteExpired
+    case signerFailed
+}
+
+private enum SignerRaceOutcome: Sendable {
+    case success(Data)
+    case failure(SignerRaceFailure)
+}
+
+private struct SignerRaceResult: Sendable {
+    let outcome: SignerRaceOutcome
+    let signerFinished: Bool
+}
+
+private final class SignerOperation: @unchecked Sendable {
+    private let signer: any Signer
+    private let request: SigningRequest
+    private let runtime: SendRuntime
+    private let sender: String
+    private let lock = NSLock()
+    private var task: Task<Void, Never>?
+    private var result: SignerRaceResult?
+    private var waiter: CheckedContinuation<SignerRaceResult, Never>?
+
+    init(signer: any Signer, request: SigningRequest, runtime: SendRuntime, sender: String) {
+        self.signer = signer
+        self.request = request
+        self.runtime = runtime
+        self.sender = sender
+    }
+
+    func start() {
+        let task = Task { [self] in
+            do {
+                complete(.success(try await signer.sign(request)))
+            } catch is CancellationError {
+                complete(.failure(.signerCancelled))
+            } catch {
+                complete(.failure(.signerFailed))
+            }
+            await runtime.endSignerFence(sender)
+        }
+        lock.lock()
+        self.task = task
+        let shouldCancel = result != nil
+        lock.unlock()
+        if shouldCancel { task.cancel() }
+    }
+
+    func wait() async -> SignerRaceResult {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            if let result {
+                lock.unlock()
+                continuation.resume(returning: result)
+            } else {
+                waiter = continuation
+                lock.unlock()
+            }
+        }
+    }
+
+    func cancel(_ failure: SignerRaceFailure) {
+        lock.lock()
+        let task = self.task
+        let waiter: CheckedContinuation<SignerRaceResult, Never>?
+        if result == nil {
+            result = SignerRaceResult(outcome: .failure(failure), signerFinished: false)
+            waiter = self.waiter
+            self.waiter = nil
+        } else {
+            waiter = nil
+        }
+        let result = self.result
+        lock.unlock()
+        task?.cancel()
+        waiter?.resume(returning: result!)
+    }
+
+    private func complete(_ outcome: SignerRaceOutcome) {
+        lock.lock()
+        let waiter: CheckedContinuation<SignerRaceResult, Never>?
+        if result == nil {
+            result = SignerRaceResult(outcome: outcome, signerFinished: true)
+            waiter = self.waiter
+            self.waiter = nil
+        } else {
+            result = SignerRaceResult(outcome: result!.outcome, signerFinished: true)
+            waiter = nil
+        }
+        let result = self.result!
+        lock.unlock()
+        waiter?.resume(returning: result)
     }
 }

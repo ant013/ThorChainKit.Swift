@@ -24,7 +24,7 @@ final class SendRuntimeSharedState: @unchecked Sendable {
     let runtimeIdentifier: String
     private let lock = NSLock()
     private var activeClients = Set<UUID>()
-    private var activeAccounts = Set<String>()
+    private var activeAccounts = [String: AccountAttemptState]()
     private var signerFences = Set<String>()
 
     init(persistenceNamespace: String, runtimeIdentifier: String) {
@@ -51,17 +51,38 @@ final class SendRuntimeSharedState: @unchecked Sendable {
     }
 
     func beginAccount(_ key: String) -> Bool {
+        beginAccount(
+            key,
+            hold: OperationHold(
+                id: UUID(),
+                accountGate: AccountGate(persistenceNamespace: persistenceNamespace, sender: key)
+            ),
+            ownerToken: Data()
+        )
+    }
+
+    func beginAccount(_ key: String, hold: OperationHold, ownerToken: Data) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        guard !activeAccounts.contains(key), !signerFences.contains(key) else { return false }
-        activeAccounts.insert(key)
+        guard activeAccounts[key] == nil, !signerFences.contains(key) else { return false }
+        activeAccounts[key] = AccountAttemptState(hold: hold, ownerToken: ownerToken)
         return true
     }
 
     func endAccount(_ key: String) {
         lock.lock()
-        activeAccounts.remove(key)
+        activeAccounts.removeValue(forKey: key)
         lock.unlock()
+    }
+
+    func releaseAccount(_ hold: OperationHold, ownerToken: Data) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let state = activeAccounts[hold.accountGate.sender],
+              state.hold == hold,
+              state.ownerToken == ownerToken else { return false }
+        activeAccounts.removeValue(forKey: hold.accountGate.sender)
+        return true
     }
 
     func beginSignerFence(_ key: String) -> Bool {
@@ -77,4 +98,9 @@ final class SendRuntimeSharedState: @unchecked Sendable {
         signerFences.remove(key)
         lock.unlock()
     }
+}
+
+private struct AccountAttemptState: Sendable {
+    let hold: OperationHold
+    let ownerToken: Data
 }

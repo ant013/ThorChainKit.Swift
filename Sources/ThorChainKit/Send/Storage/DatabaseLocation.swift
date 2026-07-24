@@ -1,12 +1,34 @@
+import Darwin
 import Foundation
 
 struct DatabaseFileIdentity: Hashable, Sendable {
-    let rawValue: String
+    let device: UInt64
+    let inode: UInt64
+
+    var rawValue: String { "\(device):\(inode)" }
+}
+
+private final class DatabaseFileDescriptor: @unchecked Sendable {
+    let rawValue: Int32
+
+    init(rawValue: Int32) { self.rawValue = rawValue }
+
+    deinit { Darwin.close(rawValue) }
 }
 
 struct DatabaseLocation: Hashable, Sendable {
     let url: URL
     let identity: DatabaseFileIdentity
+    private let descriptor: DatabaseFileDescriptor
+
+    static func == (lhs: DatabaseLocation, rhs: DatabaseLocation) -> Bool {
+        lhs.url == rhs.url && lhs.identity == rhs.identity
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(url)
+        hasher.combine(identity)
+    }
 
     static func resolve(path: String) throws -> DatabaseLocation {
         let requestedURL = URL(fileURLWithPath: path).standardizedFileURL
@@ -24,10 +46,26 @@ struct DatabaseLocation: Hashable, Sendable {
                 throw DatabaseLocationError.unavailable
             }
         }
+        let descriptor = Darwin.open(fileURL.path, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else { throw DatabaseLocationError.unavailable }
+        let handle = DatabaseFileDescriptor(rawValue: descriptor)
+        var fileStat = stat()
+        guard fstat(handle.rawValue, &fileStat) == 0 else { throw DatabaseLocationError.unavailable }
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
-        let resource = try fileURL.resourceValues(forKeys: [.fileResourceIdentifierKey])
-        let identity = resource.fileResourceIdentifier.map { String(describing: $0) } ?? fileURL.path
-        return DatabaseLocation(url: fileURL, identity: DatabaseFileIdentity(rawValue: identity))
+        return DatabaseLocation(
+            url: fileURL.resolvingSymlinksInPath(),
+            identity: DatabaseFileIdentity(device: UInt64(fileStat.st_dev), inode: UInt64(fileStat.st_ino)),
+            descriptor: handle
+        )
+    }
+
+    func stillResolvesToSameIdentity() -> Bool {
+        let descriptor = Darwin.open(url.path, O_RDONLY)
+        guard descriptor >= 0 else { return false }
+        defer { Darwin.close(descriptor) }
+        var fileStat = stat()
+        guard fstat(descriptor, &fileStat) == 0 else { return false }
+        return DatabaseFileIdentity(device: UInt64(fileStat.st_dev), inode: UInt64(fileStat.st_ino)) == identity
     }
 }
 

@@ -7,6 +7,7 @@ enum SendCoordinatorResult: Sendable {
 }
 
 struct RepairIntent: Sendable, Equatable {
+    let accountGate: AccountGate
     let persistenceNamespace: String
     let sequence: UInt64
     let reservationOwnerToken: Data
