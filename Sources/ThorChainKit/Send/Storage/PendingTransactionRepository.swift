@@ -2,19 +2,46 @@ import Combine
 import Foundation
 import GRDB
 
+typealias PendingObservationStarter = (
+    ([SendJournalRecord]) -> Void,
+    () -> Void,
+    DispatchQueue
+) -> AnyCancellable
+
 final class PendingTransactionRepository: @unchecked Sendable {
     private let journal: SendJournal
     private let network: Network
+    private let publicationBarrier: PendingPublicationBarrier?
+    private let observationStarter: PendingObservationStarter
     private let stateQueue = DispatchQueue(label: "ThorChainKit.Send.Pending")
     private let subject = CurrentValueSubject<[PendingTransaction], Never>([])
     private let statusSubject = CurrentValueSubject<PendingTransactionsStatus, Never>(.degraded)
     private var lastSnapshot = [PendingTransaction]()
-    private var observation: AnyDatabaseCancellable?
+    private var lastRecords = [SendJournalRecord]()
+    private var observation: AnyCancellable?
     private var observationGeneration = 0
 
-    init(journal: SendJournal, network: Network = .mainnet) {
+    init(
+        journal: SendJournal,
+        network: Network = .mainnet,
+        publicationBarrier: PendingPublicationBarrier? = nil,
+        observationStarter: PendingObservationStarter? = nil
+    ) {
         self.journal = journal
         self.network = network
+        self.publicationBarrier = publicationBarrier
+        self.observationStarter = observationStarter ?? { onChange, onError, queue in
+            let observation = ValueObservation.tracking { [journal] db in
+                try journal.pendingRecords(in: db)
+            }
+            let cancellable = observation.start(
+                in: journal.databaseWriter,
+                scheduling: .async(onQueue: queue),
+                onError: { _ in onError() },
+                onChange: onChange
+            )
+            return AnyCancellable { cancellable.cancel() }
+        }
         installObservation()
     }
 
@@ -44,28 +71,39 @@ final class PendingTransactionRepository: @unchecked Sendable {
         observationGeneration += 1
         let generation = observationGeneration
         observation?.cancel()
-        let observation = ValueObservation.tracking { [journal] db in
-            try journal.pendingRecords(in: db)
-        }
-        self.observation = observation.start(
-            in: journal.databaseWriter,
-            scheduling: .async(onQueue: stateQueue),
-            onError: { [weak self] _ in
+        let cancellable = observationStarter(
+            { [weak self] records in
                 self?.stateQueue.async {
                     guard let self, self.observationGeneration == generation else { return }
-                    self.observation = nil
-                    self.statusSubject.send(.degraded)
-                }
-            },
-            onChange: { [weak self] records in
-                self?.stateQueue.async {
-                    guard let self, self.observationGeneration == generation else { return }
+                    self.lastRecords = records
+                    records.filter { $0.state == .broadcasting }.forEach {
+                        self.publicationBarrier?.acknowledge(
+                            transactionID: $0.transactionID,
+                            generation: $0.broadcastGeneration
+                        )
+                    }
                     self.lastSnapshot = records.compactMap { Self.project($0, network: self.network) }
                     self.subject.send(self.lastSnapshot)
                     self.statusSubject.send(.ready)
                 }
+            },
+            { [weak self] in
+                self?.stateQueue.async {
+                    guard let self, self.observationGeneration == generation else { return }
+                    self.observation = nil
+                    self.lastRecords.filter { $0.state == .broadcasting }.forEach {
+                        self.publicationBarrier?.fail(
+                            transactionID: $0.transactionID,
+                            generation: $0.broadcastGeneration
+                        )
+                    }
+                    self.publicationBarrier?.failAll()
+                    self.statusSubject.send(.degraded)
+                    self.installObservation()
+                }
             }
         )
+        self.observation = cancellable
     }
 
     private static func project(_ record: SendJournalRecord, network: Network) -> PendingTransaction? {
@@ -103,7 +141,7 @@ final class PendingPublicationBarrier: @unchecked Sendable {
     private var waiters = [String: [CheckedContinuation<Bool, Never>]]()
     private var failedPublications = Set<String>()
 
-    func publish(transactionID: TransactionID, generation: UInt64) {
+    func acknowledge(transactionID: TransactionID, generation: UInt64) {
         let key = key(transactionID, generation)
         let waiting: [CheckedContinuation<Bool, Never>]
         lock.lock()
@@ -119,6 +157,10 @@ final class PendingPublicationBarrier: @unchecked Sendable {
         waiting.forEach { $0.resume(returning: true) }
     }
 
+    func publish(transactionID: TransactionID, generation: UInt64) {
+        acknowledge(transactionID: transactionID, generation: generation)
+    }
+
     func fail(transactionID: TransactionID, generation: UInt64) {
         let key = key(transactionID, generation)
         let waiting: [CheckedContinuation<Bool, Never>]
@@ -129,9 +171,20 @@ final class PendingPublicationBarrier: @unchecked Sendable {
         waiting.forEach { $0.resume(returning: false) }
     }
 
-    func acknowledge(transactionID: TransactionID, generation: UInt64) -> Bool {
+    func isAcknowledged(transactionID: TransactionID, generation: UInt64) -> Bool {
         lock.lock(); defer { lock.unlock() }
         return acknowledgements.contains(key(transactionID, generation))
+    }
+
+    func failAll() {
+        let waiting: [CheckedContinuation<Bool, Never>]
+        lock.lock()
+        let keys = waiters.keys
+        failedPublications.formUnion(keys)
+        waiting = waiters.values.flatMap { $0 }
+        waiters.removeAll()
+        lock.unlock()
+        waiting.forEach { $0.resume(returning: false) }
     }
 
     func wait(transactionID: TransactionID, generation: UInt64) async -> Bool {

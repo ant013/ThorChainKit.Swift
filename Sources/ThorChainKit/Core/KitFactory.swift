@@ -42,15 +42,18 @@ public extension Kit {
             storage: storage,
             publishing: publishing
         )
+        let publicationBarrier = PendingPublicationBarrier()
         let pendingRepository = PendingTransactionRepository(
             journal: SendJournal(writer: databaseRuntime.pool, persistenceNamespace: namespace),
-            network: address.network
+            network: address.network,
+            publicationBarrier: publicationBarrier
         )
         let sendRuntime = SendRuntime(
             address: address,
             persistenceNamespace: namespace,
             runtimeIdentifier: databaseRuntime.location.identity.rawValue,
             databaseWriter: databaseRuntime.pool,
+            publicationBarrier: publicationBarrier,
             pendingRepository: pendingRepository
         )
         let syncer = AccountSyncer(
@@ -130,15 +133,18 @@ public extension Kit {
             storage: storage,
             publishing: publishing
         )
+        let publicationBarrier = PendingPublicationBarrier()
         let pendingRepository = PendingTransactionRepository(
             journal: SendJournal(writer: databaseRuntime.pool, persistenceNamespace: namespace),
-            network: address.network
+            network: address.network,
+            publicationBarrier: publicationBarrier
         )
         let sendRuntime = SendRuntime(
             address: address,
             persistenceNamespace: namespace,
             runtimeIdentifier: databaseRuntime.location.identity.rawValue,
             databaseWriter: databaseRuntime.pool,
+            publicationBarrier: publicationBarrier,
             pendingRepository: pendingRepository
         )
         let syncer = AccountSyncer(

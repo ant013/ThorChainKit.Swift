@@ -17,6 +17,10 @@ final class BroadcastRetryTests: XCTestCase {
                 return BroadcastResponse(txHash: transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil)
             },
             lookupOperation: { _ in .notFound },
+            retryFamilySelection: { _ in },
+            retryEndpointLeaseOperation: { _ in },
+            retryPolicyOperation: {},
+            retryAccountOperation: { RetryAccountSnapshot(sequence: 4, nativeFee: Data([1])) },
             retryObservability: SendRetryObservability { events.append($0) }
         )
         await runtime.activate(generation: 1)
@@ -27,7 +31,7 @@ final class BroadcastRetryTests: XCTestCase {
             return XCTFail("matching CheckTx response must terminalize as accepted")
         }
         XCTAssertEqual(capture.raws, [fixture.raw])
-        XCTAssertEqual(events.values, [.operationHoldAcquired, .journalRead, .retryCAS, .publicationWait, .lookup, .broadcast, .operationHoldReleased])
+        XCTAssertEqual(events.values, [.operationHoldAcquired, .journalRead, .retryCAS, .publicationWait, .familySelection, .endpointLease, .lookup, .policyRead, .accountRead, .broadcast, .transport, .operationHoldReleased])
     }
 
     func testSequenceAdvancedBlocksBeforeAnyIOAndSurvivesRestart() async throws {
@@ -50,12 +54,17 @@ final class BroadcastRetryTests: XCTestCase {
             databaseWriter: fixture.database.pool,
             broadcastOperation: { transaction in
                 firstCapture.append(transaction.txRaw)
+                firstCapture.transportCall()
                 return BroadcastResponse(txHash: transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil)
             },
             lookupOperation: { _ in
                 firstCapture.lookupCalls += 1
                 return .notFound
             },
+            retryFamilySelection: { _ in firstCapture.familySelection() },
+            retryEndpointLeaseOperation: { _ in firstCapture.endpointLease() },
+            retryPolicyOperation: { firstCapture.policyRead() },
+            retryAccountOperation: { firstCapture.accountRead(); return RetryAccountSnapshot(sequence: 4, nativeFee: Data([1])) },
             retryObservability: SendRetryObservability { firstEvents.append($0) }
         )
         await firstRuntime.activate(generation: 1)
@@ -67,6 +76,11 @@ final class BroadcastRetryTests: XCTestCase {
         }
         XCTAssertEqual(firstCapture.lookupCalls, 0)
         XCTAssertEqual(firstCapture.raws, [])
+        XCTAssertEqual(firstCapture.familySelections, 0)
+        XCTAssertEqual(firstCapture.endpointLeases, 0)
+        XCTAssertEqual(firstCapture.policyReads, 0)
+        XCTAssertEqual(firstCapture.accountReads, 0)
+        XCTAssertEqual(firstCapture.transportCalls, 0)
         XCTAssertEqual(firstEvents.values, [.operationHoldAcquired, .journalRead, .operationHoldReleased])
 
         let secondCapture = RetryCapture()
@@ -78,12 +92,17 @@ final class BroadcastRetryTests: XCTestCase {
             databaseWriter: fixture.database.pool,
             broadcastOperation: { transaction in
                 secondCapture.append(transaction.txRaw)
+                secondCapture.transportCall()
                 return BroadcastResponse(txHash: transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil)
             },
             lookupOperation: { _ in
                 secondCapture.lookupCalls += 1
                 return .notFound
             },
+            retryFamilySelection: { _ in secondCapture.familySelection() },
+            retryEndpointLeaseOperation: { _ in secondCapture.endpointLease() },
+            retryPolicyOperation: { secondCapture.policyRead() },
+            retryAccountOperation: { secondCapture.accountRead(); return RetryAccountSnapshot(sequence: 4, nativeFee: Data([1])) },
             retryObservability: SendRetryObservability { secondEvents.append($0) }
         )
         await secondRuntime.activate(generation: 1)
@@ -95,8 +114,47 @@ final class BroadcastRetryTests: XCTestCase {
         }
         XCTAssertEqual(secondCapture.lookupCalls, 0)
         XCTAssertEqual(secondCapture.raws, [])
+        XCTAssertEqual(secondCapture.familySelections, 0)
+        XCTAssertEqual(secondCapture.endpointLeases, 0)
+        XCTAssertEqual(secondCapture.policyReads, 0)
+        XCTAssertEqual(secondCapture.accountReads, 0)
+        XCTAssertEqual(secondCapture.transportCalls, 0)
         XCTAssertEqual(secondEvents.values, [.operationHoldAcquired, .journalRead, .operationHoldReleased])
         XCTAssertEqual(try fixture.journal.record(for: fixture.transaction.transactionID)?.retryBlockedReason, .sequenceAdvanced)
+    }
+
+    func testSequenceAdvancedMutationIsObservedAfterAccountRead() async throws {
+        let fixture = try makeUnknownRecord(namespace: "retry-sequence-mutation-\(UUID().uuidString)")
+        let capture = RetryCapture()
+        let events = RetryEvents()
+        let runtime = SendRuntime(
+            address: fixture.sender,
+            persistenceNamespace: fixture.namespace,
+            runtimeIdentifier: fixture.namespace,
+            databaseWriter: fixture.database.pool,
+            broadcastOperation: { transaction in
+                capture.append(transaction.txRaw)
+                capture.transportCall()
+                return BroadcastResponse(txHash: transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil)
+            },
+            lookupOperation: { _ in .notFound },
+            retryFamilySelection: { _ in capture.familySelection() },
+            retryEndpointLeaseOperation: { _ in capture.endpointLease() },
+            retryPolicyOperation: { capture.policyRead() },
+            retryAccountOperation: { capture.accountRead(); return RetryAccountSnapshot(sequence: 5, nativeFee: Data([1])) },
+            retryObservability: SendRetryObservability { events.append($0) }
+        )
+        await runtime.activate(generation: 1)
+
+        do {
+            _ = try await runtime.retryBroadcast(transactionId: fixture.transaction.transactionID, acceptingNativeFee: Data([1]))
+            XCTFail("sequence advancement must block rebroadcast")
+        } catch let error as SendError {
+            XCTAssertEqual(error, .retryBlocked(.sequenceAdvanced))
+        }
+        XCTAssertEqual(capture.raws, [])
+        XCTAssertEqual(capture.transportCalls, 0)
+        XCTAssertEqual(events.values, [.operationHoldAcquired, .journalRead, .retryCAS, .publicationWait, .familySelection, .endpointLease, .lookup, .policyRead, .accountRead, .sequenceAdvancedMutation, .operationHoldReleased])
     }
 
     func testUnapprovedProductionFamilyIsUnavailableWithoutIO() async throws {
@@ -234,6 +292,11 @@ private final class RetryCapture: @unchecked Sendable {
     private let lock = NSLock()
     private var storedRaws = [Data]()
     private var storedLookupCalls = 0
+    private var storedFamilySelections = 0
+    private var storedEndpointLeases = 0
+    private var storedPolicyReads = 0
+    private var storedAccountReads = 0
+    private var storedTransportCalls = 0
 
     var raws: [Data] {
         lock.lock(); defer { lock.unlock() }
@@ -250,8 +313,29 @@ private final class RetryCapture: @unchecked Sendable {
         }
     }
 
+    var familySelections: Int { count { storedFamilySelections } }
+    var endpointLeases: Int { count { storedEndpointLeases } }
+    var policyReads: Int { count { storedPolicyReads } }
+    var accountReads: Int { count { storedAccountReads } }
+    var transportCalls: Int { count { storedTransportCalls } }
+
+    func familySelection() { increment { storedFamilySelections += 1 } }
+    func endpointLease() { increment { storedEndpointLeases += 1 } }
+    func policyRead() { increment { storedPolicyReads += 1 } }
+    func accountRead() { increment { storedAccountReads += 1 } }
+    func transportCall() { increment { storedTransportCalls += 1 } }
+
     func append(_ raw: Data) {
         lock.lock(); storedRaws.append(raw); lock.unlock()
+    }
+
+    private func count(_ read: () -> Int) -> Int {
+        lock.lock(); defer { lock.unlock() }
+        return read()
+    }
+
+    private func increment(_ update: () -> Void) {
+        lock.lock(); update(); lock.unlock()
     }
 }
 

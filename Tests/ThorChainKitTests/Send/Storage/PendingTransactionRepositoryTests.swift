@@ -68,6 +68,60 @@ final class PendingTransactionRepositoryTests: XCTestCase {
         wait(for: [expectation], timeout: 2)
     }
 
+    func testObservationAcknowledgesBroadcastingGeneration() async throws {
+        let fixture = try makeJournal()
+        let barrier = PendingPublicationBarrier()
+        let repository = PendingTransactionRepository(journal: fixture.journal, publicationBarrier: barrier)
+        XCTAssertTrue(try fixture.journal.transition(
+            transactionID: fixture.transaction.transactionID,
+            from: .unknown,
+            expectedGeneration: 0,
+            to: .broadcasting,
+            generation: 7
+        ))
+
+        XCTAssertTrue(await barrier.wait(transactionID: fixture.transaction.transactionID, generation: 7))
+        XCTAssertTrue(barrier.isAcknowledged(transactionID: fixture.transaction.transactionID, generation: 7))
+        _ = repository
+    }
+
+    func testObservationErrorRejectsStaleCallbackAndInstallsReplacement() throws {
+        let fixture = try makeJournal()
+        let source = TestObservationSource()
+        let ready = expectation(description: "initial observation")
+        let degraded = expectation(description: "observation degraded")
+        let recovered = expectation(description: "replacement observation")
+        var readyCount = 0
+        let repository = PendingTransactionRepository(
+            journal: fixture.journal,
+            observationStarter: source.start
+        )
+        var cancellable: AnyCancellable?
+        cancellable = repository.statusPublisher.sink { status in
+            switch status {
+            case .ready:
+                readyCount += 1
+                if readyCount == 1 { ready.fulfill() }
+                if readyCount == 2 { recovered.fulfill() }
+            case .degraded where readyCount == 1:
+                degraded.fulfill()
+            default:
+                break
+            }
+        }
+        source.emitChange([try XCTUnwrap(fixture.journal.record(for: fixture.transaction.transactionID))])
+        wait(for: [ready], timeout: 1)
+        source.emitError()
+        wait(for: [degraded], timeout: 1)
+        XCTAssertEqual(repository.status, .degraded)
+        source.emitChange([try XCTUnwrap(fixture.journal.record(for: fixture.transaction.transactionID))], callback: 0)
+        XCTAssertEqual(repository.status, .degraded)
+        source.emitChange([try XCTUnwrap(fixture.journal.record(for: fixture.transaction.transactionID))], callback: 1)
+        wait(for: [recovered], timeout: 1)
+        XCTAssertEqual(repository.status, .ready)
+        cancellable?.cancel()
+    }
+
     private func makeJournal() throws -> RepositoryFixture {
         let path = FileManager.default.temporaryDirectory.appendingPathComponent("pending-\(UUID().uuidString).sqlite")
         let database = try DatabaseRuntime.open(path: path.path)
@@ -113,4 +167,24 @@ private struct RepositoryFixture {
     let database: DatabaseRuntime
     let journal: SendJournal
     let transaction: SignedTransaction
+}
+
+private final class TestObservationSource {
+    private var callbacks: [(([SendJournalRecord]) -> Void, () -> Void)] = []
+
+    var start: PendingObservationStarter {
+        { [weak self] onChange, onError, _ in
+            self?.callbacks.append((onChange, onError))
+            return AnyCancellable {}
+        }
+    }
+
+    func emitChange(_ records: [SendJournalRecord], callback: Int? = nil) {
+        let index = callback ?? (callbacks.count - 1)
+        callbacks[index].0(records)
+    }
+
+    func emitError() {
+        callbacks[callbacks.count - 1].1()
+    }
 }

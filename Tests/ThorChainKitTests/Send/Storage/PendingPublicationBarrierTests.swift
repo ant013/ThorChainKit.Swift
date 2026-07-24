@@ -5,7 +5,7 @@ final class PendingPublicationBarrierTests: XCTestCase {
     func testEveryGenerationIsPublishedBeforeTransport() async throws {
         let transactionID = try XCTUnwrap(TransactionID(hash: String(repeating: "A", count: 64)))
         let barrier = PendingPublicationBarrier()
-        XCTAssertFalse(barrier.acknowledge(transactionID: transactionID, generation: 1))
+        XCTAssertFalse(barrier.isAcknowledged(transactionID: transactionID, generation: 1))
 
         var events = [String]()
         events.append("journal")
@@ -22,10 +22,10 @@ final class PendingPublicationBarrierTests: XCTestCase {
         let barrier = PendingPublicationBarrier()
         barrier.publish(transactionID: transactionID, generation: 1)
         barrier.reset()
-        XCTAssertFalse(barrier.acknowledge(transactionID: transactionID, generation: 1))
+        XCTAssertFalse(barrier.isAcknowledged(transactionID: transactionID, generation: 1))
         barrier.publish(transactionID: transactionID, generation: 2)
-        XCTAssertTrue(barrier.acknowledge(transactionID: transactionID, generation: 2))
-        XCTAssertFalse(barrier.acknowledge(transactionID: transactionID, generation: 1))
+        XCTAssertTrue(barrier.isAcknowledged(transactionID: transactionID, generation: 2))
+        XCTAssertFalse(barrier.isAcknowledged(transactionID: transactionID, generation: 1))
     }
 
     func testFailedPublicationAcknowledgementDoesNotPermitTransport() async throws {
@@ -35,6 +35,6 @@ final class PendingPublicationBarrierTests: XCTestCase {
 
         barrier.publish(transactionID: transactionID, generation: 1)
         XCTAssertFalse(await barrier.wait(transactionID: transactionID, generation: 1))
-        XCTAssertFalse(barrier.acknowledge(transactionID: transactionID, generation: 1))
+        XCTAssertFalse(barrier.isAcknowledged(transactionID: transactionID, generation: 1))
     }
 }

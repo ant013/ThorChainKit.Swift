@@ -37,8 +37,14 @@ enum SendRetryEvent: Sendable, Equatable {
     case journalRead
     case retryCAS
     case publicationWait
+    case familySelection
+    case endpointLease
     case lookup
+    case policyRead
+    case accountRead
     case broadcast
+    case transport
+    case sequenceAdvancedMutation
     case operationHoldReleased
 }
 
@@ -62,6 +68,9 @@ actor SendRuntime {
     private let broadcastOperation: (@Sendable (SignedTransaction) async throws -> BroadcastResponse)?
     private let lookupOperation: (@Sendable (TransactionID) async -> RetryLookupResponse)?
     private let retryAccountOperation: (@Sendable () async throws -> RetryAccountSnapshot)?
+    private let retryFamilySelection: (@Sendable (String) async throws -> Void)?
+    private let retryEndpointLeaseOperation: (@Sendable (String) async throws -> Void)?
+    private let retryPolicyOperation: (@Sendable () async throws -> Void)?
     private let retryObservability: SendRetryObservability
     private let network: Network?
     fileprivate nonisolated let admissionState = SendRuntimeAdmissionState()
@@ -80,6 +89,9 @@ actor SendRuntime {
         publicationBarrier: PendingPublicationBarrier = PendingPublicationBarrier(),
         lookupOperation: (@Sendable (TransactionID) async -> RetryLookupResponse)? = nil,
         retryAccountOperation: (@Sendable () async throws -> RetryAccountSnapshot)? = nil,
+        retryFamilySelection: (@Sendable (String) async throws -> Void)? = nil,
+        retryEndpointLeaseOperation: (@Sendable (String) async throws -> Void)? = nil,
+        retryPolicyOperation: (@Sendable () async throws -> Void)? = nil,
         retryObservability: SendRetryObservability = SendRetryObservability()
     ) {
         self.address = address
@@ -88,11 +100,20 @@ actor SendRuntime {
         quoteStore = QuoteStore(clientID: clientID)
         sequenceReservations = reservationStore ?? databaseWriter.map(SequenceReservationStore.init(writer:))
         journal = databaseWriter.map { SendJournal(writer: $0, persistenceNamespace: persistenceNamespace) }
-        self.pendingRepository = pendingRepository ?? journal.map { PendingTransactionRepository(journal: $0, network: address?.network ?? .mainnet) }
         self.publicationBarrier = publicationBarrier
+        self.pendingRepository = pendingRepository ?? journal.map {
+            PendingTransactionRepository(
+                journal: $0,
+                network: address?.network ?? .mainnet,
+                publicationBarrier: publicationBarrier
+            )
+        }
         self.broadcastOperation = broadcastOperation
         self.lookupOperation = lookupOperation
         self.retryAccountOperation = retryAccountOperation
+        self.retryFamilySelection = retryFamilySelection
+        self.retryEndpointLeaseOperation = retryEndpointLeaseOperation
+        self.retryPolicyOperation = retryPolicyOperation
         self.retryObservability = retryObservability
         sharedState = SendRuntimeRegistry.shared.state(
             for: persistenceNamespace,
@@ -316,11 +337,6 @@ actor SendRuntime {
                 quoteHeight: handoff.quoteHeight,
                 reservationOwnerToken: handoff.reservationOwnerToken
             )
-            guard pendingRepository?.refresh() ?? .ready == .ready else {
-                _ = try? journal.transition(transactionID: handoff.transaction.transactionID, from: .broadcasting, expectedGeneration: 1, to: .unknown, generation: 0)
-                return SendSubmission(transactionId: handoff.transaction.transactionID, state: .unknown)
-            }
-            publicationBarrier.publish(transactionID: handoff.transaction.transactionID, generation: 1)
             guard await publicationBarrier.wait(transactionID: handoff.transaction.transactionID, generation: 1) else {
                 _ = try? journal.transition(transactionID: handoff.transaction.transactionID, from: .broadcasting, expectedGeneration: 1, to: .unknown, generation: 0)
                 _ = pendingRepository?.refresh()
@@ -394,11 +410,6 @@ actor SendRuntime {
               retryCAS(journal: journal, transactionId: transactionId, expectedGeneration: record.broadcastGeneration, nextGeneration: nextGeneration) else {
             throw SendError.sendInProgress
         }
-        guard pendingRepository?.refresh() ?? .ready == .ready else {
-            _ = try? journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration)
-            return SendSubmission(transactionId: transactionId, state: .unknown)
-        }
-        publicationBarrier.publish(transactionID: transactionId, generation: nextGeneration)
         retryObservability.record(.publicationWait)
         guard await publicationBarrier.wait(transactionID: transactionId, generation: nextGeneration) else {
             _ = try? journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration)
@@ -407,6 +418,14 @@ actor SendRuntime {
         }
         let transaction = SignedTransaction(txRaw: record.signedTxRaw, transactionID: transactionId)
         do {
+            if let retryFamilySelection {
+                retryObservability.record(.familySelection)
+                try await retryFamilySelection(record.providerFamilyID)
+            }
+            if let retryEndpointLeaseOperation {
+                retryObservability.record(.endpointLease)
+                try await retryEndpointLeaseOperation(record.providerFamilyID)
+            }
             retryObservability.record(.lookup)
             switch await lookupOperation(transactionId) {
             case let .found(foundID, _):
@@ -423,7 +442,12 @@ actor SendRuntime {
                 _ = pendingRepository?.refresh()
                 return SendSubmission(transactionId: transactionId, state: .unknown)
             case .notFound:
+                if let retryPolicyOperation {
+                    retryObservability.record(.policyRead)
+                    try await retryPolicyOperation()
+                }
                 if let retryAccountOperation {
+                    retryObservability.record(.accountRead)
                     let snapshot = try await retryAccountOperation()
                     if snapshot.sequence < record.sequence {
                         _ = try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration, blockedReason: .providerInconsistent)
@@ -431,6 +455,7 @@ actor SendRuntime {
                         throw SendError.retryBlocked(.providerInconsistent)
                     }
                     if snapshot.sequence > record.sequence {
+                        retryObservability.record(.sequenceAdvancedMutation)
                         _ = try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration, blockedReason: .sequenceAdvanced)
                         _ = pendingRepository?.refresh()
                         throw SendError.retryBlocked(.sequenceAdvanced)
@@ -450,6 +475,7 @@ actor SendRuntime {
                 }
             }
             retryObservability.record(.broadcast)
+            retryObservability.record(.transport)
             let response = try await broadcastOperation(transaction)
             switch BroadcastClassifier.classify(localHash: transactionId, response: response) {
             case .checkTxAccepted:
