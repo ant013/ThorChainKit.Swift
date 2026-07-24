@@ -98,10 +98,10 @@ The table freezes the exact eight-file review bundle before adversarial review. 
 | `S2-02-pinned-preflight.md` | `23041f2426584df75e0a477c129c92afd15565ec0a185ac191d9dc55df02e554` |
 | `S2-03-direct-sign-codec.md` | `1d651ddf249016888b053997f3ff7541c95902f2127cd33d8bf5ebcff019038e` |
 | `S2-04-external-signer-coordinator.md` | `e208a20b81f1129d680f649663d5fc485003814902b788a897c6eb78d336aab7` |
-| `S2-05-durable-broadcast-pending.md` | `b6afab639b1ab0afd5c43918929d66d5e249f7b4d51ec12eef09fc2ebb2252fc` |
+| `S2-05-durable-broadcast-pending.md` | `927cbaab665728a5e262103df085ba19c61ac46cd714d2e13ca50134ed8f2067` |
 | `S2-06-example-acceptance.md` | `d482a62d2ed9b349ba9316b539df6e262879d2cee316399d13f6220be176e23c` |
 | `S2-07-unstoppable-integration.md` | `e12500f66891ac508e81af1f2c8b2b7711eea00125ef18054309de3f05043302` |
 | `test-plan.md` | `0249a4e4a17d1905a76b74eabecd62895a149cafb41c91208a60a54da60d43fb` |
 <!-- SPEC_HASHES_END -->
 
-Canonical revision 10 bundle digest: `a843ca732687e70264bd0b6a961fd9a0a5219917e1f6ee71aa61060d94602bcc`. Reproduce it from the repository root with `sha256sum docs/specs/sprint-02-native-send/S2-*.md docs/specs/sprint-02-native-send/test-plan.md | sha256sum`.
+Canonical revision 10 bundle digest: `cada561070fe41d537430ed9ff133f1e3c763f061cc45a83947e2044cb512cda`. Reproduce it from the repository root with `sha256sum docs/specs/sprint-02-native-send/S2-*.md docs/specs/sprint-02-native-send/test-plan.md | sha256sum`.
