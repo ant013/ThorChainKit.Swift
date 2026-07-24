@@ -87,18 +87,27 @@ final class KitCompositionTests: XCTestCase {
         XCTAssertTrue(FileManager.default.createFile(atPath: invalid.path, contents: Data("not-sqlite".utf8)))
         try FileManager.default.linkItem(at: invalid, to: invalidAlias)
         let unrelatedRuntime = try DatabaseRuntime.open(path: unrelated.path)
+        let invalidIdentity = try DatabaseLocation.resolve(path: invalid.path).identity
+        let probe = InitializationProbe(identity: invalidIdentity)
+        DatabaseRuntime.initializationControl.install { identity in probe.wait(for: identity) }
+        defer { DatabaseRuntime.initializationControl.clear() }
 
         let failures = await withTaskGroup(of: Bool.self, returning: [Bool].self) { group in
-            for path in [invalid.path, invalidAlias.path, invalid.path, invalidAlias.path] {
-                group.addTask { (try? DatabaseRuntime.open(path: path)) == nil }
-            }
+            group.addTask { (try? DatabaseRuntime.open(path: invalid.path)) == nil }
+            XCTAssertEqual(probe.started.wait(timeout: .now() + 1), .success)
+            group.addTask { (try? DatabaseRuntime.open(path: invalidAlias.path)) == nil }
+            group.addTask { (try? DatabaseRuntime.open(path: invalid.path)) == nil }
+            group.addTask { (try? DatabaseRuntime.open(path: invalidAlias.path)) == nil }
+            probe.release()
             var results = [Bool]()
             for await result in group { results.append(result) }
             return results
         }
         XCTAssertEqual(failures, [true, true, true, true])
+        XCTAssertEqual(probe.callbackCount, 1, "aliases must share one in-flight initialization")
         let unrelatedAfterFailure = try DatabaseRuntime.open(path: unrelated.path)
         XCTAssertTrue(unrelatedRuntime === unrelatedAfterFailure)
+        DatabaseRuntime.initializationControl.clear()
 
         let handle = try FileHandle(forWritingTo: invalid)
         try handle.truncate(atOffset: 0)
@@ -174,6 +183,31 @@ final class KitCompositionTests: XCTestCase {
         if case .degraded = fixture.pendingTransactionsStatus {} else { XCTFail("fixture pending status must be degraded") }
     }
 
+}
+
+private final class InitializationProbe: @unchecked Sendable {
+    private let identity: DatabaseFileIdentity
+    private let lock = NSLock()
+    private(set) var callbackCount = 0
+    let started = DispatchSemaphore(value: 0)
+    private let gate = DispatchSemaphore(value: 0)
+
+    init(identity: DatabaseFileIdentity) {
+        self.identity = identity
+    }
+
+    func wait(for identity: DatabaseFileIdentity) {
+        guard identity == self.identity else { return }
+        lock.lock()
+        callbackCount += 1
+        lock.unlock()
+        started.signal()
+        gate.wait()
+    }
+
+    func release() {
+        gate.signal()
+    }
 }
 
 private actor CompositionTransport: TestingHTTPTransport {

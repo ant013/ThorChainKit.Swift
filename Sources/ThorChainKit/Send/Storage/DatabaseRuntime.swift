@@ -20,7 +20,10 @@ final class DatabaseRuntime: @unchecked Sendable {
         if let existing = registry.entries[location.identity] {
             entry = existing
         } else {
-            let initializing = DatabaseInitializationTask { try DatabaseRuntime(location: location) }
+            let initializing = DatabaseInitializationTask {
+                initializationControl.wait(for: location.identity)
+                return try DatabaseRuntime(location: location)
+            }
             let created = DatabaseRuntimeRegistry.Entry.initializing(initializing)
             registry.entries[location.identity] = created
             initializing.start()
@@ -55,6 +58,7 @@ final class DatabaseRuntime: @unchecked Sendable {
     }
 
     private static let registry = DatabaseRuntimeRegistry()
+    static let initializationControl = DatabaseInitializationControl()
 }
 
 private final class DatabaseRuntimeRegistry: @unchecked Sendable {
@@ -94,5 +98,29 @@ private final class DatabaseInitializationTask: @unchecked Sendable {
     func wait() throws -> DatabaseRuntime {
         group.wait()
         return try stateQueue.sync { try result!.get() }
+    }
+}
+
+final class DatabaseInitializationControl: @unchecked Sendable {
+    private let lock = NSLock()
+    private var callback: (@Sendable (DatabaseFileIdentity) -> Void)?
+
+    func install(_ callback: @escaping @Sendable (DatabaseFileIdentity) -> Void) {
+        lock.lock()
+        self.callback = callback
+        lock.unlock()
+    }
+
+    func clear() {
+        lock.lock()
+        callback = nil
+        lock.unlock()
+    }
+
+    func wait(for identity: DatabaseFileIdentity) {
+        lock.lock()
+        let callback = self.callback
+        lock.unlock()
+        callback?(identity)
     }
 }

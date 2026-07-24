@@ -181,6 +181,33 @@ final class SendCoordinatorTests: XCTestCase {
             XCTAssertEqual(provider.snapshotCount, 2, name + " rejection must not start a later provider request")
         }
 
+        let (expiredRuntime, expiredQuote, expiredPublicKey, expiredSnapshot) = try await makeBlockingQuote(namespace: "coordinator-h2-expired")
+        let expiredSigner = CountingSigner(publicKey: expiredPublicKey)
+        let expiredResult = await SendCoordinator(runtime: expiredRuntime, now: { .distantFuture }).execute(
+            quote: expiredQuote,
+            signer: expiredSigner
+        )
+        XCTAssertEqual(expiredResult.failure, .quoteExpired)
+        XCTAssertEqual(expiredSigner.callCount, 1)
+        let expiredAdmitted = await expiredRuntime.beginAccountAttempt(expiredSnapshot.sender)
+        XCTAssertTrue(expiredAdmitted)
+        await expiredRuntime.endAccountAttempt(expiredSnapshot.sender)
+
+        let (cancelRuntime, cancelQuote, cancelPublicKey, cancelSnapshot) = try await makeBlockingQuote(namespace: "coordinator-h2-cancelled")
+        let cancellation = TaskCancellationBox()
+        let cancelTask = Task {
+            await SendCoordinator(runtime: cancelRuntime, now: {
+                cancellation.cancel()
+                return .distantPast
+            }).execute(quote: cancelQuote, signer: CountingSigner(publicKey: cancelPublicKey))
+        }
+        cancellation.install(cancelTask)
+        let cancelResult = await cancelTask.value
+        XCTAssertEqual(cancelResult.failure, .signerCancelled)
+        let cancelledAdmitted = await cancelRuntime.beginAccountAttempt(cancelSnapshot.sender)
+        XCTAssertTrue(cancelledAdmitted)
+        await cancelRuntime.endAccountAttempt(cancelSnapshot.sender)
+
         let (lateRuntime, lateQuote, latePublicKey, lateSnapshot) = try await makeBlockingQuote(namespace: "coordinator-h2-late")
         let lateProvider = try CoordinatorH2Provider(runtime: lateRuntime, base: lateSnapshot, h2: lateSnapshot, blocksH2: true)
         let lateSigner = CountingSigner(publicKey: latePublicKey)
@@ -192,11 +219,11 @@ final class SendCoordinatorTests: XCTestCase {
         }
         XCTAssertEqual(lateProvider.h2Started.wait(timeout: .now() + 1), .success)
         await lateRuntime.invalidate(generation: 1)
+        lateProvider.releaseH2()
         let lateResult = await lateTask.value
         XCTAssertEqual(lateResult.failure, .kitNotStarted)
         XCTAssertEqual(lateSigner.callCount, 1)
         XCTAssertEqual(lateProvider.snapshotCount, 2)
-        lateProvider.releaseH2()
         for _ in 0..<4 { await Task.yield() }
         XCTAssertEqual(lateProvider.snapshotCount, 2, "late H2 completion must not start a later provider request")
     }
