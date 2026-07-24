@@ -5,17 +5,20 @@ actor SendCoordinator {
     private let preflight: SendPreflightCoordinator?
     private let persistenceNamespace: String
     private let network: Network
+    private let now: @Sendable () -> Date
 
     init(
         runtime: SendRuntime,
         preflight: SendPreflightCoordinator? = nil,
         persistenceNamespace: String = "",
-        network: Network = .mainnet
+        network: Network = .mainnet,
+        now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.runtime = runtime
         self.preflight = preflight
         self.persistenceNamespace = persistenceNamespace
         self.network = network
+        self.now = now
     }
 
     func execute(quote: SendQuote, signer: any Signer) async -> SendCoordinatorResult {
@@ -101,6 +104,9 @@ actor SendCoordinator {
                   h2.nativeFee == h1.nativeFee
             else { throw SendError.quoteChanged(QuoteChanges(validating: [.sequence])!) }
             try bind(publicKey: publicKey, snapshot: h2)
+            try Task.checkCancellation()
+            guard quote.expiresAt > now() else { throw SendError.quoteExpired }
+            try Task.checkCancellation()
 
             let compact = try SignerVerifier().verify(signature: signature, digest: payload.digest, publicKey: publicKey)
             let transaction = try DirectSignCodec.makeTxRaw(payload: payload, compactSignature: compact.rawValue)

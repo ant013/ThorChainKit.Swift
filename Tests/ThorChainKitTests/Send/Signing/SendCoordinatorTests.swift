@@ -115,23 +115,30 @@ final class SendCoordinatorTests: XCTestCase {
     }
 
     func testH2RejectsChangedStaleCancelledExpiredAndLateResults() async throws {
-        let runtime = SendRuntime(address: try sendTestAddress(), persistenceNamespace: "coordinator-h2")
-        await runtime.activate(generation: 1)
-        let signer = CountingSigner(publicKey: Data(repeating: 0, count: 33))
-        let snapshot = try SendSnapshot.fixture(height: 12)
-        let quote = try await runtime.issuePreflightQuote(
-            request: SendQuoteRequest(
-                sender: try sendTestAddress(),
-                recipient: try sendOtherAddress(),
-                amount: .exact(snapshot.amount),
-                memo: nil
-            ),
-            snapshot: snapshot
+        let (expiryRuntime, expiryQuote, publicKey, expirySnapshot) = try await makeBlockingQuote(namespace: "coordinator-h2-expiry")
+        let expiryResult = await SendCoordinator(runtime: expiryRuntime, now: { .distantFuture }).execute(
+            quote: expiryQuote,
+            signer: CountingSigner(publicKey: publicKey)
         )
-        let result = await SendCoordinator(runtime: runtime).execute(quote: quote, signer: signer)
+        XCTAssertEqual(expiryResult.failure, .quoteExpired)
+        let expiryAdmitted = await expiryRuntime.beginAccountAttempt(expirySnapshot.sender)
+        XCTAssertTrue(expiryAdmitted)
+        await expiryRuntime.endAccountAttempt(expirySnapshot.sender)
 
-        XCTAssertEqual(result.failure, .invalidPublicKey)
-        XCTAssertEqual(signer.callCount, 0)
+        let (cancelRuntime, cancelQuote, cancelPublicKey, cancelSnapshot) = try await makeBlockingQuote(namespace: "coordinator-h2-cancel")
+        let cancellation = TaskCancellationBox()
+        let cancelTask = Task {
+            await SendCoordinator(runtime: cancelRuntime, now: {
+                cancellation.cancel()
+                return .distantPast
+            }).execute(quote: cancelQuote, signer: CountingSigner(publicKey: cancelPublicKey))
+        }
+        cancellation.install(cancelTask)
+        let cancelResult = await cancelTask.value
+        XCTAssertEqual(cancelResult.failure, .signerCancelled)
+        let cancelAdmitted = await cancelRuntime.beginAccountAttempt(cancelSnapshot.sender)
+        XCTAssertTrue(cancelAdmitted)
+        await cancelRuntime.endAccountAttempt(cancelSnapshot.sender)
     }
 
     func testCleanupFailureReturnsRepairPending() async throws {
@@ -246,6 +253,28 @@ private final class NonCooperativeSigner: Signer, @unchecked Sendable {
         }
         continuation?.resume(returning: signature)
         finished.signal()
+    }
+}
+
+private final class TaskCancellationBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var task: Task<SendCoordinatorResult, Never>?
+    private var requested = false
+
+    func install(_ task: Task<SendCoordinatorResult, Never>) {
+        lock.lock()
+        self.task = task
+        let requested = self.requested
+        lock.unlock()
+        if requested { task.cancel() }
+    }
+
+    func cancel() {
+        lock.lock()
+        requested = true
+        let task = self.task
+        lock.unlock()
+        task?.cancel()
     }
 }
 
