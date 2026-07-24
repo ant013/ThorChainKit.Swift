@@ -53,6 +53,9 @@ func transactionId(txRaw: Data) -> TransactionID
 ```
 
 `SignPayload` contains exact body/auth/sign bytes and digest but has a redacted description. `SignedTransaction` contains exact `TxRaw` and local hash and is internal until S2-05 journals it.
+The codec enforces compact-signature framing only; production cryptographic
+signature trust, including supplied-key matching, invalid/high-S rejection,
+and signer ownership, belongs to S2-04.
 
 ## Canonical Encoding
 
@@ -99,15 +102,18 @@ The complete 242-byte TxRaw is:
 0a530a510a0e2f74797065732e4d736753656e64123f0a14751e76e8199196d454941c45d1b3a323f1433bd612145a0dba49dab8fec87c6dd7c01b564ee72a8515a61a110a0472756e65120931303030303030303012590a500a460a1f2f636f736d6f732e63727970746f2e736563703235366b312e5075624b657912230a210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179812040a0208011801120510c08db7011a4023103daa64330d051da3bfa85ea7c8af9080edf19b19a306403303634b0992a32cc1b9061b2e76cd245edb2976bb437bc6636dfb23deae31e38508c5478dae45
 ```
 
-Its uppercase transaction ID is `3685BF7AD0C65889B763D4B6D1F1EDEEC96E9B63B63F8DB992D00757EB5F136E`. The golden test independently decodes every field, verifies the compact signature over the exact SignDoc digest with the pinned public key, and fails on any signature framing or one-bit TxRaw change.
+Its uppercase transaction ID is `3685BF7AD0C65889B763D4B6D1F1EDEEC96E9B63B63F8DB992D00757EB5F136E`. The golden test independently decodes every field and uses an independent test oracle to verify the static compact signature over the exact SignDoc digest with the pinned public key. This oracle is fixture evidence, not production signer-trust behavior. The test fails on any signature framing or one-bit TxRaw change.
 
 ## Validation and Trust
 
-- Require exactly 20-byte address payloads and a 33-byte valid compressed public key before encoding.
+- Require exactly 20-byte address payloads and a canonical 33-byte compressed public-key encoding before encoding.
 - Convert arbitrary-precision amounts/account numbers/sequence to protobuf fields with explicit overflow errors.
 - Require canonical decimal amount text; no sign, whitespace, leading plus, exponent, or locale formatting.
 - Do not log or interpolate SignDoc, digest, signature, or TxRaw bytes.
 - Hash functions accept exact Data; reserialization after signing is prohibited.
+- Enforce exactly one 64-byte compact signature for TxRaw framing, without
+  deciding cryptographic validity, low-S policy, or key/signature matching;
+  those signer-trust checks are S2-04 behavior.
 
 ## Analog Delta
 
@@ -123,6 +129,9 @@ Vultisig's helper proves the THOR transaction assembly order but delegates to Wa
 - amount/account/sequence boundaries and overflow;
 - memo empty/ASCII/multibyte;
 - signature length zero/63/64/65 for TxRaw construction;
+- independent verification of the pinned static fixture as a test oracle only;
+- production invalid/high-S/wrong-key and supplied-key trust vectors remain in
+  S2-04;
 - produced local hash format and single-bit TxRaw mutation;
 - public symbol/import audit proves no generated/SwiftProtobuf type escapes;
 - provenance test pins proto source revisions and regeneration produces no diff.

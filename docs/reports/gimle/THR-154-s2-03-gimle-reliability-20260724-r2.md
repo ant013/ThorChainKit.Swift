@@ -4,10 +4,27 @@
 
 **Run state:** `audit/runs/THR-154-s2-03-correction-20260724/state.json`
 
-**Repository:** clean worktree `/Users/ant013/Data/AI/.worktrees/thorchain/s2-03-direct-sign`
+**Repository:** ThorChainKit.Swift; repository-relative evidence from the
+`s2-03-direct-sign` worktree
 
-**Branch/head:** `docs/THR-154-s2-03-direct-sign` at
-`754fcc831b3d26e2812630e06b0ffdf05e5c228b` (`origin/main`)
+**Frozen evidence base:** `754fcc831b3d26e2812630e06b0ffdf05e5c228b`
+(`origin/main`)
+
+**Reviewed artifact revision:** `0b9b5e6a6567990665730f7d5cd3368fbeb5d9ec`
+(`docs/THR-154-s2-03-direct-sign`), the exact pushed head reviewed in
+discovery 0/2.
+
+**Portable artifact binding:** The final spec, plan, and this report are bound
+by their repository-relative paths, the frozen base above, the reviewed
+revision above, and the SHA-256 digests recorded in the correction checkpoint.
+No operator-local absolute path is part of this report.
+
+**Corrected artifact digests:**
+
+- `docs/specs/sprint-02-native-send/S2-03-direct-sign-codec.md` —
+  `2b456ae013b5614e096b68242531e80d7d4c4a59ffd5fa7940fd6282a0c4f157`
+- `docs/superpowers/plans/2026-07-24-THR-154-s2-03-direct-sign.md` —
+  `e0ddeee8e7e44f5e1473bf5ac7ddedd3481a1d0f0c9d1d5dd425b75f66cc3360`
 
 ## Result
 
@@ -26,7 +43,7 @@ retained as evidence and are not treated as successful discovery.
 
 | Fact | Current-tree basis | Decision |
 |---|---|---|
-| THOR assembly and signature verification | Vultisig `THORChainHelper`, head `d3123dbe` | Primary analog |
+| THOR assembly and static signature-verification control | Vultisig `THORChainHelper`, head `d3123dbe` | Primary analog |
 | Local exact-byte/hash ownership | EvmKit `TransactionBuilder`, head `be028631` | Supporting analog |
 | SwiftProtobuf generation shape | TronKit generated source and `Package.swift`, head `aa691bcd` | Supporting analog |
 | 20M gas helper | Vultisig `getFee`, lines 393–399 | Rejected counterexample |
@@ -34,7 +51,10 @@ retained as evidence and are not treated as successful discovery.
 
 The critical slice has one coherent primary, two independent supporting facts,
 an explicit composition waiver because S2-04 owns host composition, and a
-dispositioned counterexample. No broad rediscovery was repeated.
+dispositioned counterexample. Production signer-trust validation (including
+wrong-key, invalid/high-S, and supplied-key verification) is explicitly owned
+by S2-04; S2-03 retains only signature framing and independent verification of
+the static golden fixture as a test oracle. No broad rediscovery was repeated.
 
 ## Defects and fallbacks
 

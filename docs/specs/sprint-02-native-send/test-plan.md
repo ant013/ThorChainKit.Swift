@@ -33,8 +33,8 @@ dispatched without a new explicit operator approval for that exact run.
 | non-cooperative endpoint liveness | `EndpointOperationRunnerTests`, H1/H2 and retry never-resume/late-result interleavings |
 | exact/Max + dynamic native fee | `SendPreflightCoordinatorTests`, `SendPolicyTests`, Max and insufficient-balance matrices |
 | halt/module/memo policy | `HaltEvaluatorTests`, `RecipientAccountClassifierTests`, `ForbiddenModuleAddressSetTests`, `SendPolicyTests` |
-| exact protobuf/direct sign | `MsgSendCodecGoldenTests`, `DirectSignGoldenTests` |
-| external signer trust | `SignerVerifierTests`, `SendCoordinatorTests`, malformed/high-S/wrong-key vectors |
+| exact protobuf/direct sign and static signature fixture control | `MsgSendCodecGoldenTests`, `DirectSignGoldenTests` |
+| external signer trust (S2-04) | `SignerVerifierTests`, `SendCoordinatorTests`, malformed/high-S/wrong-key and supplied-key vectors |
 | one send per namespace/sender/sequence | `SendCoordinatorConcurrencyTests` plus two-Kit/shared-runtime/restart fixtures |
 | persist active generation before I/O | `SendJournalOrderingTests` |
 | publish every initial/retry generation before I/O | `PendingPublicationBarrierTests` with observation failure/deadline cases |
