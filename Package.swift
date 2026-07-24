@@ -43,7 +43,10 @@ let package = Package(
         ),
         .testTarget(
             name: "ThorChainKitTests",
-            dependencies: ["ThorChainKit"],
+            dependencies: [
+                "ThorChainKit",
+                .product(name: "secp256k1", package: "secp256k1.swift")
+            ],
             exclude: ["Fixtures"],
             swiftSettings: [.unsafeFlags(["-warnings-as-errors"])]
         ),

@@ -1,0 +1,17 @@
+syntax = "proto3";
+package cosmos.tx.signing.v1beta1;
+
+enum SignMode {
+  SIGN_MODE_UNSPECIFIED = 0;
+  SIGN_MODE_DIRECT = 1;
+}
+
+message ModeInfo {
+  message Single {
+    SignMode mode = 1;
+  }
+
+  oneof sum {
+    Single single = 1;
+  }
+}
