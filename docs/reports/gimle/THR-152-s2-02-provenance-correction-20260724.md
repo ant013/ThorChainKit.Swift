@@ -3,9 +3,9 @@
 - Task: ec32f2de-c376-4eb5-a1e2-67f168aecbf2
 - Workflow/phase: evidence_audit / complete
 - Trust: **RED**
-- Repository: /Users/ant013/Data/AI/thorchain-s2-02
+- Repository: ThorChainKit.Swift
 - Base HEAD: 23ba7e8c4204dbb16efadaa092a1ff896263e8f7
-- Final HEAD: f4943fe408bd437abc0770baa6517bb6ae1037fb
+- Reviewed implementation/provenance HEAD: f4943fe408bd437abc0770baa6517bb6ae1037fb
 - Gimle runtime: n/a
 - Indexed commit: n/a
 
