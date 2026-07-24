@@ -37,7 +37,7 @@ final class ReadOperationCoordinatorS1_04Tests: XCTestCase {
         }
     }
 
-    func testRetryRepeatsTheCompleteOperationOnTheNextFamily() async throws {
+    func testInitialWholeFamilyRetryRepeatsCompleteOperationWithoutCrossFamilyMixing() async throws {
         let first = try family(id: "first")
         let second = try family(id: "second")
         let configuration = try EndpointConfiguration(
@@ -67,6 +67,8 @@ final class ReadOperationCoordinatorS1_04Tests: XCTestCase {
         XCTAssertEqual(result.familyId, "second")
         XCTAssertEqual(familyCalls, ["first", "first", "second", "second"])
         XCTAssertEqual(recordedDelays, [1])
+        XCTAssertEqual(result.account?.accountNumber, 1)
+        XCTAssertEqual(result.balances.map(\.denom), [.rune])
     }
 
     private func family(id: String) throws -> EndpointFamilyDescriptor {

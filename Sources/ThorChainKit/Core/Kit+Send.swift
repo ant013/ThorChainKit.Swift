@@ -3,7 +3,17 @@ import Foundation
 
 public extension Kit {
     func quote(to recipient: Address, amount: SendAmount, memo: String? = nil) async throws -> SendQuote {
-        try await dependencies.sendRuntime.quote(to: recipient, amount: amount, memo: memo == "" ? nil : memo)
+        if let preflight = dependencies.preflight {
+            return try await preflight.prepareQuote(
+                request: SendQuoteRequest(
+                    sender: address,
+                    recipient: recipient,
+                    amount: amount,
+                    memo: memo == "" ? nil : memo
+                )
+            ).quote
+        }
+        return try await dependencies.sendRuntime.quote(to: recipient, amount: amount, memo: memo == "" ? nil : memo)
     }
 
     func send(quote: SendQuote, signer: any Signer) async throws -> SendSubmission {

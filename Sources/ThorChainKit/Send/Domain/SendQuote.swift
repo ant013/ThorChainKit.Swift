@@ -21,6 +21,16 @@ struct QuoteReviewSnapshot: Equatable, Hashable, Sendable {
     let accountNumber: UInt64
     let sequence: UInt64
     let providerFamilyID: String
+    let preflightContext: SendSnapshot?
+    let preflightDigest: Data?
+
+    init(sender: String, recipient: String, requestedAmountIsMaximum: Bool, amountMagnitude: Data, nativeFeeMagnitude: Data, totalDebitMagnitude: Data, memo: String?, acceptedHeight: Int64, expiresAt: Date, accountNumber: UInt64, sequence: UInt64, providerFamilyID: String, preflightContext: SendSnapshot? = nil, preflightDigest: Data? = nil) {
+        self.sender = sender; self.recipient = recipient; self.requestedAmountIsMaximum = requestedAmountIsMaximum
+        self.amountMagnitude = amountMagnitude; self.nativeFeeMagnitude = nativeFeeMagnitude; self.totalDebitMagnitude = totalDebitMagnitude
+        self.memo = memo; self.acceptedHeight = acceptedHeight; self.expiresAt = expiresAt; self.accountNumber = accountNumber
+        self.sequence = sequence; self.providerFamilyID = providerFamilyID; self.preflightContext = preflightContext
+        self.preflightDigest = preflightDigest ?? preflightContext?.digest
+    }
 }
 
 struct QuoteAuthorityRecord: Equatable, Hashable, Sendable {
@@ -70,6 +80,8 @@ public struct SendQuote: Sendable, CustomDebugStringConvertible, CustomReflectab
 
     internal var internalAuthorityRecord: QuoteAuthorityRecord { authorityRecord }
 
+    internal var preflightContext: SendSnapshot? { authorityRecord.snapshot.preflightContext }
+
     internal var hasConsistentAuthorityProjection: Bool {
         let snapshot = authorityRecord.snapshot
         let amountValue = BigUInt(amountMagnitude)
@@ -90,6 +102,18 @@ public struct SendQuote: Sendable, CustomDebugStringConvertible, CustomReflectab
             && snapshot.totalDebitMagnitude == totalDebitMagnitude
             && snapshot.memo == memo
             && snapshot.acceptedHeight == acceptedHeight
+            && (snapshot.preflightContext.map { context in
+                context.digest.count == 32
+                    && snapshot.preflightDigest == context.digest
+                    && context.familyID == snapshot.providerFamilyID
+                    && context.sender == snapshot.sender
+                    && context.recipient == snapshot.recipient
+                    && context.amount == amountValue
+                    && context.nativeFee == feeValue
+                    && context.totalDebit == totalDebitValue
+                    && context.memoMaximumBytes > 0
+                    && context.height == snapshot.acceptedHeight
+            } ?? true)
     }
 
     private static func isCanonicalMagnitude(_ data: Data, value: BigUInt, allowingZero: Bool) -> Bool {

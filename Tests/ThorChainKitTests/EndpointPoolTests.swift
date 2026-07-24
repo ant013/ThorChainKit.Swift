@@ -23,6 +23,56 @@ final class EndpointPoolTests: XCTestCase {
         XCTAssertEqual(lease.cometReferenceHeight, 110)
     }
 
+    func testCosmosAndCometRoleHeightSkewIsAcceptedInBothDirections() async throws {
+        for heights: (Int64, Int64) in [(100, 101), (101, 100)] {
+            let family = try family("skew-\(heights.0)-\(heights.1)")
+            let pool = try EndpointPool(
+                network: .mainnet,
+                configuration: EndpointConfiguration(families: [family]),
+                probe: CountingProbe { index, family in healthy(index: index, family: family, heights: heights) },
+                clock: TestEndpointClock()
+            )
+            let lease = try await pool.lease(excludingFamilyIds: [])
+            XCTAssertEqual(lease.commonReadHeight, min(heights.0, heights.1))
+        }
+    }
+
+    func testExactFamilyRefreshBypassesCacheAndNeverFallsBackToAnotherFamily() async throws {
+        let first = try family("first-refresh")
+        let second = try family("second-refresh")
+        let refreshProbe = FamilyRefreshProbe()
+        let pool = try EndpointPool(
+            network: .mainnet,
+            configuration: EndpointConfiguration(families: [first, second]),
+            probe: refreshProbe,
+            clock: TestEndpointClock()
+        )
+        _ = try await pool.lease(excludingFamilyIds: [])
+        let refreshed = try await pool.freshLease(familyID: first.id)
+        XCTAssertEqual(refreshed.family.id, first.id)
+        let probedFamilies = await refreshProbe.familyIDs
+        XCTAssertEqual(probedFamilies.count, 4)
+        XCTAssertEqual(probedFamilies.filter { $0 == first.id }.count, 2)
+        XCTAssertEqual(probedFamilies.filter { $0 == second.id }.count, 2)
+
+        let targetOnly = try EndpointPool(
+            network: .mainnet,
+            configuration: EndpointConfiguration(families: [first, second]),
+            probe: CountingProbe { index, family in
+                index == 0
+                    ? outcomes(index: index, family: family, node: .failure(.transport(kind: .connection)), block: .failure(.transport(kind: .connection)), comet: .failure(.transport(kind: .connection)))
+                    : healthy(index: index, family: family, heights: (110, 110))
+            },
+            clock: TestEndpointClock()
+        )
+        do {
+            _ = try await targetOnly.freshLease(familyID: first.id)
+            XCTFail("exact-family refresh must not fall back")
+        } catch let error as ProviderError {
+            XCTAssertEqual(error, .temporarilyUnavailable)
+        }
+    }
+
     func testTransientEmptyProbeIsNotCachedBeforeImmediateRecovery() async throws {
         let family = try family("primary")
         let probe = TransientThenHealthyProbe()
@@ -546,6 +596,17 @@ private actor CountingProbe: NodeProbing {
     func probe(index: Int, family: EndpointFamilyDescriptor) async -> [IndexedProbeOutcome] {
         count += 1
         return handler(index, family)
+    }
+}
+
+private actor FamilyRefreshProbe: NodeProbing {
+    private(set) var familyIDs = [String]()
+
+    func probe(index: Int, family: EndpointFamilyDescriptor) async -> [IndexedProbeOutcome] {
+        familyIDs.append(family.id)
+        let priorProbe = familyIDs.dropLast().contains(family.id)
+        let height: Int64 = family.id == "first-refresh" && priorProbe ? 120 : index == 0 ? 100 : 110
+        return healthy(index: index, family: family, heights: (height, height))
     }
 }
 

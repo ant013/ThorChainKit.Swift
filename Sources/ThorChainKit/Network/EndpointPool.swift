@@ -50,6 +50,21 @@ actor EndpointPool {
         }
     }
 
+    func freshLease(excludingFamilyIds: Set<String>) async throws -> EndpointLease {
+        cachedFamilies = nil
+        cacheDate = nil
+        return try await lease(excludingFamilyIds: excludingFamilyIds)
+    }
+
+    func freshLease(familyID: String) async throws -> EndpointLease {
+        cachedFamilies = nil
+        cacheDate = nil
+        let excluded = Set(configuration.families.map(\.id).filter { $0 != familyID })
+        let lease = try await lease(excludingFamilyIds: excluded)
+        guard lease.family.id == familyID else { throw ProviderError.noEligibleFamily }
+        return lease
+    }
+
     @discardableResult
     func recordFailure(for lease: EndpointLease, failure: EndpointFailure) -> Bool {
         guard lease.poolGeneration == generation,
