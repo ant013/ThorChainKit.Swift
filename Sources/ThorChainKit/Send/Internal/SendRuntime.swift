@@ -20,6 +20,10 @@ fileprivate final class SendRuntimeAdmissionState: Sendable {
     func isActive() -> Bool {
         stateQueue.sync { stateQueue.getSpecific(key: generationKey) != nil }
     }
+
+    func isActive(generation: UInt64) -> Bool {
+        stateQueue.sync { stateQueue.getSpecific(key: generationKey) == generation }
+    }
 }
 
 actor SendRuntime {
@@ -50,6 +54,15 @@ actor SendRuntime {
         admissionState.invalidate(generation: generation)
     }
 
+    nonisolated func isAdmissionActive(generation: UInt64) -> Bool {
+        admissionState.isActive(generation: generation)
+    }
+
+    func admittedGeneration() throws -> UInt64 {
+        guard let activeGeneration else { throw SendError.kitNotStarted }
+        return activeGeneration
+    }
+
     func quote(to recipient: Address, amount: SendAmount, memo: String?) throws -> SendQuote {
         try admit()
         guard let address else { throw SendError.operationUnavailable }
@@ -59,6 +72,26 @@ actor SendRuntime {
         try Task.checkCancellation()
         _ = memo
         throw SendError.operationUnavailable
+    }
+
+    func issuePreflightQuote(request: SendQuoteRequest, snapshot: SendSnapshot) throws -> SendQuote {
+        try admit()
+        let amount = snapshot.amount
+        let fee = snapshot.nativeFee
+        return try quoteStore.issue(
+            sender: request.sender,
+            recipient: request.recipient,
+            amountMagnitude: SendMagnitude(amount).data,
+            isMaximum: request.amount.isMaximum,
+            nativeFeeMagnitude: SendMagnitude(fee).data,
+            totalDebitMagnitude: SendMagnitude(snapshot.totalDebit).data,
+            memo: request.memo,
+            acceptedHeight: snapshot.height,
+            generation: activeGeneration ?? 0,
+            accountNumber: snapshot.accountNumber,
+            sequence: snapshot.sequence,
+            providerFamilyID: snapshot.familyID
+        )
     }
 
     func send(quote: SendQuote, signer: any Signer) throws -> SendSubmission {
