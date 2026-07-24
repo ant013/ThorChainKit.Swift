@@ -42,11 +42,16 @@ public extension Kit {
             storage: storage,
             publishing: publishing
         )
+        let pendingRepository = PendingTransactionRepository(
+            journal: SendJournal(writer: databaseRuntime.pool, persistenceNamespace: namespace),
+            network: address.network
+        )
         let sendRuntime = SendRuntime(
             address: address,
             persistenceNamespace: namespace,
             runtimeIdentifier: databaseRuntime.location.identity.rawValue,
-            databaseWriter: databaseRuntime.pool
+            databaseWriter: databaseRuntime.pool,
+            pendingRepository: pendingRepository
         )
         let syncer = AccountSyncer(
             address: address,
@@ -70,7 +75,8 @@ public extension Kit {
             dependencies: KitDependencies(
                 lifecycle: bridge,
                 sendRuntime: sendRuntime,
-                preflight: preflight
+                preflight: preflight,
+                pendingRepository: pendingRepository
             ),
             persistenceNamespace: namespace,
             facadeDispatcher: facadeDispatcher,
@@ -124,11 +130,16 @@ public extension Kit {
             storage: storage,
             publishing: publishing
         )
+        let pendingRepository = PendingTransactionRepository(
+            journal: SendJournal(writer: databaseRuntime.pool, persistenceNamespace: namespace),
+            network: address.network
+        )
         let sendRuntime = SendRuntime(
             address: address,
             persistenceNamespace: namespace,
             runtimeIdentifier: databaseRuntime.location.identity.rawValue,
-            databaseWriter: databaseRuntime.pool
+            databaseWriter: databaseRuntime.pool,
+            pendingRepository: pendingRepository
         )
         let syncer = AccountSyncer(
             address: address,
@@ -151,7 +162,8 @@ public extension Kit {
             dependencies: KitDependencies(
                 lifecycle: LifecycleCommandBridge(syncer: syncer, gate: gate, sendRuntime: sendRuntime),
                 sendRuntime: sendRuntime,
-                preflight: preflight
+                preflight: preflight,
+                pendingRepository: pendingRepository
             ),
             persistenceNamespace: namespace,
             facadeDispatcher: facadeDispatcher,

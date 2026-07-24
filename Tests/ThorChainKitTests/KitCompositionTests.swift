@@ -186,8 +186,8 @@ final class KitCompositionTests: XCTestCase {
         XCTAssertNotEqual(instanceAuthority, fixtureAuthority)
         XCTAssertTrue(instance.pendingTransactions.isEmpty)
         XCTAssertTrue(fixture.pendingTransactions.isEmpty)
-        if case .degraded = instance.pendingTransactionsStatus {} else { XCTFail("instance pending status must be degraded") }
-        if case .degraded = fixture.pendingTransactionsStatus {} else { XCTFail("fixture pending status must be degraded") }
+        if case .ready = instance.pendingTransactionsStatus {} else { XCTFail("instance pending status must be ready after journal recovery") }
+        if case .ready = fixture.pendingTransactionsStatus {} else { XCTFail("fixture pending status must be ready after journal recovery") }
     }
 
 }

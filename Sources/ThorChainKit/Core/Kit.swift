@@ -12,6 +12,7 @@ public final class Kit {
     private let publishing: StatePublishing
     private let pendingTransactionsSubject: CurrentValueSubject<[PendingTransaction], Never>
     private let pendingTransactionsStatusSubject: CurrentValueSubject<PendingTransactionsStatus, Never>
+    private var pendingCancellables = Set<AnyCancellable>()
     private var desiredRunning = false
     private var nextLifecycleSequence: UInt64 = 0
     private var pendingLifecycleCommands = [PendingLifecycleCommand]()
@@ -35,6 +36,17 @@ public final class Kit {
         self.pendingTransactionsSubject = pendingTransactionsSubject
         self.pendingTransactionsStatusSubject = pendingTransactionsStatusSubject
         facadeDispatcher.setSpecific(key: dispatcherKey, value: 1)
+        if let pendingRepository = dependencies.pendingRepository {
+            _ = pendingRepository.refresh()
+            self.pendingTransactionsSubject.send(pendingRepository.snapshot)
+            self.pendingTransactionsStatusSubject.send(pendingRepository.status)
+            pendingRepository.publisher.sink { [weak self] snapshot in
+                self?.pendingTransactionsSubject.send(snapshot)
+            }.store(in: &pendingCancellables)
+            pendingRepository.statusPublisher.sink { [weak self] status in
+                self?.pendingTransactionsStatusSubject.send(status)
+            }.store(in: &pendingCancellables)
+        }
     }
 
     public var lastBlockHeight: Int64? { withOwnedState { publishing.snapshot.lastBlockHeight } }
