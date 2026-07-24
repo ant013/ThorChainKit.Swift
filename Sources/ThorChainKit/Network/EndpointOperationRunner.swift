@@ -221,9 +221,13 @@ private final class CompletionGate<T>: @unchecked Sendable {
 
     @discardableResult
     func finish(_ result: Result<T, Error>) -> Bool {
-        lock.lock(); defer { lock.unlock() }
-        guard !completed else { return false }
+        lock.lock()
+        guard !completed else {
+            lock.unlock()
+            return false
+        }
         completed = true
+        lock.unlock()
         continuation.resume(with: result)
         return true
     }

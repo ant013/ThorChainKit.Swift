@@ -193,6 +193,25 @@ final class EndpointOperationRunnerTests: XCTestCase {
         catch { XCTFail("unexpected error: \(error)") }
         gate.open()
     }
+
+    func testCancellationAndCompletionRaceDoesNotDeadlock() async {
+        let runner = EndpointOperationRunner(deadline: 10, maximumOrphanedOperations: 1)
+        let gate = AsyncGate()
+        let task = Task { try await runner.run { await gate.wait(); return 1 } }
+        await gate.waitUntilRegistered()
+        let finished = expectation(description: "cancelled operation completes")
+        Task {
+            _ = await task.result
+            finished.fulfill()
+        }
+
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { task.cancel() }
+            group.addTask { gate.open() }
+        }
+
+        await fulfillment(of: [finished], timeout: 1)
+    }
 }
 
 private final class AsyncGate: @unchecked Sendable {

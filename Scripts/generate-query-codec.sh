@@ -35,6 +35,8 @@ grep -Fq 'THORNode source: `a759cb4f`' "$provenance"
 grep -Fq 'Cosmos SDK source: `v0.53.0`' "$provenance"
 grep -Fq 'cosmossdk.io/api' "$provenance"
 grep -Fq 'SwiftProtobuf package: exact `1.33.3`' "$provenance"
+grep -Fq 'Xcode: exact `26.3` (`17C529`)' "$provenance"
+grep -Fq 'Apple Swift: exact `6.2.4`' "$provenance"
 grep -Fq 'libprotoc 34.1' "$provenance"
 grep -Fq 'cosmos/auth/v1beta1/query.proto' "$provenance"
 grep -Fq 'cosmos/auth/v1beta1/auth.proto' "$provenance"
@@ -66,6 +68,9 @@ check_sha google/protobuf/any.proto d7c79a05a5c7fae89f0aff26d112e0b60f082fc7fc42
 check_sha google/protobuf/descriptor.proto 32f3df357257f556b311c7e4ad33625a7aa13de541cb53a29ae85ac746c11a07
 test "$(protoc --version)" = "libprotoc 34.1"
 test "$(shasum -a 256 "$(command -v protoc)" | awk '{print $1}')" = "59001d00d60e6ed0e6c49e2ae6591b58882cec5bf45402f937b22566be893d4e"
+test "$(xcodebuild -version | sed -n '1p')" = "Xcode 26.3"
+test "$(xcodebuild -version | sed -n '2p')" = "Build version 17C529"
+printf '%s\n' "$(xcrun swift --version)" | grep -Fq 'Apple Swift version 6.2.4'
 if rg -n 'MsgSend|TxBody|AuthInfo|SignDoc|TxRaw|PrivKey|PrivateKey|SignBytes' "$root/Sources/ThorChainKit/Network/Generated/Query" --glob '*.pb.swift'; then
   echo "transaction/signing codec found in query output" >&2
   exit 1
@@ -74,7 +79,7 @@ swift build --package-path "$root/.build/checkouts/swift-protobuf" --product pro
 plugin_dir=$(swift build --package-path "$root/.build/checkouts/swift-protobuf" --show-bin-path)
 plugin="$plugin_dir/protoc-gen-swift"
 test -x "$plugin"
-test "$(shasum -a 256 "$plugin" | awk '{print $1}')" = "bb23b810919bb7d8dcd38312ea04fec56a44427ff8b32f9d3340bd98fd969ae0"
+test "$(shasum -a 256 "$plugin" | awk '{print $1}')" = "e5908e3c8d1504ca39ad14c38503b313a84b87def21d5f7dc4d0ce4e3709b8e0"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/cosmos/crypto/secp256k1"
