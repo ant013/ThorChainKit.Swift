@@ -4,7 +4,7 @@ struct SyncSchedule: Sendable {
     let normalInterval: TimeInterval
     let failureBackoff: TimeInterval
 
-    static let `default` = SyncSchedule(normalInterval: 60, failureBackoff: 60)
+    static let `default` = SyncSchedule(normalInterval: 15, failureBackoff: 60)
 }
 
 protocol SyncClock: Sendable {
