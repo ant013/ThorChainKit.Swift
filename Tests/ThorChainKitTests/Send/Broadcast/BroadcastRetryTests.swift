@@ -42,12 +42,12 @@ final class BroadcastRetryTests: XCTestCase {
             persistenceNamespace: fixture.namespace,
             runtimeIdentifier: fixture.namespace,
             databaseWriter: fixture.database.pool,
-            operationDeadline: 0.03,
             broadcastOperation: { _, _ in
                 XCTFail("lookup timeout must not broadcast")
                 return BroadcastResponse(txHash: fixture.transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil)
             },
             lookupOperation: { _, _ in await deferred.wait() },
+            operationDeadline: 0.03,
             retryFamilySelection: { _ in },
             retryEndpointLeaseOperation: { _ in }
         )
@@ -71,9 +71,9 @@ final class BroadcastRetryTests: XCTestCase {
             persistenceNamespace: fixture.namespace,
             runtimeIdentifier: fixture.namespace,
             databaseWriter: fixture.database.pool,
-            operationDeadline: 0.03,
-            broadcastOperation: { _, _ in await deferred.wait() },
+            broadcastOperation: { _, _ in try await deferred.wait() },
             lookupOperation: { _, _ in .notFound },
+            operationDeadline: 0.03,
             retryAccountOperation: { RetryAccountSnapshot(sequence: 4, nativeFee: Data([1])) },
             retryFamilySelection: { _ in },
             retryEndpointLeaseOperation: { _ in },

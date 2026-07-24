@@ -59,12 +59,12 @@ public extension Kit {
             persistenceNamespace: namespace,
             runtimeIdentifier: databaseRuntime.location.identity.rawValue,
             databaseWriter: databaseRuntime.pool,
-            pendingRepository: pendingRepository,
-            publicationBarrier: publicationBarrier,
             broadcastOperation: { familyID, transaction in
                 guard let client = broadcastClients[familyID] else { throw BroadcastTransportError.invalidEndpoint }
                 return try await client.broadcast(transaction: transaction)
             },
+            pendingRepository: pendingRepository,
+            publicationBarrier: publicationBarrier,
             lookupOperation: { familyID, transactionID in
                 guard let client = lookupClients[familyID] else { return .providerInconsistent }
                 return await client.lookup(transactionID: transactionID)
@@ -165,12 +165,12 @@ public extension Kit {
             persistenceNamespace: namespace,
             runtimeIdentifier: databaseRuntime.location.identity.rawValue,
             databaseWriter: databaseRuntime.pool,
-            pendingRepository: pendingRepository,
-            publicationBarrier: publicationBarrier,
             broadcastOperation: { familyID, transaction in
                 guard let client = broadcastClients[familyID] else { throw BroadcastTransportError.invalidEndpoint }
                 return try await client.broadcast(transaction: transaction)
             },
+            pendingRepository: pendingRepository,
+            publicationBarrier: publicationBarrier,
             lookupOperation: { familyID, transactionID in
                 guard let client = lookupClients[familyID] else { return .providerInconsistent }
                 return await client.lookup(transactionID: transactionID)
