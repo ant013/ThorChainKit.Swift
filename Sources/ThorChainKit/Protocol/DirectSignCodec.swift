@@ -3,16 +3,28 @@ import Foundation
 import BigInt
 import SwiftProtobuf
 
-struct SignPayload: Sendable {
+struct SignPayload: Sendable, CustomDebugStringConvertible, CustomReflectable {
     let bodyBytes: Data
     let authInfoBytes: Data
     let signDocBytes: Data
     let digest: Data
+
+    var debugDescription: String { "SignPayload(redacted)" }
+
+    var customMirror: Mirror {
+        Mirror(self, children: [:], displayStyle: .struct)
+    }
 }
 
-struct SignedTransaction: Sendable {
+struct SignedTransaction: Sendable, CustomDebugStringConvertible, CustomReflectable {
     let txRaw: Data
     let transactionID: TransactionID
+
+    var debugDescription: String { "SignedTransaction(redacted)" }
+
+    var customMirror: Mirror {
+        Mirror(self, children: [:], displayStyle: .struct)
+    }
 }
 
 enum DirectSignCodec {

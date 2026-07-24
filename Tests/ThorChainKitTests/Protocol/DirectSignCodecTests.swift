@@ -46,6 +46,26 @@ final class DirectSignCodecTests: XCTestCase {
         XCTAssertNotEqual(DirectSignCodec.transactionId(txRaw: signed.txRaw), DirectSignCodec.transactionId(txRaw: mutated))
     }
 
+    func testByteCarriersRedactDebugAndReflection() throws {
+        let payload = try makePayload(snapshot: makeSnapshot())
+        let signed = try DirectSignCodec.makeTxRaw(payload: payload, compactSignature: signature)
+
+        for representation in [
+            String(describing: payload),
+            String(reflecting: payload),
+            String(describing: signed),
+            String(reflecting: signed)
+        ] {
+            XCTAssertFalse(representation.contains("bodyBytes"))
+            XCTAssertFalse(representation.contains("authInfoBytes"))
+            XCTAssertFalse(representation.contains("signDocBytes"))
+            XCTAssertFalse(representation.contains("digest"))
+            XCTAssertFalse(representation.contains("txRaw"))
+            XCTAssertFalse(representation.contains(payload.digest.hex))
+            XCTAssertFalse(representation.contains(signed.txRaw.hex))
+        }
+    }
+
     func testTxRawRejectsEverySignatureLengthExceptCompact() throws {
         let payload = try makePayload(snapshot: makeSnapshot())
         for length in [0, 63, 65] {
