@@ -118,6 +118,7 @@ final class SendPreflightCoordinator: @unchecked Sendable {
         guard try HaltEvaluator.evaluate(height: snapshot.height, mimir: snapshot.mimir) == .allowed else { throw SendError.chainHalted }
         guard snapshot.recipientClassification != .module else { throw SendError.recipientIsModule }
         guard snapshot.recipient == request.recipient.raw else { throw SendError.invalidRecipient }
+        try policy.validate(memo: request.memo, maximumBytes: snapshot.memoMaximumBytes)
         let quote = try await runtime.issuePreflightQuote(request: request, snapshot: snapshot)
         await runtime.finishPreflight(attempt)
         return PreparedQuote(quote: quote, snapshot: snapshot)

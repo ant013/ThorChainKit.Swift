@@ -22,10 +22,12 @@ struct SendPolicy: Equatable, Sendable {
         memoMaximumBytes = uncheckedMemoMaximumBytes; self.operationDeadline = operationDeadline; self.revision = revision
     }
 
-    func validate(memo: String?) throws {
+    func validate(memo: String?, maximumBytes: Int? = nil) throws {
+        let maximumBytes = maximumBytes ?? memoMaximumBytes
+        guard maximumBytes > 0 else { throw SendError.providerUnavailable }
         guard let memo else { return }
-        guard memo.utf8.count <= memoMaximumBytes else {
-            throw SendError.memoTooLong(maxUTF8Bytes: memoMaximumBytes)
+        guard memo.utf8.count <= maximumBytes else {
+            throw SendError.memoTooLong(maxUTF8Bytes: maximumBytes)
         }
     }
 

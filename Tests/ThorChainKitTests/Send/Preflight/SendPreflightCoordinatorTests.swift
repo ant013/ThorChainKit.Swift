@@ -22,6 +22,25 @@ final class SendPreflightCoordinatorTests: XCTestCase {
         XCTAssertEqual(provider.heights, [42])
     }
 
+    func testPreparationRejectsMemoAboveExactHeightAuthLimit() async throws {
+        let address = try sendTestAddress()
+        let family = try EndpointFamilyDescriptor(id: "rorcual-mainnet", cosmosRestURL: URL(string: "https://api-thorchain.rorcual.xyz/")!, cometBftURL: URL(string: "https://rpc-thorchain.rorcual.xyz/")!)
+        let lease = EndpointLease(family: family, verifiedChainId: "thorchain-1", cosmosReadHeight: 42, cometReferenceHeight: 43, poolGeneration: 1)
+        let snapshot = try changed(try SendSnapshot.fixture(height: 42), memoMaximumBytes: 16)
+        let provider = ScriptedSendProvider(leases: [lease], snapshots: [snapshot])
+        let runtime = SendRuntime(address: address)
+        await runtime.activate(generation: 1)
+        provider.runtime = runtime
+
+        let request = SendQuoteRequest(sender: address, recipient: try sendOtherAddress(), amount: .exact(100), memo: String(repeating: "a", count: 17))
+        do {
+            _ = try await SendPreflightCoordinator(runtime: runtime, provider: provider).prepareQuote(request: request)
+            XCTFail("expected memo limit rejection")
+        } catch {
+            XCTAssertEqual(error as? SendError, .memoTooLong(maxUTF8Bytes: 16))
+        }
+    }
+
     func testCrossFamilyOrCrossHeightSnapshotFailsClosed() async throws {
         let address = try sendTestAddress()
         let family = try EndpointFamilyDescriptor(id: "rorcual-mainnet", cosmosRestURL: URL(string: "https://api-thorchain.rorcual.xyz/")!, cometBftURL: URL(string: "https://rpc-thorchain.rorcual.xyz/")!)
