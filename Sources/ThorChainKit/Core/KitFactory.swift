@@ -20,7 +20,8 @@ public extension Kit {
 
         let facadeDispatcher = DispatchQueue(label: "io.horizontalsystems.thorchain-kit.facade")
         let publishing = StatePublishing()
-        let storage = try GrdbAccountStateStorage(path: try databasePath(namespace: namespace))
+        let databaseRuntime = try DatabaseRuntime.open(path: try databasePath(namespace: namespace))
+        let storage = GrdbAccountStateStorage(writer: databaseRuntime.pool)
         let probe = LiveNodeProbe(configuration: endpoints)
         let pool = EndpointPool(network: address.network, configuration: endpoints, probe: probe)
         let liveClient = LiveThorNodeClient(
@@ -41,7 +42,12 @@ public extension Kit {
             storage: storage,
             publishing: publishing
         )
-        let sendRuntime = SendRuntime(address: address)
+        let sendRuntime = SendRuntime(
+            address: address,
+            persistenceNamespace: namespace,
+            runtimeIdentifier: databaseRuntime.location.identity.rawValue,
+            databaseWriter: databaseRuntime.pool
+        )
         let syncer = AccountSyncer(
             address: address,
             storageKey: key,
@@ -93,7 +99,8 @@ public extension Kit {
             .joined()
         let facadeDispatcher = DispatchQueue(label: "io.horizontalsystems.thorchain-kit.facade")
         let publishing = StatePublishing()
-        let storage = try GrdbAccountStateStorage(path: databasePath)
+        let databaseRuntime = try DatabaseRuntime.open(path: databasePath)
+        let storage = GrdbAccountStateStorage(writer: databaseRuntime.pool)
         let adapter = FixtureHTTPTransportAdapter(transport: transport)
         let probe = LiveNodeProbe(configuration: endpoints, transport: adapter)
         let pool = EndpointPool(network: address.network, configuration: endpoints, probe: probe)
@@ -117,7 +124,12 @@ public extension Kit {
             storage: storage,
             publishing: publishing
         )
-        let sendRuntime = SendRuntime(address: address)
+        let sendRuntime = SendRuntime(
+            address: address,
+            persistenceNamespace: namespace,
+            runtimeIdentifier: databaseRuntime.location.identity.rawValue,
+            databaseWriter: databaseRuntime.pool
+        )
         let syncer = AccountSyncer(
             address: address,
             storageKey: key,

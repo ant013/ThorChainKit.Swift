@@ -14,6 +14,10 @@ final class GrdbAccountStateStorage: AccountStateStorage {
         try ThorChainMigrations.migrator().migrate(pool)
     }
 
+    init(writer: DatabasePool) {
+        pool = writer
+    }
+
     func load(key: StorageKey) async throws -> StorageRecord? {
         try await pool.read { db -> StorageRecord? in
             guard try Row.fetchOne(
