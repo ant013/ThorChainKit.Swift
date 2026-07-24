@@ -110,16 +110,16 @@ Bug statuses: {'workaround': 4}
 
 ## Adversarial decisions
 
-- ARCH-157-01@1 ACCEPT: Two-level runtime ownership is explicit and scoped
-- ARCH-157-02@1 ACCEPT: Current-family retry capability is fail-closed
-- SEC-157-01@1 ACCEPT: sequenceAdvanced is a persisted pre-CAS retry block
-- SEC-157-02@1 ACCEPT: Redaction policy is internally consistent
-- SEC-157-03@1 ACCEPT: Strict response authority remains hash-first and fail-closed
-- VOP-157-01@1 ACCEPT: Use Apple xcrun Swift and discovery assertions
-- VOP-157-02@1 ACCEPT: Every AC has a named observable
-- VOP-157-03@1 ACCEPT: Restart evidence must cross process boundary
-- VOP-157-04@1 ACCEPT: Observation/publication seam is deterministic
-- VOP-157-05@1 ACCEPT: Live family compatibility is an explicit gate
+- ARCH-157-01@2 ACCEPT: Two-level runtime ownership is explicit and scoped
+- ARCH-157-02@2 ACCEPT: Current-family retry capability is fail-closed
+- SEC-157-01@2 ACCEPT: sequenceAdvanced has an explicit persisted pre-CAS/no-I-O retry guard
+- SEC-157-02@2 ACCEPT: Redaction policy is internally consistent
+- SEC-157-03@2 ACCEPT: Strict response authority remains hash-first and fail-closed
+- VOP-157-01@2 ACCEPT: Use Apple xcrun Swift and discovery assertions
+- VOP-157-02@2 ACCEPT: Every AC has a named observable
+- VOP-157-03@2 ACCEPT: Restart evidence must cross process boundary
+- VOP-157-04@2 ACCEPT: Observation/publication seam is deterministic
+- VOP-157-05@2 ACCEPT: Live family compatibility is an explicit gate
 
 ## Verification and acceptance
 

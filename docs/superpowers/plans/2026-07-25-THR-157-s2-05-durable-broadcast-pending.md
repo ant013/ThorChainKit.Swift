@@ -4,6 +4,14 @@ Authoritative current-main base: `76e3a7195d68140dcd137a3f978ae37f6963b7f5`.
 Authoritative slice spec: `docs/specs/sprint-02-native-send/S2-05-durable-broadcast-pending.md`.
 Formalization artifacts: `audit/runs/thr-157-reformalize-20260725/`.
 
+## Exact revision binding
+
+- Authoritative S2-05 spec SHA-256: `927cbaab665728a5e262103df085ba19c61ac46cd714d2e13ca50134ed8f2067`.
+- Canonical S2 bundle digest: `cada561070fe41d537430ed9ff133f1e3c763f061cc45a83947e2044cb512cda`.
+- Re-formalization spec artifact SHA-256: `49c6bcdc1bbdb651aa536c74aebedf149daf909fb0fa9bcd076349274bd2f69c`.
+- Re-formalization delta matrix SHA-256: `afaa859649242dff8d926b850c67bd463fe418c9aaac19a28f2393c2f3eb1318`.
+- Re-formalization test plan SHA-256: `ca486960a2829d30ff6c52b0b93a2a93eea7256c24bc04ac58877957bf0faf7e`.
+
 ## Goal and acceptance
 
 Persist exact signed bytes/hash and the S2-04 reservation link before network I/O; classify only authoritative Cosmos CheckTx responses; retry exact bytes safely; publish/recover pending state across cancellation, timeout, observation failure, and restart. Done means AC1–AC7 in the current S2-05 spec pass with local MacBook evidence and no out-of-slice integration.
