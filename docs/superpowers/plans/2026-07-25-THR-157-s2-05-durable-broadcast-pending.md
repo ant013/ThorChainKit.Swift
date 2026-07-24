@@ -6,11 +6,11 @@ Formalization artifacts: `audit/runs/thr-157-reformalize-20260725/`.
 
 ## Exact revision binding
 
-- Authoritative S2-05 spec SHA-256: `927cbaab665728a5e262103df085ba19c61ac46cd714d2e13ca50134ed8f2067`.
-- Canonical S2 bundle digest: `cada561070fe41d537430ed9ff133f1e3c763f061cc45a83947e2044cb512cda`.
-- Re-formalization spec artifact SHA-256: `49c6bcdc1bbdb651aa536c74aebedf149daf909fb0fa9bcd076349274bd2f69c`.
+- Authoritative S2-05 spec SHA-256: `bea62d003798aca8c7aa29c5716f0ea6fcf1732448888a3235011fe4aec4fc66`.
+- Canonical S2 bundle digest: `b79d6320d94807bddc33686838b174a0f9e55775c165cc7e15626b3c9306f5ae`.
+- Re-formalization spec artifact SHA-256: `b54da7eb40cbcf22094a881133ba51645deb217db7e7ef7c8a6fc4076a529e8d`.
 - Re-formalization delta matrix SHA-256: `afaa859649242dff8d926b850c67bd463fe418c9aaac19a28f2393c2f3eb1318`.
-- Re-formalization test plan SHA-256: `ca486960a2829d30ff6c52b0b93a2a93eea7256c24bc04ac58877957bf0faf7e`.
+- Re-formalization test plan SHA-256: `d15e64be7b8b58a0dee070161c385fa96a43ade92430e34849e10b3ca994a394`.
 
 ## Goal and acceptance
 
@@ -39,4 +39,4 @@ Persist exact signed bytes/hash and the S2-04 reservation link before network I/
 
 Untouched: S2-06 Example, S2-07 Unstoppable, UI/host integration, inclusion/history/finality, replacement/resigning, explorer logic, and unrelated pre-existing reports.
 
-Discovery **2/2**; closure **0/5** at this revised formalization. Frozen allowlist: `ARCH-157-01`, `ARCH-157-02`, `SEC-157-01`, `SEC-157-02`, `SEC-157-03`, `VOP-157-01`, `VOP-157-02`, `VOP-157-03`, `VOP-157-04`, `VOP-157-05`. Later review is targeted closure only. Implementation remains prohibited until this exact revision receives explicit user confirmation, including the fail-closed current-family retry gate.
+Discovery **2/2**; closure **1/5** at this revised formalization. Frozen allowlist: `ARCH-157-01`, `ARCH-157-02`, `SEC-157-01`, `SEC-157-02`, `SEC-157-03`, `VOP-157-01`, `VOP-157-02`, `VOP-157-03`, `VOP-157-04`, `VOP-157-05`. Later review is targeted closure only. Implementation remains prohibited until this exact revision receives explicit user confirmation, including the fail-closed current-family retry gate.
