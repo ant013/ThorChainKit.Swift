@@ -26,6 +26,7 @@ final class SendRuntimeSharedState: @unchecked Sendable {
     private var activeClients = Set<UUID>()
     private var activeAccounts = [String: AccountAttemptState]()
     private var signerFences = Set<String>()
+    private var recoveryClaimed = false
 
     init(persistenceNamespace: String, runtimeIdentifier: String) {
         self.persistenceNamespace = persistenceNamespace
@@ -48,6 +49,20 @@ final class SendRuntimeSharedState: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return activeClients.contains(clientID)
+    }
+
+    func claimRecovery() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !recoveryClaimed else { return false }
+        recoveryClaimed = true
+        return true
+    }
+
+    func releaseRecovery() {
+        lock.lock()
+        recoveryClaimed = false
+        lock.unlock()
     }
 
     func beginAccount(_ key: String) -> Bool {
