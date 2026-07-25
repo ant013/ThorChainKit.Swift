@@ -1,5 +1,12 @@
 # S2-07 — Unstoppable Native RUNE Send Integration
 
+**Formalization revision:** 1 — discovery 1/2; closure 0/5.
+
+This document is the implementation contract for THR-160. The design is
+approval-gated: no Unstoppable source, test, project, script, or acceptance
+artifact may change until this revision is explicitly approved. The reviewed
+architecture base remains commit `518835315a65996b9321665213adb0516503df65`.
+
 **Risk:** critical
 **Depends on:** accepted/released S2-01 through S2-06 package revision and completed S1-07 MarketKit/WalletCore host release
 **Produces:** standard WalletCore SendNew integration and controlled real mainnet send
@@ -312,3 +319,26 @@ The runner requires a nonzero discovered test count and the suite's overlap sent
 ## Pinned Decision
 
 Vultisig is not a host architecture analog here. No KeysignPayload, TSS response, WalletCore transaction compiler, or global THOR service is imported into Unstoppable or ThorChainKit.
+
+## Formalization Evidence and Delta Boundary
+
+The current Unstoppable checkout used for analog verification is
+`/Users/ant013/Ios/HorizontalSystems/unstoppable-wallet-ios` at HEAD
+`520fb7400311b3266cfb6b0db81c3e919e080019`. It is on the unrelated dirty
+branch `core/uswap-provider-layering`; its changes are preserved and are not an
+implementation base. The load-bearing analogs are the HEAD versions of
+`ISendTronAdapter`, `TronPreSendHandler`, `TronSendHandler`,
+`SendHandlerFactory`, `SendViewModel`, `AccountManager`, and the serialized
+`Unstoppable/Tests` suites. Gimle project mapping and Serena were unavailable,
+so all selected facts were independently checked with codebase-memory followed
+by targeted `git grep`/`git show`; no Gimle result is treated as design proof.
+
+The delta is deliberately limited to the exact host files and new files named
+above: a narrow internal THOR adapter/client seam; host-owned ephemeral signer
+creation and active-account revalidation; quote/review/send outcome mapping;
+absolute expiry; the shared `IOutcomeSendHandler` path; the shared
+`SlideButton` action seam; serialized global-state tests; the strict
+concurrency baseline-delta canary; local WalletCore/AppTests and Development
+build evidence; and one controlled mainnet acceptance. No protocol logic,
+mnemonic/secret storage, fixture transport, Maestro, launch argument, or
+secret-bearing artifact is added to Unstoppable.
