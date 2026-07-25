@@ -1,7 +1,7 @@
 # THR-159 S2-06 topology implementation evidence
 
 Date: 2026-07-25
-Head: `19100aeca67c27387c16987fddfc0f350ee25561`
+Head: `a6d2fce74a80cf118c4cab733948dcfbaae95475`
 Simulator UDID: `0A88BC07-1DF9-490A-BCAF-6FA2165F6B17`
 
 ## Gimle reliability
