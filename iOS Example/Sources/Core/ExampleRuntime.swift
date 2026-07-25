@@ -50,9 +50,13 @@ struct ExampleRuntime {
     let network: Network
     let endpointConfiguration: EndpointConfiguration
     let mode: ExampleMode
+    let recipient: String
+    let fixtureNamespace: String?
     let signer: (any Signer)?
 #if EXAMPLE_FIXTURE
     private let fixtureTransport: FixtureTransport
+    private let fixtureClock: FixtureClock
+    private let fixtureScenario: FixtureScenario
 #endif
 
     init() throws {
@@ -72,9 +76,14 @@ struct ExampleRuntime {
 #if EXAMPLE_FIXTURE
         mode = .fixture
         let scenario = FixtureScenario(id: Self.scenarioID)
-        let transport = FixtureTransport(scenario: scenario)
+        let transcript = FixtureTranscript(expected: scenario.expectedRequests)
+        let transport = FixtureTransport(scenario: scenario, transcript: transcript)
+        fixtureScenario = scenario
+        fixtureClock = FixtureClock(now: Date(timeIntervalSince1970: 1_700_000_000))
         fixtureTransport = transport
         let address = try Address(Configuration.address, network: network)
+        recipient = Configuration.recipient
+        fixtureNamespace = scenario.namespace
         kit = try Kit.fixture(
             address: address,
             walletId: scenario.namespace,
@@ -83,7 +92,12 @@ struct ExampleRuntime {
             databasePath: try Self.fixtureDatabasePath(namespace: scenario.namespace),
             observedAt: Date(timeIntervalSince1970: 1)
         )
-        signer = FixtureSigner.golden()
+        let golden = FixtureSigner.golden()
+        signer = FixtureSigner(
+            expectedDigest: scenario.expectedDigest,
+            signature: golden.signature,
+            compressedPublicKey: golden.compressedPublicKey
+        )
 #else
         mode = .live
         let session = try LiveSendSession(
@@ -91,6 +105,8 @@ struct ExampleRuntime {
             endpoints: endpointConfiguration
         )
         kit = session.kit
+        recipient = session.recipient.raw
+        fixtureNamespace = nil
         signer = session.signer
 #endif
     }
@@ -155,6 +171,20 @@ struct ExampleRuntime {
 #endif
     }
 
+    func advanceFixtureToExpiry() async {
+#if EXAMPLE_FIXTURE
+        await fixtureClock.advanceToExpiry(of: fixtureScenario)
+#endif
+    }
+
+    func isQuoteExpired(_ date: Date) async -> Bool {
+#if EXAMPLE_FIXTURE
+        return await fixtureClock.now >= date
+#else
+        return Date() >= date
+#endif
+    }
+
     func endpointSnapshot(scenario: EndpointScenario) async -> EndpointPolicySnapshot {
         let snapshot = await TestingEndpointPolicySession(
             network: network,
@@ -192,7 +222,9 @@ struct ExampleRuntime {
 
 #if EXAMPLE_FIXTURE
     private static var scenarioID: FixtureScenarioID {
-        let raw = ProcessInfo.processInfo.arguments.drop { $0 != "--example-scenario" }.dropFirst().first
+        let arguments = ProcessInfo.processInfo.arguments
+        let raw = arguments.first(where: { $0.hasPrefix("--example-scenario=") })?.split(separator: "=", maxSplits: 1).last.map(String.init)
+            ?? arguments.drop { $0 != "--example-scenario" }.dropFirst().first
         return FixtureScenarioID(rawValue: raw ?? "send-quote-review") ?? .quoteReview
     }
 #endif

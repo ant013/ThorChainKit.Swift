@@ -12,7 +12,10 @@ enum SendAmountInput {
               parts[0].allSatisfy(\.isNumber),
               parts[0].first != "-" else { return nil }
         let fraction = parts.count == 2 ? String(parts[1]) : ""
-        guard fraction.count <= 8, fraction.allSatisfy(\.isNumber) else { return nil }
+        guard (parts.count == 1 || !fraction.isEmpty), fraction.count <= 8,
+              fraction.allSatisfy(\.isNumber) else {
+            return nil
+        }
         let integer = BigUInt(String(parts[0]), radix: 10) ?? 0
         let fractional = BigUInt(fraction.padding(toLength: 8, withPad: "0", startingAt: 0), radix: 10) ?? 0
         let value = integer * unitsPerRune + fractional

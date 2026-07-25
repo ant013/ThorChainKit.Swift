@@ -1,6 +1,10 @@
 appId: org.horizontalsystems.thorchainkit.example.fixture
 name: send-quote-review
 ---
+- launchApp:
+    clearState: true
+    arguments:
+      "--example-scenario": "send-quote-review"
 - tapOn:
     id: send-open
 - tapOn:
@@ -25,3 +29,12 @@ name: send-quote-review
     id: send.review.height
 - assertVisible:
     id: send.review.expiry
+- tapOn:
+    id: send.fixture.advance-to-expiry
+- assertVisible:
+    text: "Quote expired — refresh required"
+- assertNotEnabled:
+    id: send.confirm.button
+- assertVisible:
+    id: send.fixture.signer-call-count
+    text: "0"

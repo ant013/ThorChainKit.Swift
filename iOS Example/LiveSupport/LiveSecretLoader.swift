@@ -1,4 +1,5 @@
 import Foundation
+import ThorChainKit
 #if canImport(HdWalletKit)
 import HdWalletKit
 #endif
@@ -19,11 +20,19 @@ public struct LiveSecretLoader {
         let data: Data
         do { data = try Data(contentsOf: url, options: [.uncached]) } catch { throw LiveSecretError.unavailable }
         guard let text = String(data: data, encoding: .utf8) else { throw LiveSecretError.malformed }
+        let allowedKeys = Set([
+            "THORCHAIN_NETWORK",
+            "THORCHAIN_MAINNET_MNEMONIC",
+            "THORCHAIN_MAINNET_RECIPIENT_ADDRESS"
+        ])
         var values = [String: String]()
         for line in text.split(whereSeparator: \.isNewline) {
+            if line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { continue }
             let parts = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
-            guard parts.count == 2 else { continue }
-            values[String(parts[0])] = String(parts[1])
+            guard parts.count == 2, !parts[0].isEmpty else { throw LiveSecretError.malformed }
+            let key = String(parts[0])
+            guard allowedKeys.contains(key), values[key] == nil else { throw LiveSecretError.malformed }
+            values[key] = String(parts[1])
         }
         guard values["THORCHAIN_NETWORK"] == "mainnet",
               let mnemonic = values["THORCHAIN_MAINNET_MNEMONIC"],
@@ -38,8 +47,8 @@ public struct LiveSecretLoader {
               words.allSatisfy({ $0 == $0.lowercased() && !$0.isEmpty }),
               words.joined(separator: " ") == mnemonic,
               validMnemonic,
-              !recipient.isEmpty
+              (try? Address(recipient, network: .mainnet)) != nil
         else { throw LiveSecretError.malformed }
-        return (words, recipient)
+        return (words, try Address(recipient, network: .mainnet).raw)
     }
 }

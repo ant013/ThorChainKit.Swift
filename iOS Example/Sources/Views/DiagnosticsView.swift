@@ -18,7 +18,7 @@ struct DiagnosticsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                row("Data Source", value: "FIXTURE", identifier: "data-source")
+                row("Data Source", value: model.dataSource, identifier: "data-source")
                 row("Network", value: model.network, identifier: "network")
                 row("Address", value: model.address, identifier: "address")
                 row("Sync State", value: model.syncDescription, identifier: "sync-state")

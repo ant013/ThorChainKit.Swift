@@ -3,6 +3,7 @@ import ThorChainKit
 
 public final class FixtureSigner: Signer, @unchecked Sendable {
     public let compressedPublicKey: Data
+    public let signature: Data
     private let expectedDigest: Data
     private let signature: Data
     private let lock = NSLock()

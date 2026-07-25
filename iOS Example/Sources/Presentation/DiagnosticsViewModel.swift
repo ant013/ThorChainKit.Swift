@@ -32,6 +32,7 @@ final class DiagnosticsViewModel: ObservableObject {
         "\(runtime.kit.network.environment.rawValue) · \(runtime.kit.network.expectedChainId)"
     }
 
+    var dataSource: String { runtime.mode.rawValue }
     var address: String { runtime.kit.address.raw }
     var runeBalance: String { accountState?.balances[.rune]?.description ?? "0" }
     var accountExists: String { String(accountState?.exists ?? false) }

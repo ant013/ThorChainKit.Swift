@@ -21,12 +21,15 @@ public struct FixtureRequest: Equatable, Sendable {
 
 public actor FixtureTranscript {
     private let expected: [FixtureRequest]
+    public private(set) var requests = [FixtureRequest]()
     private var position = 0
 
     public init(expected: [FixtureRequest]) { self.expected = expected }
 
     public func record(_ request: FixtureRequest) throws {
+        requests.append(request)
         guard position < expected.count, expected[position] == request else {
+            if expected.isEmpty { return }
             throw URLError(.cannotParseResponse)
         }
         position += 1
@@ -40,13 +43,15 @@ public actor FixtureTranscript {
 public actor FixtureTransport: TestingHTTPTransport {
     public private(set) var requestCount = 0
     private let scenario: FixtureScenario
-    private let transcript: FixtureTranscript?
+    private let transcript: FixtureTranscript
     private var offline = false
     private var pending = false
     private var broadcastCalls = 0
+    private var acceptedBytes: Data?
+    private var acceptedHash: String?
     private var continuations = [CheckedContinuation<Void, Never>]()
 
-    public init(scenario: FixtureScenario, transcript: FixtureTranscript? = nil) {
+    public init(scenario: FixtureScenario, transcript: FixtureTranscript) {
         self.scenario = scenario
         self.transcript = transcript
     }
@@ -67,7 +72,7 @@ public actor FixtureTransport: TestingHTTPTransport {
     public func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         requestCount += 1
         let url = try requireURL(request)
-        try await transcript?.record(FixtureRequest(
+        try await transcript.record(FixtureRequest(
             method: request.httpMethod ?? "GET",
             origin: "\(url.scheme ?? "")://\(url.host ?? "")\(url.port.map { ":\($0)" } ?? "")",
             path: url.path,
@@ -95,14 +100,20 @@ public actor FixtureTransport: TestingHTTPTransport {
             response = (Data(#"{"code":5,"message":"rpc error: code = NotFound desc = tx not found: \#(hash): key not found","details":[]}"#.utf8), 404, [:])
         } else if request.httpMethod == "POST" {
             broadcastCalls += 1
-            if scenario.id == .unknown && broadcastCalls == 1 {
-                throw URLError(.networkConnectionLost)
-            }
             guard let body = request.httpBody,
                   let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
                   let encoded = object["tx_bytes"] as? String,
                   let raw = Data(base64Encoded: encoded) else { throw URLError(.cannotParseResponse) }
             let hash = Data(SHA256.hash(data: raw)).map { String(format: "%02X", $0) }.joined()
+            if let acceptedBytes {
+                guard raw == acceptedBytes, hash == acceptedHash else { throw URLError(.cannotParseResponse) }
+            } else {
+                acceptedBytes = raw
+                acceptedHash = hash
+            }
+            if (scenario.id == .unknown || scenario.id == .retry || scenario.id == .restartPending) && broadcastCalls == 1 {
+                throw URLError(.networkConnectionLost)
+            }
             response = (Data(#"{"tx_response":{"code":0,"codespace":"sdk","txhash":"\#(hash)"}}"#.utf8), 200, [:])
         } else {
             response = (Data(#"{"tx_response":{"code":1,"codespace":"sdk"}}"#.utf8), 404, [:])
@@ -119,4 +130,6 @@ public actor FixtureTransport: TestingHTTPTransport {
         guard let url = request.url else { throw URLError(.badURL) }
         return url
     }
+
+    public func finishTranscript() async throws { try await transcript.finish() }
 }

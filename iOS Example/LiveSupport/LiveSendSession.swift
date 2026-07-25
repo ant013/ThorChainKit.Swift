@@ -32,10 +32,12 @@ public struct LiveSendSession {
     public let kit: Kit
     public let signer: LiveSigner
     public let address: Address
+    public let recipient: Address
 
     public init(secretURL: URL, endpoints: EndpointConfiguration) throws {
 #if canImport(HdWalletKit) && canImport(HsCryptoKit)
         let secret = try LiveSecretLoader().load(from: secretURL)
+        let recipient = try Address(secret.recipient, network: .mainnet)
         guard let seed = Mnemonic.seed(mnemonic: secret.words, passphrase: "", iterations: 2048) else {
             throw LiveSecretError.malformed
         }
@@ -48,6 +50,7 @@ public struct LiveSendSession {
         let signer = LiveSigner(privateKey: privateKey.raw, compressedPublicKey: publicKey)
         let kit = try Kit.instance(address: address, walletId: walletID, endpoints: endpoints)
         self.address = address
+        self.recipient = recipient
         self.signer = signer
         self.kit = kit
 #else

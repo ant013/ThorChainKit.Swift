@@ -1,6 +1,10 @@
 appId: org.horizontalsystems.thorchainkit.example.fixture
 name: send-checktx-accepted
 ---
+- launchApp:
+    clearState: true
+    arguments:
+      "--example-scenario": "send-checktx-accepted"
 - tapOn:
     id: send-open
 - tapOn:
@@ -12,3 +16,7 @@ name: send-checktx-accepted
     id: send.confirm.button
 - assertVisible:
     id: send.result.state
+- assertVisible:
+    text: "CheckTx accepted — not confirmed"
+- assertVisible:
+    id: send.result.local-hash

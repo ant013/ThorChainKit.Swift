@@ -11,5 +11,5 @@ enum Configuration {
     static let cometBftURL = URL(string: "https://rpc.invalid")!
     static let liveCosmosRestURL = URL(string: "https://thornode.ninerealms.com")!
     static let liveCometBftURL = URL(string: "https://thornode.ninerealms.com")!
-    static let liveSecretURL = URL(fileURLWithPath: ".env")
+    static let liveSecretURL = URL(fileURLWithPath: ".env", relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
 }

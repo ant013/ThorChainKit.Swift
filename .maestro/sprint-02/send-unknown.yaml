@@ -1,6 +1,10 @@
 appId: org.horizontalsystems.thorchainkit.example.fixture
 name: send-unknown
 ---
+- launchApp:
+    clearState: true
+    arguments:
+      "--example-scenario": "send-unknown"
 - tapOn:
     id: send-open
 - tapOn:
@@ -14,3 +18,5 @@ name: send-unknown
     id: send.result.local-hash
 - assertVisible:
     id: send.retry.button
+- assertVisible:
+    text: "Unknown — retry available"

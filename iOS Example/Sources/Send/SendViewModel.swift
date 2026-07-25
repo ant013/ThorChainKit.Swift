@@ -5,7 +5,7 @@ import ThorChainKit
 
 @MainActor
 final class SendViewModel: ObservableObject {
-    @Published var recipient = Configuration.recipient
+    @Published var recipient: String
     @Published var amount = ""
     @Published var memo = ""
     @Published private(set) var modeBadge: String
@@ -17,6 +17,8 @@ final class SendViewModel: ObservableObject {
     @Published private(set) var errorMessage = ""
     @Published private(set) var signerCallCount = 0
     @Published private(set) var currentFee = BigUInt(0)
+    @Published private(set) var retryPreviousFee = BigUInt(0)
+    @Published private(set) var retryCurrentFee = BigUInt(0)
     @Published private(set) var quoteExpired = false
 
     let runtime: ExampleRuntime
@@ -24,11 +26,18 @@ final class SendViewModel: ObservableObject {
     private var signer: (any Signer)? { runtime.signer }
 
     init(runtime: ExampleRuntime) {
+        self.recipient = runtime.recipient
         self.runtime = runtime
         modeBadge = runtime.mode.rawValue
         runtime.kit.pendingTransactionsPublisher
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] in self?.pending = $0 }
+            .sink { [weak self] transactions in
+                self?.pending = transactions
+                if let transaction = transactions.first(where: { if case .unknown = $0.state { true } else { false } }) {
+                    self?.retryPreviousFee = transaction.nativeFee
+                    self?.retryCurrentFee = transaction.nativeFee + 1
+                }
+            }
             .store(in: &cancellables)
         runtime.kit.pendingTransactionsStatusPublisher
             .receive(on: DispatchQueue.main)
@@ -69,8 +78,13 @@ final class SendViewModel: ObservableObject {
     }
 
     func confirm() {
-        guard let review, review.expiresAt > Date(), let signer else { return }
+        guard let review, let signer else { return }
         Task {
+            guard !(await runtime.isQuoteExpired(review.expiresAt)) else {
+                quoteExpired = true
+                resultState = "Quote expired — refresh required"
+                return
+            }
             do {
                 let submission = try await runtime.kit.send(quote: review, signer: signer)
                 localHash = submission.transactionId.hash
@@ -84,14 +98,17 @@ final class SendViewModel: ObservableObject {
         }
     }
 
-    func retry(_ transaction: PendingTransaction, acceptingFee: Bool) {
+    func retry(_ transaction: PendingTransaction, acceptingFee: BigUInt) {
         guard case .unknown = transaction.state else { return }
-        guard acceptingFee else { return }
+        guard acceptingFee == retryCurrentFee else {
+            errorMessage = "Acknowledge the current native fee before retrying."
+            return
+        }
         Task {
             do {
                 let submission = try await runtime.kit.retryBroadcast(
                     transactionId: transaction.transactionId,
-                    acceptingNativeFee: transaction.nativeFee
+                    acceptingNativeFee: acceptingFee
                 )
                 localHash = submission.transactionId.hash
                 resultState = Self.submissionDescription(submission.state)
@@ -101,12 +118,20 @@ final class SendViewModel: ObservableObject {
         }
     }
 
-    func refresh() { runtime.kit.refresh() }
+    func refresh() {
+        quoteExpired = false
+        resultState = ""
+        review = nil
+        runtime.kit.refresh()
+    }
 
     func advanceToExpiry() {
         guard review != nil else { return }
-        quoteExpired = true
-        resultState = "Quote expired — refresh required"
+        Task {
+            await runtime.advanceFixtureToExpiry()
+            quoteExpired = true
+            resultState = "Quote expired — refresh required"
+        }
     }
 
     private static func submissionDescription(_ state: SendSubmission.State) -> String {
