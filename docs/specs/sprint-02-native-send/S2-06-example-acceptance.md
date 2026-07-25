@@ -4,7 +4,7 @@
 **Depends on:** S2-01 through S2-05
 **Produces:** runnable package-owned fixture/live send demonstration and guarded Maestro evidence
 
-## Topology correction revision 5 — Xcode 26.3 gate
+## Topology correction revision 6 — explicit ownership and fail-closed LIVE gate
 
 This revision binds the slice to Xcode `26.3 (17C529)` and the iOS `26.2`
 simulator runtime on the approved iPhone 17 Pro UDID. It supersedes the
@@ -16,7 +16,12 @@ not link LiveSupport, but Xcode 26.3 still materializes the shared
 `HsCryptoKit` → `swift-crypto` package-product closure and asks for the absent
 hashed `Crypto_17A3B1FFC41E47_PackageProduct` executable. The real arm64
 `Crypto.framework/Crypto` is present; the requested wrapper executable is not.
-The saved diagnostic is `/private/tmp/thr159-xcode263-newpif.Vy3rb5/fixture-build.log`.
+The redacted diagnostic is retained by digest, not by an operator-local path:
+`fixture-build.log`, SHA-256
+`8d2747d9f7109f2cbba149b124f2c2cb1a05c15382ae9d3aa7d0611a498bb128`.
+The reproducible command is the exact Fixture Debug build from the Verification
+section with `IDEEnableNewPackagePIFBuilder=YES`; its output is captured under
+the run's redacted artifact directory.
 
 The direct root `Crypto`/`_CryptoExtras` declaration and static ThorChainKit
 experiments are rejected and must not be repeated: the former still produced
@@ -36,12 +41,28 @@ toolchain/runtime: one valid Crypto executable per package closure, no
 duplicate ThorChainKit linkage, FixtureSupport exclusion from Live artifacts,
 and successful Fixture Debug plus Live Release builds.
 
-Any future compatibility slice must choose one explicit owner for the shared
-crypto closure (an approved upstream/package-graph correction or a redesigned
-single-consumer target boundary). It may not guess between dynamic/static
-products or bypass the missing executable with copied binaries or linker
-flags. Until then, all build, Maestro, artifact, and release-symbol criteria
-remain fail-closed and unachieved.
+Revision-6 resolves the ownership ambiguity for the eventual implementation,
+without claiming that the Xcode 26.3 wrapper failure is fixed:
+
+- Each app target directly owns its `ThorChainKit` package product. No local
+  support target depends on `ThorChainKit`, and no app depends on a support
+  target that also links that product.
+- `ThorChainExampleLive` directly owns `ThorChainKit`, `HdWalletKit`,
+  `HsCryptoKit`, and `secp256k1`; `ThorChainExampleLiveSupport` is a
+  Foundation-only target containing the staged-file loader. Live derivation,
+  address construction, signer adapter, and `Kit.instance` construction live
+  in Example-owned `Sources/Signing/**`.
+- `ThorChainExampleFixture` directly owns `ThorChainKit` and depends on the
+  Foundation-only `ThorChainExampleFixtureSupport`; fixture scenario,
+  transport, clock, and transcript data remain in `FixtureSupport/**`, while
+  the Example-owned signer/Kit transport adapters live in
+  `Sources/Signing/**`.
+
+This is the single-owner graph to prove in Step 0. It may not guess between
+dynamic/static products or bypass the missing executable with copied binaries,
+linker flags, external checkout edits, weaker pins, or acceptance reduction.
+Until the exact graph produces both required builds, all build, Maestro,
+artifact, and release-symbol criteria remain fail-closed and unachieved.
 
 ## Goal
 
@@ -62,8 +83,10 @@ iOS Example/
   Sources/ThorChainExampleApp.swift
   Sources/Core/ExampleRuntime.swift
   Sources/Signing/LiveSendSession.swift
+  Sources/Signing/LiveSigner.swift
+  Sources/Signing/FixtureSigner.swift
+  Sources/Signing/FixtureTransportAdapter.swift
   LiveSupport/LiveSecretLoader.swift
-  LiveSupport/ThorBip39Signer.swift
   Sources/Send/SendViewModel.swift
   Sources/Send/SendView.swift
   Sources/Send/SendReviewView.swift
@@ -74,16 +97,17 @@ iOS Example/
 .maestro/sprint-02/*.yaml
 Scripts/run-maestro.sh
 Tests/ThorChainKitTests/ExampleAcceptanceManifestTests.swift
+Sources/ThorChainKit/Core/KitFactory.swift (test-only SPI transport factory only)
 ```
 
 Existing Sprint 1 Example files may be evolved rather than duplicated; the responsibilities/accessibility IDs below are fixed. The current project has one native target, so implementation must make the target graph explicit rather than relying on scheme names alone:
 
-- `ThorChainExampleLive` is the Release app target. Its source membership is the shared SwiftUI `Sources/**` set plus the live session; it links the `ThorChainKit` package product and the Example-only `ThorChainExampleLiveSupport` target.
+- `ThorChainExampleLive` is the Release app target. Its source membership is the shared SwiftUI `Sources/**` set plus the Example-owned live signer/session and transport guard; it directly links `ThorChainKit`, `HdWalletKit`, `HsCryptoKit`, `secp256k1`, and the Foundation-only `ThorChainExampleLiveSupport` product. No support target links `ThorChainKit`.
 - `ThorChainExampleFixture` is the Debug app target. It has the same shared SwiftUI source membership, defines `EXAMPLE_FIXTURE`, and links `ThorChainExampleFixtureSupport`.
-- `ThorChainExampleFixtureSupport` is a non-app fixture-support target whose source membership is exactly `FixtureSupport/**`; it contains the fixture signer, transport, clock, scenario table, and reset hook. It is linked only by `ThorChainExampleFixture`.
+- `ThorChainExampleFixtureSupport` is a Foundation-only non-app target whose source membership is exactly `FixtureSupport/**`; it contains only fixture transport data, clock, scenario table, transcript, and reset hook. It is linked only by `ThorChainExampleFixture`; its Kit-conforming signer and transport adapters are in Example-owned `Sources/Signing/**` and compiled by the app.
 - `ThorChainExampleLive` and `ThorChainExampleFixture` are separate app products with separate schemes (`ThorChainExampleLive` Release and `ThorChainExampleFixture` Debug). Neither scheme may hide a target dependency.
 
-The fixture-support target is not a Swift Package product, is absent from Live source membership, Live Archive/Profile dependency closure, and the ThorChainKit library target. The Live app links `ThorChainKit` plus the Example-only `ThorChainExampleLiveSupport` target; it must compile without `EXAMPLE_FIXTURE`. `ThorChainExampleLiveSupport` contains only the BIP39 loader, THOR derivation adapter, and Live signer, and links `HdWalletKit` at pinned commit `2fc0dbfc089f78a9804baafe8e1bc4aab69cbad1`, `HsCryptoKit` 1.3.2, and `secp256k1` 0.10.0. It is never linked by Fixture or the library. The only conditional import of fixture support is in Example-owned SwiftUI composition. A project-graph test compares target dependencies and source membership, and an Archive/Profile/Release audit resolves the built Live executable before scanning it for the fixture module and symbols (`FixtureScenario`, `FixtureTransport`, `FixtureSigner`, and the fixture target product name). Any unresolved executable, unexpected dependency, source overlap, or scanner error fails closed. UIKit imports, AppDelegate, view-controller types, and representable wrappers are prohibited in the Example and library.
+The fixture-support target is not a Swift Package product, is absent from Live source membership, Live Archive/Profile dependency closure, and the ThorChainKit library target. `ThorChainExampleLiveSupport` is Foundation-only and contains only the staged-file loader; it is never linked by Fixture or the library. The only conditional import of fixture support is in Example-owned SwiftUI composition. A project-graph test compares target dependencies and source membership, and an Archive/Profile/Release audit resolves the built Live executable before scanning it for the fixture module and symbols (`FixtureScenario`, `FixtureTransport`, `FixtureSigner`, and the fixture target product name). Any unresolved executable, unexpected dependency, source overlap, or scanner error fails closed. UIKit imports, AppDelegate, view-controller types, and representable wrappers are prohibited in the Example and library.
 
 ## Runtime Modes
 
@@ -98,10 +122,70 @@ The fixture-support target is not a Swift Package product, is absent from Live s
 ### Live
 
 - Explicit opt-in runtime selection and visible `LIVE` badge.
-- `LiveSendSession` owns the mode lifecycle. Board selected BIP39 for a dedicated reusable low-balance QA wallet on THORChain mainnet, created outside this slice and separate from personal funds; the app and this slice never generate or fund that wallet. The only runtime inputs are the operator's local, outside-Git `.env` values `THORCHAIN_NETWORK=mainnet`, `THORCHAIN_MAINNET_MNEMONIC`, and `THORCHAIN_MAINNET_RECIPIENT_ADDRESS`; the network is explicit and is never inferred from the address. The loader requires exactly twelve lowercase English BIP39 words separated by single ASCII spaces and `Mnemonic.validate` success. It rejects missing, malformed, non-English, wrong-count, or extra-content input, any network other than `mainnet`, and invalid recipient input without logging the variable, secret, or recipient. It derives the BIP39 seed with the standard `mnemonic` salt, empty passphrase, and 2048 PBKDF2-SHA512 rounds, then derives the exact THOR path `m/44'/931'/0'/0/0` with `HdWalletKit` (`HDWallet(seed:..., coinType: 931, xPrivKey: 0x0488ade4, purpose: .bip44, curve: .secp256k1)`). The compressed public key is hashed with RIPEMD160(SHA256(pubkey)) and encoded by the public `AddressCodec`; the same derived private key backs the Example-owned compact secp256k1 signer. `LiveSendSession` derives one address, creates the signer for that same derived address, and constructs `Kit.instance(address:derivedAddress, walletId:stableWalletID, ...)` as one atomic operation; publication occurs only after all three values agree. A failed load, validation, derivation, signer construction, or Kit construction publishes no partial session. `stableWalletID` is the non-secret string `thor-example/live/` plus lowercase SHA-256 of the canonical compressed public key; it is not displayed or emitted in artifacts. Replacing mode first releases the previous signer/Kit and clears the send form; logout releases both and clears the form/model. The secure field/UI model and loader-owned mutable buffers are cleared immediately after successful signer construction. The design acknowledges transient UI, `String`/`Data`, process-environment, and crypto-library copies; it promises neither exclusive in-memory ownership nor complete erasure. It never persists the mnemonic or private key to Keychain or UserDefaults, source, YAML, command line, environment dumps/echo, logs, screenshots, JUnit, or artifacts. The app best-effort clears only mutable buffers it owns on background/logout; process termination destroys process memory, but no security claim depends on a termination callback.
+- The simulator-only ingress is the app data-container path
+  `Library/Application Support/ThorChainKitExample/live/.env`. The local runner
+  creates the directory by launching the app once, terminates it, and uses
+  `xcrun simctl push <UDID> <outside-Git-root>/.env <app-data-container>/Library/Application Support/ThorChainKitExample/live/.env`.
+  Secret bytes are never shell-sourced, placed in arguments or process
+  environment, printed, uploaded, or copied into the bundle. The loader
+  requires a regular non-symlink file, mode `0600` when the simulator exposes
+  POSIX mode, size `1...4096` bytes, a single read, and immediate unlink after
+  successful parsing; missing, symlinked, oversized, unreadable, or leftover
+  files keep Live unavailable. Tests stage a redacted fixture through the same
+  path and assert absence from bundle, arguments, environment, logs, JUnit,
+  screenshots, and artifact inventory.
+- Board selected BIP39 for a dedicated reusable low-balance QA wallet on
+  THORChain mainnet, created outside this slice and separate from personal
+  funds; the app and this slice never generate or fund that wallet. The staged
+  file contains `THORCHAIN_NETWORK=mainnet`,
+  `THORCHAIN_MAINNET_MNEMONIC`, and `THORCHAIN_MAINNET_RECIPIENT_ADDRESS`; the
+  network is explicit and is never inferred from the address. The loader
+  requires exactly twelve lowercase English BIP39 words separated by single
+  ASCII spaces and `Mnemonic.validate` success. It rejects missing, malformed,
+  non-English, wrong-count, or extra-content input, any network other than
+  `mainnet`, and invalid recipient input without logging the variable, secret,
+  or recipient.
+- It derives the BIP39 seed with the standard `mnemonic` salt, empty passphrase,
+  and 2048 PBKDF2-SHA512 rounds, then derives the exact THOR path
+  `m/44'/931'/0'/0/0` with the pinned `HdWalletKit` backend. The independently
+  checked public BIP39 vector is mnemonic `abandon` eleven times plus `about`,
+  empty passphrase, expected seed
+  `5eb00bbddcf069084889a8ab9155568165f5c453ccb85e70811aaed6f6da5fc19a5ac40b389cd370d086206dec8aa6c43daea6690f20ad3d8d48b2d2ce9e38e4`;
+  the independent THOR address vector is `thorchain-account-0-0` from
+  `Tests/ThorChainKitTests/Fixtures/AddressVectors.json`, with expected public
+  key `02a9ac9f7a97da41559e1684011b6a9b0b9c0445297d5f51dea0897fd4a39c31c7`,
+  path `m/44'/931'/0'/0/0`, and address
+  `thor1tgxm5jw6hrlvslrd6lqpk4jwuu4g29dxytrean`. The test obtains the expected
+  QA sender address from the non-secret operator manifest and compares it to
+  the derived address before session publication; a mismatch fails closed.
+- The compressed public key is encoded with the public `AddressCodec`; the same
+  derived private key backs the Example-owned compact secp256k1 signer.
+  `LiveSendSession` derives one address, creates the signer for that same
+  derived address, and constructs `Kit.instance(address:derivedAddress,
+  walletId:stableWalletID, ...)` as one atomic operation; publication occurs
+  only after all three values and the independent vector/QA sender check agree.
+  A failed load, validation, derivation, signer construction, or Kit
+  construction publishes no partial session. `stableWalletID` is the non-secret
+  string `thor-example/live/` plus lowercase SHA-256 of the canonical compressed
+  public key; it is not displayed or emitted in artifacts. Replacing mode first
+  releases the previous signer/Kit and clears the send form; logout releases
+  both and clears the form/model. The secure field/UI model and loader-owned
+  mutable buffers are cleared immediately after successful signer construction.
+- Controlled LIVE uses an Example-owned `BroadcastDenyingHTTPTransport` through
+  the test-only SPI factory in `KitFactory.swift` used only for this
+  observation. It records count-only
+  attempted broadcast calls and throws before network I/O; count-only signer,
+  `Kit.send`, and `retryBroadcast` guards are also installed. Any non-zero
+  counter aborts the observation and emits only redacted counters. This guard
+  is transport-level and remains active until the session is released.
+- It never persists the mnemonic or private key to Keychain or UserDefaults,
+  source, YAML, command line, environment dumps/echo, logs, screenshots, JUnit,
+  or artifacts. The app best-effort clears only mutable buffers it owns on
+  background/logout; process termination destroys process memory, but no
+  security claim depends on a termination callback.
 - Public endpoints use the production provider policy.
 - Destructive send requires a second explicit confirmation displaying amount, native fee, total, and recipient.
-- Controlled LIVE observation is a read-only lifecycle check against a purpose-created low-balance mainnet QA wallet. Its existing balance does not authorize an irreversible send. It may observe opt-in, derivation/address agreement, LIVE labelling, quote/review, logout, and mode replacement, but terminates before confirmation and never calls `Kit.send`, `retryBroadcast`, or a broadcaster. The checklist fails if a confirmation/broadcast action, send call, or broadcast log is observed.
+- Controlled LIVE observation is a read-only lifecycle check against a purpose-created low-balance mainnet QA wallet. Its existing balance does not authorize an irreversible send. It may observe opt-in, derivation/address agreement, LIVE labelling, quote/review, logout, and mode replacement, but the SPI-installed transport deny guard rejects every broadcast before network I/O. Count-only signer, `Kit.send`, `retryBroadcast`, and broadcast counters must remain zero; any non-zero counter aborts the checklist.
 
 Fixture success is never reported as live evidence.
 
@@ -116,7 +200,7 @@ Review:
 
 - `send.review.amount`, `send.review.recipient`, `send.review.memo`, `send.review.native-fee`, `send.review.total`, `send.review.height`, `send.review.expiry`, `send.confirm.button`, `send.refresh.button`.
 
-Fixture-only controls/counters, compiled only into the fixture-support target:
+Fixture-only controls/counters, compiled only into the fixture app/support closure:
 
 - `send.fixture.advance-to-expiry`, `send.fixture.signer-call-count`.
 
@@ -132,7 +216,7 @@ Sensitive bytes, account number/sequence, signature, wallet identifier, and endp
 
 `SendViewModel.quote()` accepts a positive RUNE amount in the grammar `[0-9]+(\.[0-9]{1,8})?`, with no sign, exponent, grouping separator, or whitespace. It converts the decimal exactly to 1e8 base units by right-padding the fractional part; it never rounds or truncates. The resulting base-unit value must be in `1...2^256-1` and its canonical magnitude must be at most 32 bytes; values above that bound are the defined `BigUInt` overflow rejection. Invalid input has no quote, network/fixture request, signer call, or broadcaster call. It stores exactly one current quote. `confirm()` passes that quote and the mode signer to `Kit.send`; it never calls the codec/broadcaster directly. Expiration disables confirm and requires an explicit refresh/review.
 
-An unknown result keeps the local transaction ID and enables retry. If the fee changes, the UI presents previous/current fee and only then calls `retryBroadcast(...acceptingNativeFee: current)`. Restart reconstructs pending from both public publishers: an empty journal is shown as empty; a read failure preserves the last snapshot but visibly projects `PENDING DATA UNAVAILABLE`/degraded and disables actions that would guess state. It never presents degraded persistence as confirmed or silently replaces it with an empty list.
+An unknown result keeps the local transaction ID, warns that the transaction may already execute, and prohibits replacement send. If the fee changes, the UI presents previous/current fee and only then calls `retryBroadcast(...acceptingNativeFee: current)`. A matching `sdk/19` response is terminal `CheckTx accepted — not confirmed`; retry and replacement send are disabled and that terminal state survives restart. Restart reconstructs pending from both public publishers: an empty journal is shown as empty; a read failure preserves the last snapshot but visibly projects `PENDING DATA UNAVAILABLE`/degraded and disables actions that would guess state. It never presents degraded persistence as confirmed or silently replaces it with an empty list.
 
 ## Guarded Maestro Suite
 
@@ -156,33 +240,39 @@ Flows:
 - `send-retry.yaml`;
 - `send-restart-pending.yaml`.
 
-Selectors use IDs only, never localized labels or coordinates. The committed manifest contains an action/assertion matrix for every flow: `send-quote-review` enters a valid RUNE amount and non-empty memo, asserts all review IDs plus the rendered memo and absolute expiry, then advances the injected clock to the exact deadline; confirm becomes unavailable, Refresh is visible, and signer call count remains zero. The accepted flow asserts `CheckTx accepted — not confirmed`; the unknown flow asserts the canonical local hash and retry; the retry flow asserts unchanged signer count, unchanged hash, exact signed bytes, and explicit changed-fee acknowledgement; the restart flow asserts pending before and after relaunch and namespace reuse only within that flow. The runner's manifest test mutates each flow by removing its action or assertion and must fail, so five YAML files or five JUnit cases alone cannot pass. The response-loss scenario occurs after fixture node acceptance so the local state must be unknown while retry returns matching `sdk/19` without another signer request. UI wording never says simply `confirmed` or `sent` for CheckTx acceptance.
+Selectors use IDs only, never localized labels or coordinates. The committed manifest contains an action/assertion matrix for every flow: `send-quote-review` enters a valid RUNE amount and non-empty memo, asserts all review IDs plus the rendered memo and absolute expiry, then advances the injected clock to the exact deadline; confirm becomes unavailable, Refresh is visible, and signer call count remains zero. The accepted flow asserts `CheckTx accepted — not confirmed`; the unknown flow asserts the canonical local hash, the may-already-execute warning, and replacement-send prohibition; the retry flow asserts unchanged signer count, unchanged hash, exact signed bytes, explicit changed-fee acknowledgement, terminal `sdk/19` wording, disabled retry, and terminal state after restart; the restart flow asserts pending before and after relaunch and namespace reuse only within that flow. The runner's manifest test mutates each flow by removing its action or assertion and must fail, so five YAML files or five JUnit cases alone cannot pass. The response-loss scenario occurs after fixture node acceptance so the local state is initially unknown while retry returns matching `sdk/19` without another signer request. UI wording never says simply `confirmed` or `sent` for CheckTx acceptance.
 
 ## Unit/Component Tests
 
 - fixture signer accepts only exact digest and records one call;
-- live mode cannot initialize without the local file source, and missing/unreadable/malformed/non-English/wrong-count/extra-content mnemonic input fails closed without logging secret material;
-- live start uses BIP39 standard seed derivation and exact `m/44'/931'/0'/0/0` THOR derivation through the pinned Example-only backend, derives the address, signer, and Kit atomically, rejects mismatch/partial construction, clears the input/model, labels `LIVE`, and logout/mode replacement releases the session;
+- live mode cannot initialize without the simulator-staged regular file, and missing/symlinked/oversized/unreadable/leftover/malformed/non-English/wrong-count/extra-content mnemonic input fails closed without logging secret material;
+- live start uses BIP39 standard seed derivation and exact `m/44'/931'/0'/0/0` THOR derivation through the pinned Example-owned backend, verifies the independent BIP39/THOR vectors and expected QA sender address before publication, derives the address, signer, and Kit atomically, rejects mismatch/partial construction, clears the input/model, labels `LIVE`, and logout/mode replacement releases the session;
+- controlled LIVE's deny transport and count-only signer/send/retry guards prove zero broadcast attempts before the observation is accepted;
 - RUNE grammar, exact 1e8 conversion, zero and >256-bit/32-byte overflow rejection, and no-side-effect invalid-input behavior;
 - fixture transcript rejects wrong origin, method, path, query, body, order, missing, or extra calls and asserts expected signed bytes/hash;
 - restart distinguishes empty from degraded/unavailable persistence using both pending publishers;
 - quote expiry/manual refresh and no silent fee refresh, including the exact absolute deadline and zero signer calls;
-- unknown preserves hash and exposes retry;
-- changed-fee acknowledgement passes exact current amount;
+- unknown preserves hash, warns that the transaction may already execute, and prohibits replacement send;
+- changed-fee acknowledgement passes exact current amount; matching `sdk/19` is terminal `CheckTx accepted — not confirmed`, disables retry/replacement send, and survives restart;
 - process reconstruction consumes the real journal/publisher;
 - accessibility IDs exist and sensitive fields are absent;
 - acceptance manifest and JUnit parser fail closed, including one-action/one-assertion negative mutations for every flow;
 - runtime UI-tree/Maestro verification covers every required ID, including the mode badge, scans every node/value, and rejects an unlisted sensitive accessibility mutation;
 - secure input/UI state is cleared after signer construction; Vision/OCR screenshot canary self-test detects a rendered canary and fails closed;
 - unique namespace/reset behavior for all independent flows and two-phase namespace preservation for restart;
-- Live Release/Archive/Profile products do not link fixture target, contain no fixture scenario/transport symbols, and include only the pinned Example-only Live support backend; the scan fails closed on an unresolved or wrong executable.
+- Live Release/Archive/Profile products do not link fixture target, contain no fixture scenario/transport/signer symbols, and use the explicit single-owner package graph; the scan fails closed on an unresolved or wrong executable.
 
 ## Security and Artifact Rules
 
-- No mnemonic/private key/API credential in Git, UserDefaults, fixtures, Maestro YAML, command line, process environment dumps, console, screenshots, or JUnit. The root `.env` containing `THORCHAIN_NETWORK`, `THORCHAIN_MAINNET_MNEMONIC`, and `THORCHAIN_MAINNET_RECIPIENT_ADDRESS` is operator-owned, excluded by the tracked `.gitignore`, never printed/uploaded, and never included in CI/artifacts.
+- No mnemonic/private key/API credential in Git, UserDefaults, fixtures, Maestro YAML, command line, process environment dumps, console, screenshots, or JUnit. The outside-Git root `.env` is staged only into the simulator data-container path described above, read once, removed, never printed/uploaded, and never included in CI/artifacts.
 - A canary is injected only into a temporary copy/runtime; byte scanners and the Vision/OCR screenshot self-test each prove detection through their real path.
 - Hash/address/amount are public test-account evidence; they are clearly labeled and never reuse a user wallet.
 - Fixture transport cannot compile into the library product or a Release Example live mode; project membership and a built-binary audit both enforce this. The BIP39 loader/deriver/signer cannot compile into Fixture or the library.
+- The only library change permitted by this slice is a test-only `@_spi(Testing)`
+  Kit factory overload that accepts the existing HTTP transport seam for the
+  controlled LIVE deny guard; it adds no public API, secret storage, UI, or
+  production behavior. Its direct test proves the guard is selected and
+  rejects broadcast before network I/O.
 - Controlled LIVE evidence must name the purpose-created low-balance mainnet QA wallet by a non-secret test label only and must show zero confirmation, `Kit.send`, retry-broadcast, and broadcaster events. Existing funding does not authorize an irreversible send.
 
 ## Verification
@@ -201,8 +291,11 @@ opt-in controlled LIVE checklist and UI-tree evidence; controlled LIVE stops bef
 ## Acceptance Criteria
 
 - Five fixture flows pass on one exact simulator and JUnit count is enforced.
+- The Step-0 compatibility gate passes first: the explicit app-owned package
+  graph produces both Fixture Debug and Live Release builds with one
+  `ThorChainKit`/crypto-closure owner per app and no unresolved wrapper.
 - CheckTx-accepted, unknown, retry, and restart are driven through public kit APIs and production storage/codec behavior.
-- Retry proves the signature call count remains one and local hash remains identical.
+- Retry proves the signature call count remains one and local hash remains identical; matching `sdk/19` is terminal `CheckTx accepted — not confirmed`, disables retry/replacement send, and survives restart.
 - Fixture and live artifacts are visibly/distinctly labeled, and fixture state is flow-order independent.
 - Repository and generated artifacts contain no secret.
 - Live signer, derived address, and Kit instance are one atomic session using the approved BIP39 loader/derivation/backend; malformed or unavailable local input keeps Live explicitly unavailable and cannot send.
