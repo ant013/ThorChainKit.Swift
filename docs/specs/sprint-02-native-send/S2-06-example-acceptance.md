@@ -4,6 +4,45 @@
 **Depends on:** S2-01 through S2-05
 **Produces:** runnable package-owned fixture/live send demonstration and guarded Maestro evidence
 
+## Topology correction revision 5 — Xcode 26.3 gate
+
+This revision binds the slice to Xcode `26.3 (17C529)` and the iOS `26.2`
+simulator runtime on the approved iPhone 17 Pro UDID. It supersedes the
+obsolete Xcode 26.2 toolchain requirement; Xcode 26.6 remains only a later
+fallback.
+
+At exact PR head `ea51548e82c1f96814050e49bc34462028f35c66`, Fixture Debug does
+not link LiveSupport, but Xcode 26.3 still materializes the shared
+`HsCryptoKit` → `swift-crypto` package-product closure and asks for the absent
+hashed `Crypto_17A3B1FFC41E47_PackageProduct` executable. The real arm64
+`Crypto.framework/Crypto` is present; the requested wrapper executable is not.
+The saved diagnostic is `/private/tmp/thr159-xcode263-newpif.Vy3rb5/fixture-build.log`.
+
+The direct root `Crypto`/`_CryptoExtras` declaration and static ThorChainKit
+experiments are rejected and must not be repeated: the former still produced
+only the empty hashed wrapper, while the latter introduced duplicate linkage
+between the app and FixtureSupport. No external checkout patch, vendored
+binary, dependency-pin change, policy weakening, or acceptance reduction is
+allowed.
+
+### Compatibility decision
+
+No safe repository-only package-graph delta is proven by the current evidence.
+The smallest fail-closed decision is to keep the existing pins and target
+boundary unchanged, record the Xcode 26.3 incompatibility as a separate
+compatibility blocker, and prohibit S2-06 implementation/acceptance claims
+until a separately approved delta proves all of the following on the exact
+toolchain/runtime: one valid Crypto executable per package closure, no
+duplicate ThorChainKit linkage, FixtureSupport exclusion from Live artifacts,
+and successful Fixture Debug plus Live Release builds.
+
+Any future compatibility slice must choose one explicit owner for the shared
+crypto closure (an approved upstream/package-graph correction or a redesigned
+single-consumer target boundary). It may not guess between dynamic/static
+products or bypass the missing executable with copied binaries or linker
+flags. Until then, all build, Maestro, artifact, and release-symbol criteria
+remain fail-closed and unachieved.
+
 ## Goal
 
 Prove the public contract through a real iOS consumer without relying on Unstoppable. The Example must make CheckTx-accepted versus unknown state, byte-identical retry, and restart recovery visible and deterministic.

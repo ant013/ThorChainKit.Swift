@@ -1,11 +1,18 @@
 # THR-159 — S2-06 iOS Example Send Acceptance Plan
 
-Design revision 4 for `docs/specs/sprint-02-native-send/S2-06-example-acceptance.md`,
+Design revision 5 for `docs/specs/sprint-02-native-send/S2-06-example-acceptance.md`,
 based on architecture revision 10 at commit
 `518835315a65996b9321665213adb0516503df65`. The prior draft was superseded by
 the discovery-1/2 adversarial findings. Discovery is frozen at 2/2;
 implementation remains approval-gated. The Board selected a dedicated BIP39
 test wallet; revision 4 specifies fail-closed local loading and THOR derivation.
+
+Revision 5 reopens only the package-graph compatibility gate for Xcode 26.3
+(17C529) with the iOS 26.2 simulator runtime. The exact-head failure is in the
+shared HsCryptoKit → swift-crypto wrapper, even for Fixture without LiveSupport.
+No safe repository-only delta is currently proven. Implementation is paused at
+this gate; direct-Crypto and static-product experiments are rejected and must
+not recur.
 
 ## Goal
 
@@ -13,6 +20,21 @@ Implement only the package-owned iOS Example live/fixture boundary and guarded
 five-flow Maestro acceptance described by the authoritative spec.
 
 ## Steps
+
+- [ ] 0. Xcode 26.3 package-graph compatibility decision
+  - Owner: ThorChainCTO / separately approved compatibility slice.
+  - Acceptance: On exact Xcode `26.3 (17C529)` and iOS `26.2`, the chosen delta
+    produces one valid Crypto executable per package closure, keeps one owner
+    for ThorChainKit linkage, preserves FixtureSupport exclusion from Live,
+    and passes both Fixture Debug and Live Release package-graph preparation.
+    Missing/unresolved wrappers, duplicate linkage, external checkout edits,
+    copied binaries, weaker pins, or guessed linker flags fail closed.
+  - Paths: `Package.swift`, `iOS Example/iOS Example.xcodeproj/project.pbxproj`,
+    and any separately approved compatibility design only.
+  - Depends on: none; blocks Steps 1–4.
+  - Check: exact-head package-graph build logs plus target-graph and resolved
+    executable audits. The current saved log fails at the hashed Crypto
+    wrapper, so no implementation or acceptance evidence is claimed.
 
 - [ ] 1. Example targets and runtime composition
   - Owner: ThorChainSwiftEngineer
