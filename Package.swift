@@ -6,6 +6,11 @@ let package = Package(
     platforms: [.iOS(.v13), .macOS(.v10_15)],
     products: [
         .library(name: "ThorChainKit", targets: ["ThorChainKit"]),
+        .library(
+            name: "ThorChainExampleLiveSupport",
+            type: .dynamic,
+            targets: ["LiveSupport"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/attaswift/BigInt.git", from: "5.0.0"),
@@ -25,6 +30,10 @@ let package = Package(
             url: "https://github.com/apple/swift-protobuf.git",
             exact: "1.33.3"
         ),
+        .package(
+            url: "https://github.com/horizontalsystems/HdWalletKit.Swift.git",
+            revision: "2fc0dbfc089f78a9804baafe8e1bc4aab69cbad1"
+        ),
     ],
     targets: [
         .target(
@@ -40,6 +49,16 @@ let package = Package(
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
             ],
             swiftSettings: [.unsafeFlags(["-warnings-as-errors"])]
+        ),
+        .target(
+            name: "LiveSupport",
+            dependencies: [
+                "ThorChainKit",
+                .product(name: "HdWalletKit", package: "HdWalletKit.Swift"),
+                .product(name: "HsCryptoKit", package: "HsCryptoKit.Swift"),
+                .product(name: "secp256k1", package: "secp256k1.swift"),
+            ],
+            path: "iOS Example/LiveSupport"
         ),
         .testTarget(
             name: "ThorChainKitTests",

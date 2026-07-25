@@ -25,14 +25,11 @@
 		B20000000000000000000011 /* SendReviewView.swift */ = {isa = PBXBuildFile; fileRef = B30000000000000000000011; };
 		B20000000000000000000012 /* PendingView.swift */ = {isa = PBXBuildFile; fileRef = B30000000000000000000012; };
 		B20000000000000000000020 /* ThorChainKit */ = {isa = PBXBuildFile; productRef = B90000000000000000000001; };
-		B20000000000000000000023 /* LiveSupport.framework */ = {isa = PBXBuildFile; fileRef = B30000000000000000000062; };
 		B20000000000000000000024 /* FixtureSupport.framework */ = {isa = PBXBuildFile; fileRef = B30000000000000000000063; };
-		B20000000000000000000030 /* LiveSecretLoader.swift */ = {isa = PBXBuildFile; fileRef = B30000000000000000000030; };
-		B20000000000000000000031 /* LiveSendSession.swift */ = {isa = PBXBuildFile; fileRef = B30000000000000000000031; };
 		B20000000000000000000040 /* FixtureScenario.swift */ = {isa = PBXBuildFile; fileRef = B30000000000000000000040; };
 		B20000000000000000000041 /* FixtureSigner.swift */ = {isa = PBXBuildFile; fileRef = B30000000000000000000041; };
 		B20000000000000000000042 /* FixtureTransport.swift */ = {isa = PBXBuildFile; fileRef = B30000000000000000000042; };
-		B20000000000000000000050 /* HdWalletKit */ = {isa = PBXBuildFile; productRef = B90000000000000000000010; };
+		B20000000000000000000025 /* ThorChainExampleLiveSupport */ = {isa = PBXBuildFile; productRef = B90000000000000000000002; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -54,46 +51,41 @@
 		B30000000000000000000010 /* SendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendView.swift; sourceTree = "<group>"; };
 		B30000000000000000000011 /* SendReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendReviewView.swift; sourceTree = "<group>"; };
 		B30000000000000000000012 /* PendingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingView.swift; sourceTree = "<group>"; };
-		B30000000000000000000030 /* LiveSecretLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveSecretLoader.swift; sourceTree = "<group>"; };
-		B30000000000000000000031 /* LiveSendSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveSendSession.swift; sourceTree = "<group>"; };
 		B30000000000000000000040 /* FixtureScenario.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FixtureScenario.swift; sourceTree = "<group>"; };
 		B30000000000000000000041 /* FixtureSigner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FixtureSigner.swift; sourceTree = "<group>"; };
 		B30000000000000000000042 /* FixtureTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FixtureTransport.swift; sourceTree = "<group>"; };
 		B30000000000000000000060 /* ThorChainExampleLive.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = ThorChainExampleLive.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B30000000000000000000061 /* ThorChainExampleFixture.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = ThorChainExampleFixture.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		B30000000000000000000062 /* LiveSupport.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = LiveSupport.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B30000000000000000000063 /* FixtureSupport.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = FixtureSupport.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		B40000000000000000000001 = {isa = PBXFrameworksBuildPhase; files = (B20000000000000000000020, B20000000000000000000023); runOnlyForDeploymentPostprocessing = 0; };
+		B40000000000000000000001 = {isa = PBXFrameworksBuildPhase; files = (B20000000000000000000020, B20000000000000000000025); runOnlyForDeploymentPostprocessing = 0; };
 		B40000000000000000000002 = {isa = PBXFrameworksBuildPhase; files = (B20000000000000000000020, B20000000000000000000024); runOnlyForDeploymentPostprocessing = 0; };
-		B40000000000000000000003 = {isa = PBXFrameworksBuildPhase; files = (B20000000000000000000020, B20000000000000000000050); runOnlyForDeploymentPostprocessing = 0; };
+		B40000000000000000000003 = {isa = PBXFrameworksBuildPhase; files = (B20000000000000000000020); runOnlyForDeploymentPostprocessing = 0; };
 		B40000000000000000000004 = {isa = PBXFrameworksBuildPhase; files = (B20000000000000000000020); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		B50000000000000000000001 = {isa = PBXGroup; children = (B50000000000000000000002, B50000000000000000000030, B50000000000000000000040, B50000000000000000000005); sourceTree = "<group>"; };
+		B50000000000000000000001 = {isa = PBXGroup; children = (B50000000000000000000002, B50000000000000000000040, B50000000000000000000005); sourceTree = "<group>"; };
 		B50000000000000000000002 = {isa = PBXGroup; children = (B30000000000000000000001, B30000000000000000000002, B50000000000000000000003, B50000000000000000000004, B50000000000000000000006, B50000000000000000000007, B50000000000000000000008); path = Sources; sourceTree = "<group>"; };
 		B50000000000000000000003 = {isa = PBXGroup; children = (B30000000000000000000003); path = Core; sourceTree = "<group>"; };
 		B50000000000000000000004 = {isa = PBXGroup; children = (B30000000000000000000004, B30000000000000000000006, B30000000000000000000008, B3000000000000000000000A, B3000000000000000000000C); path = Presentation; sourceTree = "<group>"; };
-		B50000000000000000000005 = {isa = PBXGroup; children = (B30000000000000000000060, B30000000000000000000061, B30000000000000000000062, B30000000000000000000063); name = Products; sourceTree = "<group>"; };
+		B50000000000000000000005 = {isa = PBXGroup; children = (B30000000000000000000060, B30000000000000000000061, B30000000000000000000063); name = Products; sourceTree = "<group>"; };
 		B50000000000000000000006 = {isa = PBXGroup; children = (B30000000000000000000005, B30000000000000000000007, B30000000000000000000009, B3000000000000000000000B, B3000000000000000000000D); path = Views; sourceTree = "<group>"; };
 		B50000000000000000000007 = {isa = PBXGroup; children = (B3000000000000000000000E, B3000000000000000000000F, B30000000000000000000010, B30000000000000000000011); path = Send; sourceTree = "<group>"; };
 		B50000000000000000000008 = {isa = PBXGroup; children = (B30000000000000000000012); path = Pending; sourceTree = "<group>"; };
-		B50000000000000000000030 = {isa = PBXGroup; children = (B30000000000000000000030, B30000000000000000000031); path = LiveSupport; sourceTree = "<group>"; };
 		B50000000000000000000040 = {isa = PBXGroup; children = (B30000000000000000000040, B30000000000000000000041, B30000000000000000000042); path = FixtureSupport; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		B10000000000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = B80000000000000000000001; buildPhases = (B60000000000000000000001, B40000000000000000000001, B60000000000000000000003); dependencies = (B70000000000000000000001); name = ThorChainExampleLive; packageProductDependencies = (B90000000000000000000001); productName = ThorChainExampleLive; productReference = B30000000000000000000060; productType = "com.apple.product-type.application"; };
+		B10000000000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = B80000000000000000000001; buildPhases = (B60000000000000000000001, B40000000000000000000001, B60000000000000000000003); name = ThorChainExampleLive; packageProductDependencies = (B90000000000000000000001, B90000000000000000000002); productName = ThorChainExampleLive; productReference = B30000000000000000000060; productType = "com.apple.product-type.application"; };
 		B10000000000000000000002 = {isa = PBXNativeTarget; buildConfigurationList = B80000000000000000000002; buildPhases = (B60000000000000000000002, B40000000000000000000002, B60000000000000000000004); dependencies = (B70000000000000000000002); name = ThorChainExampleFixture; packageProductDependencies = (B90000000000000000000001); productName = ThorChainExampleFixture; productReference = B30000000000000000000061; productType = "com.apple.product-type.application"; };
-		B10000000000000000000003 = {isa = PBXNativeTarget; buildConfigurationList = B80000000000000000000003; buildPhases = (B60000000000000000000030, B40000000000000000000003); name = ThorChainExampleLiveSupport; packageProductDependencies = (B90000000000000000000001, B90000000000000000000010); productName = ThorChainExampleLiveSupport; productReference = B30000000000000000000062; productType = "com.apple.product-type.framework"; };
 		B10000000000000000000004 = {isa = PBXNativeTarget; buildConfigurationList = B80000000000000000000004; buildPhases = (B60000000000000000000040, B40000000000000000000004); name = ThorChainExampleFixtureSupport; packageProductDependencies = (B90000000000000000000001); productName = ThorChainExampleFixtureSupport; productReference = B30000000000000000000063; productType = "com.apple.product-type.framework"; };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		B70000000000000000000000 = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 2630; TargetAttributes = {};}; buildConfigurationList = B80000000000000000000000; compatibilityVersion = "Xcode 16.0"; developmentRegion = en; mainGroup = B50000000000000000000001; packageReferences = (B90000000000000000000000, B90000000000000000000020); productRefGroup = B50000000000000000000005; projectDirPath = ""; projectRoot = ""; targets = (B10000000000000000000001, B10000000000000000000002, B10000000000000000000003, B10000000000000000000004); };
+		B70000000000000000000000 = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 2630; TargetAttributes = {};}; buildConfigurationList = B80000000000000000000000; compatibilityVersion = "Xcode 16.0"; developmentRegion = en; mainGroup = B50000000000000000000001; packageReferences = (B90000000000000000000000); productRefGroup = B50000000000000000000005; projectDirPath = ""; projectRoot = ""; targets = (B10000000000000000000001, B10000000000000000000002, B10000000000000000000004); };
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
@@ -104,12 +96,10 @@
 /* Begin PBXSourcesBuildPhase section */
 		B60000000000000000000001 = {isa = PBXSourcesBuildPhase; files = (B20000000000000000000001, B20000000000000000000002, B20000000000000000000003, B20000000000000000000004, B20000000000000000000005, B20000000000000000000006, B20000000000000000000007, B20000000000000000000008, B20000000000000000000009, B2000000000000000000000A, B2000000000000000000000B, B2000000000000000000000C, B2000000000000000000000D, B2000000000000000000000E, B2000000000000000000000F, B20000000000000000000010, B20000000000000000000011, B20000000000000000000012); runOnlyForDeploymentPostprocessing = 0; };
 		B60000000000000000000002 = {isa = PBXSourcesBuildPhase; files = (B20000000000000000000001, B20000000000000000000002, B20000000000000000000003, B20000000000000000000004, B20000000000000000000005, B20000000000000000000006, B20000000000000000000007, B20000000000000000000008, B20000000000000000000009, B2000000000000000000000A, B2000000000000000000000B, B2000000000000000000000C, B2000000000000000000000D, B2000000000000000000000E, B2000000000000000000000F, B20000000000000000000010, B20000000000000000000011, B20000000000000000000012); runOnlyForDeploymentPostprocessing = 0; };
-		B60000000000000000000030 = {isa = PBXSourcesBuildPhase; files = (B20000000000000000000030, B20000000000000000000031); runOnlyForDeploymentPostprocessing = 0; };
 		B60000000000000000000040 = {isa = PBXSourcesBuildPhase; files = (B20000000000000000000040, B20000000000000000000041, B20000000000000000000042); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		B70000000000000000000001 = {isa = PBXTargetDependency; target = B10000000000000000000003; };
 		B70000000000000000000002 = {isa = PBXTargetDependency; target = B10000000000000000000004; };
 /* End PBXTargetDependency section */
 
@@ -117,7 +107,6 @@
 		B80000000000000000000000 = {isa = XCConfigurationList; buildConfigurations = (B80000000000000000000010, B80000000000000000000011); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		B80000000000000000000001 = {isa = XCConfigurationList; buildConfigurations = (B80000000000000000000012, B80000000000000000000013); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		B80000000000000000000002 = {isa = XCConfigurationList; buildConfigurations = (B80000000000000000000014, B80000000000000000000015); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
-		B80000000000000000000003 = {isa = XCConfigurationList; buildConfigurations = (B80000000000000000000016, B80000000000000000000017); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		B80000000000000000000004 = {isa = XCConfigurationList; buildConfigurations = (B80000000000000000000018, B80000000000000000000019); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
 		B80000000000000000000010 = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; SDKROOT = iphoneos;}; name = Debug; };
 		B80000000000000000000011 = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; SDKROOT = iphoneos;}; name = Release; };
@@ -125,8 +114,6 @@
 		B80000000000000000000013 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = org.horizontalsystems.thorchainkit.example.live; PRODUCT_NAME = ThorChainExampleLive; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_TREAT_WARNINGS_AS_ERRORS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";}; name = Release; };
 		B80000000000000000000014 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = org.horizontalsystems.thorchainkit.example.fixture; PRODUCT_NAME = ThorChainExampleFixture; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG EXAMPLE_FIXTURE"; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_TREAT_WARNINGS_AS_ERRORS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";}; name = Debug; };
 		B80000000000000000000015 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = org.horizontalsystems.thorchainkit.example.fixture; PRODUCT_NAME = ThorChainExampleFixture; SWIFT_ACTIVE_COMPILATION_CONDITIONS = EXAMPLE_FIXTURE; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_TREAT_WARNINGS_AS_ERRORS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";}; name = Release; };
-		B80000000000000000000016 = {isa = XCBuildConfiguration; buildSettings = {DEFINES_MODULE = YES; GENERATE_INFOPLIST_FILE = YES; PRODUCT_MODULE_NAME = LiveSupport; PRODUCT_NAME = ThorChainExampleLiveSupport; SWIFT_VERSION = 5.0;}; name = Debug; };
-		B80000000000000000000017 = {isa = XCBuildConfiguration; buildSettings = {DEFINES_MODULE = YES; GENERATE_INFOPLIST_FILE = YES; PRODUCT_MODULE_NAME = LiveSupport; PRODUCT_NAME = ThorChainExampleLiveSupport; SWIFT_VERSION = 5.0;}; name = Release; };
 		B80000000000000000000018 = {isa = XCBuildConfiguration; buildSettings = {DEFINES_MODULE = YES; GENERATE_INFOPLIST_FILE = YES; PRODUCT_MODULE_NAME = FixtureSupport; PRODUCT_NAME = ThorChainExampleFixtureSupport; SWIFT_ACTIVE_COMPILATION_CONDITIONS = EXAMPLE_FIXTURE; SWIFT_VERSION = 5.0;}; name = Debug; };
 		B80000000000000000000019 = {isa = XCBuildConfiguration; buildSettings = {DEFINES_MODULE = YES; GENERATE_INFOPLIST_FILE = YES; PRODUCT_MODULE_NAME = FixtureSupport; PRODUCT_NAME = ThorChainExampleFixtureSupport; SWIFT_ACTIVE_COMPILATION_CONDITIONS = EXAMPLE_FIXTURE; SWIFT_VERSION = 5.0;}; name = Release; };
 /* End XCBuildConfiguration section */
@@ -135,14 +122,10 @@
 		B90000000000000000000000 = {isa = XCLocalSwiftPackageReference; relativePath = ..; };
 /* End XCLocalSwiftPackageReference section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		B90000000000000000000020 = {isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/horizontalsystems/HdWalletKit.Swift.git"; requirement = {kind = revision; revision = 2fc0dbfc089f78a9804baafe8e1bc4aab69cbad1;}; };
-/* End XCRemoteSwiftPackageReference section */
-
 /* Begin XCSwiftPackageProductDependency section */
 		B90000000000000000000001 = {isa = XCSwiftPackageProductDependency; package = B90000000000000000000000; productName = ThorChainKit; };
 		B90000000000000000000003 = {isa = XCSwiftPackageProductDependency; package = B90000000000000000000000; productName = ThorChainKit; };
-		B90000000000000000000010 = {isa = XCSwiftPackageProductDependency; package = B90000000000000000000020; productName = HdWalletKit; };
+		B90000000000000000000002 = {isa = XCSwiftPackageProductDependency; package = B90000000000000000000000; productName = ThorChainExampleLiveSupport; };
 /* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = B70000000000000000000000;
