@@ -4,7 +4,7 @@
 **Depends on:** S2-01 through S2-05
 **Produces:** runnable package-owned fixture/live send demonstration and guarded Maestro evidence
 
-## Topology correction revision 6 — explicit ownership and fail-closed LIVE gate
+## Topology correction revision 7 — explicit ownership and fail-closed LIVE gate
 
 This revision binds the slice to Xcode `26.3 (17C529)` and the iOS `26.2`
 simulator runtime on the approved iPhone 17 Pro UDID. It supersedes the
@@ -240,6 +240,10 @@ Flows:
 - `send-retry.yaml`;
 - `send-restart-pending.yaml`.
 
+The authoritative five-flow command is
+`THORCHAIN_SIMULATOR_UDID=<UDID> Scripts/run-maestro.sh s2-06`; the required
+`s2-06` token selects the guarded runner dispatch and must not be omitted.
+
 Selectors use IDs only, never localized labels or coordinates. The committed manifest contains an action/assertion matrix for every flow: `send-quote-review` enters a valid RUNE amount and non-empty memo, asserts all review IDs plus the rendered memo and absolute expiry, then advances the injected clock to the exact deadline; confirm becomes unavailable, Refresh is visible, and signer call count remains zero. The accepted flow asserts `CheckTx accepted — not confirmed`; the unknown flow asserts the canonical local hash, the may-already-execute warning, and replacement-send prohibition; the retry flow asserts unchanged signer count, unchanged hash, exact signed bytes, explicit changed-fee acknowledgement, terminal `sdk/19` wording, disabled retry, and terminal state after restart; the restart flow asserts pending before and after relaunch and namespace reuse only within that flow. The runner's manifest test mutates each flow by removing its action or assertion and must fail, so five YAML files or five JUnit cases alone cannot pass. The response-loss scenario occurs after fixture node acceptance so the local state is initially unknown while retry returns matching `sdk/19` without another signer request. UI wording never says simply `confirmed` or `sent` for CheckTx acceptance.
 
 ## Unit/Component Tests
@@ -280,7 +284,7 @@ Selectors use IDs only, never localized labels or coordinates. The committed man
 ```text
 xcodebuild -workspace iOS\ Example/iOS\ Example.xcworkspace -scheme ThorChainExampleLive -configuration Release -destination id=<UDID> build
 xcodebuild -workspace iOS\ Example/iOS\ Example.xcworkspace -scheme ThorChainExampleFixture -configuration Debug -destination id=<UDID> build
-THORCHAIN_SIMULATOR_UDID=<UDID> Scripts/run-maestro.sh
+THORCHAIN_SIMULATOR_UDID=<UDID> Scripts/run-maestro.sh s2-06
 swift test --filter ExampleAcceptanceManifestTests
 Scripts/audit-example-target-graph.sh
 Scripts/audit-example-release-binary.sh --scheme ThorChainExampleLive --configuration Release --destination id=<UDID>

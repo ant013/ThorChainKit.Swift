@@ -1,13 +1,13 @@
 # THR-159 — S2-06 iOS Example Send Acceptance Plan
 
-Design revision 6 for `docs/specs/sprint-02-native-send/S2-06-example-acceptance.md`,
+Design revision 7 for `docs/specs/sprint-02-native-send/S2-06-example-acceptance.md`,
 based on architecture revision 10 at commit
 `518835315a65996b9321665213adb0516503df65`. The prior draft was superseded by
 the discovery-1/2 adversarial findings. Discovery is frozen at 2/2;
 implementation remains approval-gated. The Board selected a dedicated BIP39
 test wallet; revision 4 specifies fail-closed local loading and THOR derivation.
 
-Revision 6 reopens only the package-graph compatibility gate and closes the
+Revision 7 reopens only the package-graph compatibility gate and closes the
 ownership, ingress, derivation-vector, LIVE-barrier, and terminal-retry gaps
 for Xcode 26.3
 (17C529) with the iOS 26.2 simulator runtime. The exact-head failure is in the
@@ -121,7 +121,7 @@ five-flow Maestro acceptance described by the authoritative spec.
   - Paths: `.maestro/sprint-02`, `Scripts/run-maestro.sh`,
     `Scripts/test-run-maestro.sh`, `Tests/ThorChainKitTests/ExampleAcceptanceManifestTests.swift`.
   - Depends on: 0–3 and S2-01 through S2-05.
-  - Check: runner shim/mutant tests; local exact-UDID Maestro; and an evidence
+  - Check: runner shim/mutant tests; `THORCHAIN_SIMULATOR_UDID=<UDID> Scripts/run-maestro.sh s2-06`; and an evidence
     manifest under `artifacts/s2-06/<git-head>/<udid>/` containing exact head,
     UDID, scheme/configuration, resolved executable, JUnit, logs, screenshot
     inventory/OCR results, and failure artifacts. Missing, extra, ambiguous,
@@ -163,6 +163,10 @@ host integration, and no S2-07 work.
   whose existing funding does not authorize an irreversible send, plus a
   controlled LIVE checklist that terminates before confirmation/broadcast and
   proves zero send/retry/broadcaster events.
+- `VOP-H02`: resolved by naming the existing runner dispatch contract exactly:
+  `THORCHAIN_SIMULATOR_UDID=<UDID> Scripts/run-maestro.sh s2-06`. Omitting the
+  slice token is invalid because `Scripts/run-maestro.sh` requires one token
+  and dispatches S2-06 only for `s2-06`.
 
 ## Handoff gate
 
