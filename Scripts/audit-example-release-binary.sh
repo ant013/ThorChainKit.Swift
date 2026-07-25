@@ -37,8 +37,15 @@ fi
 executables=$(find "$app_path" -type f -perm -111 -print)
 [[ -n "$executables" ]] || { echo "no executable binaries resolved" >&2; exit 1; }
 while IFS= read -r executable; do
-  if strings "$executable" | rg -q 'FixtureScenario|FixtureTransport|FixtureSigner|ThorChainExampleFixture|ThorChainExampleFixtureSupport'; then
+  if ! scanned_strings=$(strings "$executable"); then
+    echo "strings scanner failed for Live executable: $executable" >&2
+    exit 1
+  fi
+  if rg -q 'FixtureScenario|FixtureTransport|FixtureSigner|ThorChainExampleFixture|ThorChainExampleFixtureSupport' <<< "$scanned_strings"; then
     echo "fixture symbol found in Live executable: $executable" >&2
+    exit 1
+  elif [[ $? -ne 1 ]]; then
+    echo "fixture symbol scanner failed for Live executable: $executable" >&2
     exit 1
   fi
 done <<< "$executables"

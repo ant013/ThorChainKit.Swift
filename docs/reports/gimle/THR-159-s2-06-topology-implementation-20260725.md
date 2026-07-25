@@ -1,7 +1,7 @@
 # THR-159 S2-06 topology implementation evidence
 
 Date: 2026-07-25
-Head: `96d89623ecd83bb39445fee561e0b52456c2e77d`
+Head: `19100aeca67c27387c16987fddfc0f350ee25561`
 Simulator UDID: `0A88BC07-1DF9-490A-BCAF-6FA2165F6B17`
 
 ## Gimle reliability
@@ -30,5 +30,14 @@ this run, so no Serena result is claimed.
   are retained under
   `artifacts/s2-06/acceptance/<head>/<udid>/`.
 - The release audit failed closed when the exact Live artifact was unresolved.
+
+## Closure 2 correction verification
+
+- This report is bound to the exact implementation head above.
+- `bash -n` for both Example audit scripts, the target-graph audit, and
+  `git diff --check` passed at that head.
+- Release-audit probes passed for a clean artifact, fixture-symbol rejection,
+  a failing `strings` scanner, and a failing `rg` matcher; each rejection
+  exited non-zero.
 
 No hosted workflow was dispatched.
