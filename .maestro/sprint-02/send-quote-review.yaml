@@ -36,5 +36,7 @@ name: send-quote-review
 - assertNotEnabled:
     id: send.confirm.button
 - assertVisible:
+    id: send.refresh.button
+- assertVisible:
     id: send.fixture.signer-call-count
     text: "0"

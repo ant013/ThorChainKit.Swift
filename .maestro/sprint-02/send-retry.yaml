@@ -26,4 +26,13 @@ name: send-retry
 - tapOn:
     id: send.retry.button
 - assertVisible:
+    id: send.retry.hash-unchanged
+    text: "true"
+- assertVisible:
+    id: send.retry.signer-count-unchanged
+    text: "true"
+- assertVisible:
+    id: send.fixture.signer-call-count
+    text: "1"
+- assertVisible:
     id: send.result.local-hash

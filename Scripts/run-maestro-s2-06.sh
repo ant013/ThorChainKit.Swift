@@ -10,6 +10,8 @@ destination="platform=iOS Simulator,id=$udid"
 head=$(git rev-parse HEAD)
 out="$root/artifacts/s2-06/$head/$udid"
 derived="$root/.build/s2-06"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$out"
 xcodebuild -workspace "$root/iOS Example/iOS Example.xcworkspace" -scheme ThorChainExampleFixture -configuration Debug -destination "$destination" -derivedDataPath "$derived" build
 xcrun simctl boot "$udid" >/dev/null 2>&1 || true
@@ -19,7 +21,39 @@ app="$derived/Build/Products/Debug-iphonesimulator/ThorChainExampleFixture.app"
 python3 -c 'import json,sys; p,app,udid=sys.argv[1:]; open(p,"w").write(json.dumps({"scheme":"ThorChainExampleFixture","configuration":"Debug","udid":udid,"resolvedExecutable":app+"/ThorChainExampleFixture"})+"\n")' "$out/build-settings.json" "$app" "$udid"
 xcrun simctl install "$udid" "$app"
 xcrun simctl launch "$udid" org.horizontalsystems.thorchainkit.example.fixture
+mkdir -p "$out/screenshots"
 maestro test --device "$udid" --format junit --output "$out/junit.xml" --test-output-dir "$out/screenshots" "$root/.maestro/sprint-02"
+xcrun simctl io "$udid" screenshot "$out/screenshots/final.png" >/dev/null
+maestro hierarchy --device "$udid" --compact > "$tmp/ui-tree.csv"
+python3 - "$tmp/ui-tree.csv" "$out/ui-tree.json" <<'PY'
+import csv
+import json
+import re
+import sys
+
+rows = list(csv.DictReader(open(sys.argv[1], newline="")))
+nodes = []
+for row in rows:
+    attributes = row.get("attributes", "")
+    match = re.search(r"(?:identifier|resource-id)=[\"']?([^,;\"']+)", attributes)
+    nodes.append({"identifier": match.group(1).strip() if match else "", "attributes": attributes})
+if not nodes:
+    raise SystemExit("runtime UI hierarchy is empty")
+with open(sys.argv[2], "w") as handle:
+    json.dump({"nodes": nodes}, handle, sort_keys=True)
+    handle.write("\n")
+PY
+clang_resource=$(xcrun clang -print-resource-dir)
+sdk=$(xcrun --sdk macosx --show-sdk-path)
+swift_flags=(
+    -Xcc -nostdinc
+    -Xcc -isystem -Xcc "$clang_resource/include"
+    -Xcc -isystem -Xcc "$sdk/usr/include"
+    -Xcc -iframework -Xcc "$sdk/System/Library/Frameworks"
+)
+xcrun swift "${swift_flags[@]}" "$root/Scripts/scan-s2-06-ocr.swift" "$out/screenshots" "$out/screenshots/ocr-self-test.json"
+git -C "$root" ls-files -- iOS\ Example .maestro Scripts | grep -vE '\.(sqlite|env)$' > "$tmp/tracked-list"
+xcrun swift "${swift_flags[@]}" "$root/Scripts/scan-s1-01-artifacts.swift" "$root" "$out" "$tmp/tracked-list"
 python3 - "$out/junit.xml" <<'PY'
 import sys
 import xml.etree.ElementTree as ET

@@ -30,6 +30,10 @@ struct PendingView: View {
                     }
                 }
             }
+            Text(String(model.retryHashUnchanged))
+                .accessibilityIdentifier("send.retry.hash-unchanged")
+            Text(String(model.retrySignerCountUnchanged))
+                .accessibilityIdentifier("send.retry.signer-count-unchanged")
         }
     }
 

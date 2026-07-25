@@ -2,6 +2,7 @@
 """Validate the semantic S2-06 five-flow contract and its committed YAML."""
 import json
 import pathlib
+import re
 import sys
 
 EXPECTED = {
@@ -36,7 +37,11 @@ def main() -> int:
         if not text_path.is_file():
             fail(f"{name}: YAML is missing")
         text = text_path.read_text()
-        if "launchApp:" not in text or "--example-scenario" not in text or name not in text:
+        scenario_arguments = re.findall(
+            r'["\']?--example-scenario["\']?\s*:\s*["\']([^"\']+)["\']',
+            text,
+        )
+        if "launchApp:" not in text or scenario_arguments != [name]:
             fail(f"{name}: YAML is not scenario-bound")
         for required in EXPECTED[name]:
             if required not in text:

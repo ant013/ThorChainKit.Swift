@@ -123,6 +123,12 @@ struct ExampleRuntime {
     var fixtureSignerCallCount: Int {
         (signer as? FixtureSigner)?.callCount ?? 0
     }
+
+    var fixtureScenarioID: FixtureScenarioID { fixtureScenario.id }
+
+    func finishFixtureTranscript() async throws {
+        try await fixtureTransport.finishTranscript()
+    }
 #endif
 
     func writeFixtureEvidence(syncState: String, acceptedHeight: Int64?, lastBlockHeight: Int64?, rune: String, requestCount: Int) {

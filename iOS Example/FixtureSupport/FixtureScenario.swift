@@ -17,7 +17,7 @@ public struct FixtureScenario: Sendable {
     public let expectedSignedBytes: Data
     public let expectedTransactionHash: String
     public let currentNativeFee: UInt64
-    public let expectedRequests: [FixtureRequest]
+    public let expectedRequests: [FixtureRequestPattern]
 
     public init(id: FixtureScenarioID, now: Date = Date(timeIntervalSince1970: 1_700_000_000)) {
         self.id = id
@@ -28,7 +28,40 @@ public struct FixtureScenario: Sendable {
         expectedSignedBytes = Data(hex: "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798")
         expectedTransactionHash = expectedDigest.map { String(format: "%02X", $0) }.joined()
         currentNativeFee = 2
-        expectedRequests = []
+        expectedRequests = Self.expectedRequests(for: id, transactionHash: expectedTransactionHash)
+    }
+
+    private static func expectedRequests(for id: FixtureScenarioID, transactionHash: String) -> [FixtureRequestPattern] {
+        let rest = "https://rest.invalid"
+        let rpc = "https://rpc.invalid"
+        let sender = "thor1w508d6qejxtdg4y5r3zarvary0c5xw7ku6wp68"
+        let probes = [
+            FixtureRequestPattern(method: "GET", origin: rest, path: "/cosmos/base/tendermint/v1beta1/node_info"),
+            FixtureRequestPattern(method: "GET", origin: rest, path: "/cosmos/base/tendermint/v1beta1/blocks/latest"),
+            FixtureRequestPattern(method: "GET", origin: rpc, path: "/status")
+        ]
+        let quote = [
+            FixtureRequestPattern(method: "GET", origin: rpc, path: "/abci_query"),
+            FixtureRequestPattern(method: "GET", origin: rest, path: "/cosmos/bank/v1beta1/spendable_balances/\(sender)/by_denom", query: "denom=rune"),
+            FixtureRequestPattern(method: "GET", origin: rpc, path: "/abci_query"),
+            FixtureRequestPattern(method: "GET", origin: rest, path: "/thorchain/mimir/key/HaltChainGlobal", query: "height=12345678"),
+            FixtureRequestPattern(method: "GET", origin: rest, path: "/thorchain/mimir/key/NodePauseChainGlobal", query: "height=12345678"),
+            FixtureRequestPattern(method: "GET", origin: rest, path: "/thorchain/mimir/key/HaltTHORChain", query: "height=12345678"),
+            FixtureRequestPattern(method: "GET", origin: rest, path: "/thorchain/mimir/key/SolvencyHaltTHORChain", query: "height=12345678"),
+            FixtureRequestPattern(method: "GET", origin: rest, path: "/cosmos/auth/v1beta1/params"),
+            FixtureRequestPattern(method: "GET", origin: rest, path: "/thorchain/version", query: "height=12345678"),
+            FixtureRequestPattern(method: "GET", origin: rpc, path: "/abci_query")
+        ]
+        var requests = probes + quote
+        if id != .quoteReview {
+            requests += quote + quote
+            requests.append(FixtureRequestPattern(method: "POST", origin: rest, path: "/cosmos/tx/v1beta1/txs", bodyRequired: true))
+        }
+        if id == .retry {
+            requests.append(FixtureRequestPattern(method: "GET", origin: rest, path: "/cosmos/tx/v1beta1/txs/\(transactionHash)"))
+            requests.append(FixtureRequestPattern(method: "POST", origin: rest, path: "/cosmos/tx/v1beta1/txs", bodyRequired: true))
+        }
+        return requests
     }
 }
 

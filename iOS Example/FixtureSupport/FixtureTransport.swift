@@ -19,24 +19,55 @@ public struct FixtureRequest: Equatable, Sendable {
     }
 }
 
+public struct FixtureRequestPattern: Sendable {
+    public let method: String
+    public let origin: String
+    public let path: String
+    public let query: String?
+    public let bodyRequired: Bool
+
+    public init(method: String, origin: String, path: String, query: String? = nil, bodyRequired: Bool = false) {
+        self.method = method
+        self.origin = origin
+        self.path = path
+        self.query = query
+        self.bodyRequired = bodyRequired
+    }
+
+    func matches(_ request: FixtureRequest) -> Bool {
+        method == request.method
+            && origin == request.origin
+            && path == request.path
+            && (query == nil || query == request.query)
+            && (!bodyRequired || request.body != nil)
+    }
+}
+
 public actor FixtureTranscript {
-    private let expected: [FixtureRequest]
+    private let expected: [FixtureRequestPattern]
     public private(set) var requests = [FixtureRequest]()
     private var position = 0
+    private var probeMatches = Set<Int>()
 
-    public init(expected: [FixtureRequest]) { self.expected = expected }
+    public init(expected: [FixtureRequestPattern]) { self.expected = expected }
 
     public func record(_ request: FixtureRequest) throws {
         requests.append(request)
-        guard position < expected.count, expected[position] == request else {
-            if expected.isEmpty { return }
-            throw URLError(.cannotParseResponse)
+        guard expected.count >= 3 else { throw URLError(.cannotParseResponse) }
+        if position < 3 {
+            guard let match = (0..<3).first(where: { !probeMatches.contains($0) && expected[$0].matches(request) }) else {
+                throw URLError(.cannotParseResponse)
+            }
+            probeMatches.insert(match)
+            position += 1
+            return
         }
+        guard position < expected.count, expected[position].matches(request) else { throw URLError(.cannotParseResponse) }
         position += 1
     }
 
     public func finish() throws {
-        guard position == expected.count else { throw URLError(.cannotParseResponse) }
+        guard expected.count >= 3, position == expected.count else { throw URLError(.cannotParseResponse) }
     }
 }
 

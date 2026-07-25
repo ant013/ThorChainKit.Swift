@@ -19,6 +19,8 @@ final class SendViewModel: ObservableObject {
     @Published private(set) var currentFee = BigUInt(0)
     @Published private(set) var retryPreviousFee = BigUInt(0)
     @Published private(set) var retryCurrentFee = BigUInt(0)
+    @Published private(set) var retryHashUnchanged = false
+    @Published private(set) var retrySignerCountUnchanged = false
     @Published private(set) var quoteExpired = false
 
     let runtime: ExampleRuntime
@@ -91,6 +93,9 @@ final class SendViewModel: ObservableObject {
                 resultState = Self.submissionDescription(submission.state)
 #if EXAMPLE_FIXTURE
                 signerCallCount = runtime.fixtureSignerCallCount
+                if runtime.fixtureScenarioID != .retry {
+                    try await runtime.finishFixtureTranscript()
+                }
 #endif
             } catch {
                 errorMessage = "Send unavailable."
@@ -106,12 +111,21 @@ final class SendViewModel: ObservableObject {
         }
         Task {
             do {
+                let signerCountBeforeRetry = signerCallCount
                 let submission = try await runtime.kit.retryBroadcast(
                     transactionId: transaction.transactionId,
                     acceptingNativeFee: acceptingFee
                 )
                 localHash = submission.transactionId.hash
                 resultState = Self.submissionDescription(submission.state)
+#if EXAMPLE_FIXTURE
+                signerCallCount = runtime.fixtureSignerCallCount
+#endif
+                retryHashUnchanged = submission.transactionId.hash == transaction.transactionId.hash
+                retrySignerCountUnchanged = signerCallCount == signerCountBeforeRetry
+#if EXAMPLE_FIXTURE
+                try await runtime.finishFixtureTranscript()
+#endif
             } catch {
                 errorMessage = "Retry unavailable."
             }
@@ -131,6 +145,9 @@ final class SendViewModel: ObservableObject {
             await runtime.advanceFixtureToExpiry()
             quoteExpired = true
             resultState = "Quote expired — refresh required"
+#if EXAMPLE_FIXTURE
+            try? await runtime.finishFixtureTranscript()
+#endif
         }
     }
 
