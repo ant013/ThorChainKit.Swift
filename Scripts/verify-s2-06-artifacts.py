@@ -70,9 +70,11 @@ def main() -> int:
     root = pathlib.Path(__file__).resolve().parents[1]
     artifact = pathlib.Path(sys.argv[1]).resolve()
     udid = sys.argv[2]
-    if artifact.parent.name != pathlib.Path(udid).name:
-        fail("artifact directory is not UDID-scoped")
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    if artifact.name != pathlib.Path(udid).name:
+        fail("artifact directory is not UDID-scoped")
+    if artifact.parent.name != head:
+        fail("artifact directory is not HEAD-scoped")
     if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=no"], cwd=root, text=True).strip():
         fail("tracked input is dirty")
     if not artifact.is_dir():
