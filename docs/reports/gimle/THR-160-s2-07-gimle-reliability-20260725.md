@@ -4,6 +4,10 @@ Date: 2026-07-25
 
 Gimle trust: RED.
 
+This report covers formalization revision 2 after discovery 1/2 adversarial
+`REVISE`. The current-tree fallback remains the authority for the revised
+design; no host implementation was performed.
+
 The required codebase-memory project `Users-ant013-Data-AI-thorchain` was
 queried first and reported ready. The exact Unstoppable codebase-memory project
 also reported ready and supplied symbol candidates, but its indexed commit was
@@ -47,6 +51,9 @@ purposes, with Gimle trust still RED.
 
 No host implementation, build, AppTests, simulator, or controlled mainnet
 acceptance was run in this formalization phase. Those checks belong to the
-approved implementation/QA phases. The dirty external checkout and absent
-Serena must be rechecked on the fresh implementation branch before relying on
-any line-level evidence.
+approved implementation/QA phases. The dirty external checkout, absent Serena,
+and Gimle project/runtime mapping must be rechecked on the fresh implementation
+branch before relying on any line-level evidence. Revision 2 specifically adds
+an exact package SHA, tracked resolution/config inputs, raw diagnostic
+comparison, hermetic global-state tests, and a bounded no-run/no-broadcast
+mainnet protocol; these remain unverified until implementation/QA.

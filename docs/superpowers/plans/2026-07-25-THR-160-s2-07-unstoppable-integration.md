@@ -1,10 +1,11 @@
 # THR-160 — S2-07 Unstoppable Native RUNE Send Integration Plan
 
-Design revision 1 for
+Design revision 2 for
 `docs/specs/sprint-02-native-send/S2-07-unstoppable-integration.md`, based on
 architecture revision 10 at commit
 `518835315a65996b9321665213adb0516503df65`. Discovery is bounded at 1/2;
-implementation remains approval-gated.
+closure remains 0/5; revision 1 was returned `REVISE` and implementation
+remains approval-gated.
 
 ## Goal
 
@@ -17,13 +18,16 @@ with the local transaction hash.
 
 - [ ] 1. Adapter, client, and factory boundary
   - Owner: ThorChainSwiftEngineer
-  - Acceptance: `ISendThorChainAdapter` exposes only the internal send client
-    and account ID; the manager, wrapper, and factory store no signer or
-    account secret; `ThorChainSendClient` validates its own live quote handle,
-    maps kit submission outcomes, and rejects fake/cross-client handles before
-    any signer or kit call. Native RUNE is registered through existing
+  - Acceptance: `ISendThorChainAdapter` exposes account ID, the S1 receive
+    address projection, and an actor-safe MainActor client factory; the
+    adapter strongly owns the wrapper while the client holds only an
+    invalidation lease. The manager, wrapper, and factory store no signer or
+    account secret; the client validates complete quote binding and rejects
+    fake/same-client-swapped/cross-client/stopped handles before any signer or
+    kit call. Native RUNE is registered through existing
     SendNew handler/pre-handler arrays with no `Core.swift` special case.
-  - Paths: `Core/Protocols.swift`, `Core/Managers/ThorChainKitManager.swift`,
+  - Paths: `Package.swift`, `Package.resolved`, `.gitignore`,
+    `Core/Protocols.swift`, `Core/Managers/ThorChainKitManager.swift`,
     `Core/Factories/ThorChainKitFactory.swift`,
     `Core/Adapters/ThorChain/ThorChainAdapter.swift`, new
     `ThorChainSendClient.swift`, `ThorChainSendData.swift`, and
@@ -36,9 +40,10 @@ with the local transaction hash.
   - Owner: ThorChainSwiftEngineer
   - Acceptance: `ThorChainSignerProvider` is the only construction path;
     `ThorChainSigner` is an ephemeral actor exposing only its immutable public
-    key and signing capability; each public-key/sign operation reads the
-    currently authorized active mnemonic account, rechecks account ID/type/key,
-    and fails closed on account switch, duress/passcode change, removal, or
+    key and Sendable key-source capability; each public-key/sign operation
+    checks unlocked foreground state, authorization epoch, current visible
+    active-account object/ID/type/key, and fails closed on lock, background,
+    account switch, duress/passcode change, same-ID replacement, removal, or
     mismatch. No signer, seed, private key, `Account`, or `AccountType` is
     stored by adapter/manager/factory or logged.
   - Paths: new `ThorChainSigner.swift`, `ThorChainSignerProvider.swift`,
@@ -50,7 +55,8 @@ with the local transaction hash.
 - [ ] 3. SendNew quote, expiry, and outcome UX
   - Owner: ThorChainSwiftEngineer
   - Acceptance: pre-send conversion is exact and fail-closed; review renders
-    the stored quote, fee, total, memo, and height; absolute expiry blocks
+    the stored handle quote, fee, total, memo, and height; immutable complete
+    quote binding rejects same-client swaps; absolute expiry blocks
     send; accepted/unknown outcomes retain the full local hash and bypass the
     generic sent banner; legacy handlers still produce `.sent`; no quote is
     recreated during send and no automatic retry is added.
@@ -69,8 +75,10 @@ with the local transaction hash.
     exact `Development`/`Debug-Dev` strict-concurrency command, compares all
     repository-owned Swift diagnostics including unchanged transitive callers,
     rejects `@unchecked Sendable`, `@preconcurrency`, warning suppression, and
-    an invalid actor-boundary canary, and proves both SlideButton entry paths
-    call one action seam exactly once.
+    an invalid actor-boundary canary, compares raw diagnostics without
+    replacement false-passes, verifies the exact package/config/toolchain
+    inputs, and proves both SlideButton entry paths call one action seam
+    exactly once.
   - Paths: `Scripts/CI/check-thorchain-send-concurrency.sh`, its non-target
     canary fixture, and `SlideButton.swift`.
   - Depends on: 2 and 3.
@@ -79,12 +87,14 @@ with the local transaction hash.
 
 - [ ] 5. Serialized AppTests and local build
   - Owner: ThorChainQAEngineer
-  - Acceptance: `ThorChainGlobalStateTests` is `@Suite(.serialized)`, snapshots
-    and restores global registries/active-account state, and its overlap
-    sentinel fails under parallel execution. WalletCore tests and AppTests
-    run locally with `-parallel-testing-enabled NO`; the Development build
-    succeeds; no Maestro, fixture transport, launch argument, or secret-bearing
-    artifact exists in the host diff.
+  - Acceptance: `ThorChainGlobalStateTests` is `@Suite(.serialized)`, runs on
+    an erased purpose-created simulator/container, snapshots and restores all
+    mutated global domains, and its overlap sentinel fails under parallel
+    execution. Every named narrow suite has a literal `-only-testing` command
+    and nonzero discovery. WalletCore tests and AppTests run locally with
+    `-parallel-testing-enabled NO`; the Development build succeeds; no
+    Maestro, fixture transport, launch argument, or secret-bearing artifact
+    exists in the host diff.
   - Paths: `Unstoppable/Tests/ThorChain/`, WalletCore tests, and local evidence
     manifests under the operator-controlled artifact directory.
   - Depends on: 1–4.
@@ -93,11 +103,13 @@ with the local transaction hash.
 
 - [ ] 6. Controlled mainnet acceptance and merge gate
   - Owner: ThorChainQAEngineer, then ThorChainCTO
-  - Acceptance: on a purpose-created controlled mnemonic account, native RUNE
-    SendNew shows the exact quote and returns the local hash plus honest
-    CheckTx/unknown state; no duplicate signature or generic sent banner is
-    observed. Any unavailable controlled ambiguous-response environment is
-    recorded as deterministic kit evidence, never simulated as live success.
+  - Acceptance: after exact identity/network preflight and separate final
+    operator approval, a purpose-created controlled mnemonic account capped at
+    `0.01 RUNE` sends at most `0.001 RUNE` to a pre-verified operator-owned
+    recipient; SendNew shows the exact quote and returns the local hash plus
+    honest CheckTx/unknown state, with no duplicate signature or generic sent
+    banner. Any unavailable control is recorded `not-run`, never simulated as
+    live success.
   - Paths: QA evidence and the exact PR head; no ThorChainKit or Maestro files.
   - Depends on: 5 and explicit approval.
   - Check: local QA comment cites exact PR head, local tests/build, controlled
