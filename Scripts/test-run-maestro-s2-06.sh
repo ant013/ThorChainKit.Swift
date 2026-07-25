@@ -29,6 +29,28 @@ rg -q 'parts\.count == 1 \|\| !fraction\.isEmpty' "$root/iOS Example/Sources/Sen
 rg -q 'Address\(recipient, network: \.mainnet\)' "$root/iOS Example/LiveSupport/LiveSecretLoader.swift"
 rg -q 'FixtureTranscript\(expected: scenario\.expectedRequests\)' "$root/iOS Example/Sources/Core/ExampleRuntime.swift"
 rg -q 'acceptedBytes' "$root/iOS Example/FixtureSupport/FixtureTransport.swift"
+rg -q 'scenario\.id == \.unknown \|\| scenario\.id == \.retry' "$root/iOS Example/FixtureSupport/FixtureTransport.swift"
+rg -q 'guard raw == scenario\.expectedSignedBytes else' "$root/iOS Example/FixtureSupport/FixtureTransport.swift"
+python3 - "$root/iOS Example/FixtureSupport/FixtureTransport.swift" <<'PY'
+import sys
+from pathlib import Path
+
+source = Path(sys.argv[1]).read_text()
+guard = "guard raw == scenario.expectedSignedBytes else { throw URLError(.cannotParseResponse) }"
+
+def validate(value: str) -> None:
+    if guard not in value:
+        raise AssertionError("signed-byte acceptance guard is missing")
+
+validate(source)
+mutant = source.replace(guard, "guard raw != scenario.expectedSignedBytes else { throw URLError(.cannotParseResponse) }", 1)
+try:
+    validate(mutant)
+except AssertionError:
+    print("signed-byte negative mutation rejected")
+else:
+    raise SystemExit("signed-byte negative mutation unexpectedly passed")
+PY
 rg -q 'isQuoteExpired' "$root/iOS Example/Sources/Send/SendViewModel.swift"
 rg -q 'value: model\.dataSource' "$root/iOS Example/Sources/Views/DiagnosticsView.swift"
 rg -q 'artifactDigests' "$root/Scripts/verify-s2-06-artifacts.py"

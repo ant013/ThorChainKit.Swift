@@ -126,7 +126,7 @@ public actor FixtureTransport: TestingHTTPTransport {
             response = (#"{"account":{"@type":"/cosmos.auth.v1beta1.BaseAccount","account_number":"123456","sequence":"1"}}"#.data(using: .utf8)!, 200, ["Grpc-Metadata-X-Cosmos-Block-Height": "12345678"])
         } else if path.contains("/balances/") {
             response = (#"{"balances":[{"denom":"rune","amount":"700000000"}],"pagination":{"next_key":null}}"#.data(using: .utf8)!, 200, ["Grpc-Metadata-X-Cosmos-Block-Height": "12345678"])
-        } else if path.contains("/txs/") && scenario.id == .unknown {
+        } else if path.contains("/txs/") && (scenario.id == .unknown || scenario.id == .retry) {
             let hash = url.lastPathComponent
             response = (Data(#"{"code":5,"message":"rpc error: code = NotFound desc = tx not found: \#(hash): key not found","details":[]}"#.utf8), 404, [:])
         } else if request.httpMethod == "POST" {
@@ -135,6 +135,7 @@ public actor FixtureTransport: TestingHTTPTransport {
                   let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
                   let encoded = object["tx_bytes"] as? String,
                   let raw = Data(base64Encoded: encoded) else { throw URLError(.cannotParseResponse) }
+            guard raw == scenario.expectedSignedBytes else { throw URLError(.cannotParseResponse) }
             let hash = Data(SHA256.hash(data: raw)).map { String(format: "%02X", $0) }.joined()
             if let acceptedBytes {
                 guard raw == acceptedBytes, hash == acceptedHash else { throw URLError(.cannotParseResponse) }

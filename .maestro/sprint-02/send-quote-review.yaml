@@ -29,6 +29,8 @@ name: send-quote-review
     id: send.review.height
 - assertVisible:
     id: send.review.expiry
+- assertEnabled:
+    id: send.confirm.button
 - tapOn:
     id: send.fixture.advance-to-expiry
 - assertVisible:

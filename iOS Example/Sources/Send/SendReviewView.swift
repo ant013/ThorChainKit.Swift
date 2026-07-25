@@ -14,7 +14,7 @@ struct SendReviewView: View {
             Text(String(review.acceptedHeight)).accessibilityIdentifier("send.review.height")
             Text(Self.absoluteExpiry(review.expiresAt)).accessibilityIdentifier("send.review.expiry")
             Button("Confirm") { model.confirm() }
-                .disabled(model.quoteExpired || review.expiresAt <= Date())
+                .disabled(model.quoteExpired)
                 .accessibilityIdentifier("send.confirm.button")
             Button("Refresh") { model.refresh() }
                 .accessibilityIdentifier("send.refresh.button")
