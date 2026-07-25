@@ -40,9 +40,10 @@ five-flow Maestro acceptance described by the authoritative spec.
     effects. Review expiry, CheckTx-accepted, unknown, changed-fee retry,
     empty-versus-degraded restart state, and all fixed IDs including
     `send.mode-badge` are visible with no sensitive values. Live remains
-    loads exactly twelve lowercase English BIP39 words from the path named by
-    `THORCHAIN_EXAMPLE_LIVE_MNEMONIC_FILE`, rejects every malformed or extra
-    input without logging it, and derives `m/44'/931'/0'/0/0` through the pinned
+    loads exactly twelve lowercase English BIP39 words from local-only
+    `THORCHAIN_TEST_MNEMONIC`, uses `THORCHAIN_TEST_RECIPIENT_ADDRESS` for the
+    controlled-smoke recipient, rejects every malformed or extra input without
+    logging it, and derives `m/44'/931'/0'/0/0` through the pinned
     Example-only backend; then start/replace/logout atomically owns signer + derived address
     + matching Kit and clears the input/model. Controlled LIVE stops before
     confirmation/broadcast.
@@ -95,7 +96,8 @@ host integration, and no S2-07 work.
 ## Discovery-2 blocker disposition
 
 - `THR-159-SEC-H01`: resolved in design revision 4 by the Board's BIP39 choice:
-  an outside-Git path named by `THORCHAIN_EXAMPLE_LIVE_MNEMONIC_FILE`, exact
+  local-only `THORCHAIN_TEST_MNEMONIC` and
+  `THORCHAIN_TEST_RECIPIENT_ADDRESS` values in the ignored root `.env`, exact
   twelve-word validation, standard BIP39 seed derivation, and
   `m/44'/931'/0'/0/0` through the pinned Example-only backend. The app never
   generates or funds the wallet. The non-secret wallet ID rule is fixed as the
