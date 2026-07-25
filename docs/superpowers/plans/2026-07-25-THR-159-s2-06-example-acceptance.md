@@ -1,11 +1,11 @@
 # THR-159 — S2-06 iOS Example Send Acceptance Plan
 
-Design revision 3 for `docs/specs/sprint-02-native-send/S2-06-example-acceptance.md`,
+Design revision 4 for `docs/specs/sprint-02-native-send/S2-06-example-acceptance.md`,
 based on architecture revision 10 at commit
 `518835315a65996b9321665213adb0516503df65`. The prior draft was superseded by
 the discovery-1/2 adversarial findings. Discovery is frozen at 2/2;
-implementation remains approval-gated. One operator decision remains open for
-the Live signer/derivation backend.
+implementation remains approval-gated. The Board selected a dedicated BIP39
+test wallet; revision 4 specifies fail-closed local loading and THOR derivation.
 
 ## Goal
 
@@ -19,12 +19,13 @@ five-flow Maestro acceptance described by the authoritative spec.
   - Acceptance: `ThorChainExampleLive` (Release) and `ThorChainExampleFixture`
     (Debug) are separate app targets/products; `ThorChainExampleFixtureSupport`
     is linked only by Fixture and contains exactly `FixtureSupport/**`.
-    Live/Archive/Profile dependency closure and source membership contain no
+    `ThorChainExampleLiveSupport` contains only the BIP39 loader, THOR derivation
+    adapter, and Live signer; Live/Archive/Profile dependency closure and source membership contain no
     fixture target or source. The SwiftUI App composes the selected runtime
     without UIKit, AppDelegate, view controllers, or representable wrappers.
   - Paths: `iOS Example/iOS Example.xcodeproj/project.pbxproj`,
     `iOS Example/iOS Example.xcworkspace`, `iOS Example/Sources/**`,
-    `iOS Example/FixtureSupport/**`.
+    `iOS Example/LiveSupport/**`, `iOS Example/FixtureSupport/**`.
   - Depends on: none.
   - Check: target-graph/source-membership audit; Live Release Archive/Profile
     show-build-settings audit; both exact-destination xcodebuilds; resolved
@@ -39,11 +40,14 @@ five-flow Maestro acceptance described by the authoritative spec.
     effects. Review expiry, CheckTx-accepted, unknown, changed-fee retry,
     empty-versus-degraded restart state, and all fixed IDs including
     `send.mode-badge` are visible with no sensitive values. Live remains
-    unavailable until the operator approves its secret format/derivation/
-    backend; then start/replace/logout atomically owns signer + derived address
+    loads exactly twelve lowercase English BIP39 words from the path named by
+    `THORCHAIN_EXAMPLE_LIVE_MNEMONIC_FILE`, rejects every malformed or extra
+    input without logging it, and derives `m/44'/931'/0'/0/0` through the pinned
+    Example-only backend; then start/replace/logout atomically owns signer + derived address
     + matching Kit and clears the input/model. Controlled LIVE stops before
     confirmation/broadcast.
-  - Paths: `iOS Example/Sources/Send`, `iOS Example/Sources/Pending`, tests.
+  - Paths: `iOS Example/Sources/Send`, `iOS Example/Sources/Pending`,
+    `iOS Example/LiveSupport`, tests.
   - Depends on: 1 and S2-01 through S2-05.
   - Check: focused unit/component tests; runtime accessibility-tree/Maestro ID
     assertions and sensitive-value negatives; controlled LIVE observation.
@@ -90,11 +94,12 @@ host integration, and no S2-07 work.
 
 ## Discovery-2 blocker disposition
 
-- `THR-159-SEC-H01`: unresolved operator decision. Choose the secret format,
-  derivation path, and signing backend compatible with S2-04's host-owned
-  `Signer`; until then Live is explicitly unavailable and no send session is
-  constructed. The non-secret wallet ID rule is fixed as the domain prefix plus
-  SHA-256 of the canonical compressed public key.
+- `THR-159-SEC-H01`: resolved in design revision 4 by the Board's BIP39 choice:
+  an outside-Git path named by `THORCHAIN_EXAMPLE_LIVE_MNEMONIC_FILE`, exact
+  twelve-word validation, standard BIP39 seed derivation, and
+  `m/44'/931'/0'/0/0` through the pinned Example-only backend. The app never
+  generates or funds the wallet. The non-secret wallet ID rule is fixed as the
+  domain prefix plus SHA-256 of the canonical compressed public key.
 - `THR-159-SEC-H02`: resolved by the exact Example input bound
   `1...2^256-1` base units and a canonical magnitude of at most 32 bytes.
 - `THR-159-UI-H01`: resolved by `send.mode-badge`, a full runtime accessibility
