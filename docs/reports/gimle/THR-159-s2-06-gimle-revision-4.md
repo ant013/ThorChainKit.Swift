@@ -16,14 +16,14 @@ Discovery is frozen at 2/2. Revision 4 records the Board's answered Live
 signer choice and the resulting concrete design:
 
 - `THR-159-SEC-H01`: the Live target uses an Example-only support target with a
-  fail-closed local loader for exactly twelve lowercase English BIP39 words,
-  sourced by the outside-Git path in
-  `THORCHAIN_EXAMPLE_LIVE_MNEMONIC_FILE`. It derives the standard BIP39 seed
-  and exact THOR path `m/44'/931'/0'/0/0` through the pinned `HdWalletKit`
-  backend, then atomically creates the matching address, signer, and Kit
-  session. Missing, malformed, extra, or unreadable input publishes no
+  fail-closed local loader for exactly twelve lowercase English BIP39 words
+  from `THORCHAIN_TEST_MNEMONIC` in the ignored root `.env`; the controlled
+  recipient is `THORCHAIN_TEST_RECIPIENT_ADDRESS`. It derives the standard
+  BIP39 seed and exact THOR path `m/44'/931'/0'/0/0` through the pinned
+  `HdWalletKit` backend, then atomically creates the matching address, signer,
+  and Kit session. Missing, malformed, extra, or unreadable input publishes no
   session and never logs secret material. The app does not generate or fund
-  the wallet.
+  the reusable QA wallet.
 - `THR-159-SEC-H02`: remains resolved by the deterministic
   `1...2^256-1` base-unit and 32-byte canonical-magnitude bound.
 - `THR-159-UI-H01`: remains resolved by `send.mode-badge`, full runtime
