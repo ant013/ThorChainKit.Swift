@@ -1,8 +1,11 @@
 # THR-159 S2-06 topology implementation evidence
 
 Date: 2026-07-25
-Head: `a6d2fce74a80cf118c4cab733948dcfbaae95475`
+Implementation checkpoint: `a6d2fce74a80cf118c4cab733948dcfbaae95475`
 Simulator UDID: `0A88BC07-1DF9-490A-BCAF-6FA2165F6B17`
+
+The report-binding commit necessarily follows this implementation checkpoint;
+the report does not self-embed its final commit hash.
 
 ## Gimle reliability
 
@@ -24,16 +27,15 @@ this run, so no Serena result is claimed.
   root, no native LiveSupport target, and keeps native FixtureSupport.
 - The target-graph audit, S2-06 manifest contract/negative mutations, Swift
   parse checks, shell syntax checks, and `git diff --check` passed.
-- The exact Fixture Debug and Live Release builds both reached package
-  resolution and stalled while recursively cloning SwiftProtobuf's
-  `protobuf` submodule. Both bounded runs were terminated with exit 143; logs
-  are retained under
-  `artifacts/s2-06/acceptance/<head>/<udid>/`.
+- The old `96d8962` Fixture Debug and Live Release build logs are
+  pre-implementation attempts and are excluded from current-head acceptance.
 - The release audit failed closed when the exact Live artifact was unresolved.
 
 ## Closure 2 correction verification
 
-- This report is bound to the exact implementation head above.
+- This report uses the implementation checkpoint above for its implementation
+  evidence; the final exact PR head is established by Git plus the pushed
+  Paperclip handoff/review record, not by a self-embedded value in this file.
 - `bash -n` for both Example audit scripts, the target-graph audit, and
   `git diff --check` passed at that head.
 - Release-audit probes passed for a clean artifact, fixture-symbol rejection,
