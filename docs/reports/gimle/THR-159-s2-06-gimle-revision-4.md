@@ -34,11 +34,13 @@ signer choice and the resulting concrete design:
   tracked input inventory, clean-input checks, exact HEAD/UDID, per-file and
   artifact digests, and fail-closed wrong-head/dirty/extra/missing/tampered
   cases.
-- `THR-159-VOP-H02`: remains resolved by a purpose-created unfunded wallet
-  and a controlled LIVE checklist that stops before confirmation/broadcast and
-  proves zero send/retry/broadcaster events.
+- `THR-159-VOP-H02`: remains resolved by a purpose-created low-balance mainnet
+  QA wallet; its existing funding does not authorize an irreversible send. The
+  controlled LIVE checklist stops before confirmation/broadcast and proves zero
+  send/retry/broadcaster events.
 
-No product code, wallet, or funds changed. The revision requires a fresh
+No product code, wallet generation, funding, or send action was performed by
+this design revision. The revision requires a fresh
 bounded adversarial review and explicit operator approval before implementation.
 The independent roadmap-status repair must also be approved and landed before
 the S2-06 formalization head is recreated from corrected `origin/main`.

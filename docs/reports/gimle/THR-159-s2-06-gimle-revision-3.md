@@ -27,9 +27,10 @@ Discovery is frozen at 2/2. The five discovery-2 findings were dispositioned:
 - `THR-159-VOP-H01`: resolved by a versioned manifest with complete tracked
   input inventory, clean-input checks, exact HEAD/UDID, per-file and artifact
   digests, and fail-closed wrong-head/dirty/extra/missing/tampered cases.
-- `THR-159-VOP-H02`: resolved by a purpose-created unfunded wallet and a
-  controlled LIVE checklist that stops before confirmation/broadcast and proves
-  zero send/retry/broadcaster events.
+- `THR-159-VOP-H02`: resolved by a purpose-created low-balance mainnet QA wallet;
+  its existing funding does not authorize an irreversible send. The controlled
+  LIVE checklist stops before confirmation/broadcast and proves zero
+  send/retry/broadcaster events.
 
 No product code changed. Explicit operator approval is still required for this
 design revision, and the Live backend decision must precede implementation.

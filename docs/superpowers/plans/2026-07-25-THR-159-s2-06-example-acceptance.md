@@ -110,7 +110,8 @@ host integration, and no S2-07 work.
   node/value scan, and an unlisted-node sensitive-value mutation.
 - `THR-159-VOP-H01`: resolved by the versioned digest-bound manifest and
   fail-closed clean-input, wrong-head, extra/missing/tampered checks.
-- `THR-159-VOP-H02`: resolved by a purpose-created unfunded wallet and a
+- `THR-159-VOP-H02`: resolved by a purpose-created low-balance mainnet QA wallet
+  whose existing funding does not authorize an irreversible send, plus a
   controlled LIVE checklist that terminates before confirmation/broadcast and
   proves zero send/retry/broadcaster events.
 
