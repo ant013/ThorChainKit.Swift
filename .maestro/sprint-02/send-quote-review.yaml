@@ -1,0 +1,27 @@
+appId: org.horizontalsystems.thorchainkit.example.fixture
+name: send-quote-review
+---
+- tapOn:
+    id: send-open
+- tapOn:
+    id: send.amount.input
+- inputText: "1.25"
+- tapOn:
+    id: send.memo.input
+- inputText: "fixture memo"
+- tapOn:
+    id: send.quote.button
+- assertVisible:
+    id: send.review.amount
+- assertVisible:
+    id: send.review.recipient
+- assertVisible:
+    id: send.review.memo
+- assertVisible:
+    id: send.review.native-fee
+- assertVisible:
+    id: send.review.total
+- assertVisible:
+    id: send.review.height
+- assertVisible:
+    id: send.review.expiry

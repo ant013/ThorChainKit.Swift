@@ -501,3 +501,4 @@ if run_scanner "$scanner" 2>/dev/null; then fail "processed-count mutant was acc
 echo "PASS scanner-count"
 
 echo "PASS test-run-maestro"
+"$(cd "$(dirname "$0")/.." && pwd -P)/Scripts/test-run-maestro-s2-06.sh"

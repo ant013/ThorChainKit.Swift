@@ -12,6 +12,10 @@ repository_root=$(git -C "$script_root" rev-parse --show-toplevel)
 repository_root=$(cd "$repository_root" && pwd -P)
 cd "$repository_root"
 
+if [[ ${1:-} == s2-06 ]]; then
+    exec "$repository_root/Scripts/run-maestro-s2-06.sh"
+fi
+
 [[ $# == 1 ]] || fail "exactly one slice token is required"
 slice=$1
 case "$slice" in

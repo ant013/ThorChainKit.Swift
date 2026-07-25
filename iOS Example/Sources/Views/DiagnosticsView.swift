@@ -5,12 +5,14 @@ struct DiagnosticsView: View {
     @StateObject private var endpoints: EndpointsViewModel
     @StateObject private var accountRead: AccountReadViewModel
     @StateObject private var lifecycle: LifecycleViewModel
+    @StateObject private var send: SendViewModel
 
     init(model: DiagnosticsViewModel) {
         self.model = model
         _endpoints = StateObject(wrappedValue: EndpointsViewModel(runtime: model.runtime))
         _accountRead = StateObject(wrappedValue: AccountReadViewModel(runtime: model.runtime))
         _lifecycle = StateObject(wrappedValue: LifecycleViewModel(runtime: model.runtime))
+        _send = StateObject(wrappedValue: SendViewModel(runtime: model.runtime))
     }
 
     var body: some View {
@@ -54,6 +56,10 @@ struct DiagnosticsView: View {
                 NavigationLink(destination: LifecycleView(model: lifecycle)) {
                     Text("Lifecycle")
                         .accessibilityIdentifier("lifecycle-open")
+                }
+                NavigationLink(destination: SendView(model: send)) {
+                    Text("Send")
+                        .accessibilityIdentifier("send-open")
                 }
             }
         }

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "flows": [
+    {"flow": "send-quote-review", "actions": ["enter amount", "enter memo", "quote"], "assertions": ["review", "expiry", "expiry disables confirm"]},
+    {"flow": "send-checktx-accepted", "actions": ["quote", "confirm"], "assertions": ["CheckTx accepted — not confirmed", "local hash"]},
+    {"flow": "send-unknown", "actions": ["quote", "confirm"], "assertions": ["Unknown — retry available", "local hash", "retry"]},
+    {"flow": "send-retry", "actions": ["unknown", "acknowledge fee", "retry"], "assertions": ["same hash", "same signer count", "changed fee"]},
+    {"flow": "send-restart-pending", "actions": ["create pending", "relaunch"], "assertions": ["pending before relaunch", "pending after relaunch", "same namespace"]}
+  ]
+}

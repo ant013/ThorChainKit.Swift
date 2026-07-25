@@ -1,0 +1,16 @@
+appId: org.horizontalsystems.thorchainkit.example.fixture
+name: send-unknown
+---
+- tapOn:
+    id: send-open
+- tapOn:
+    id: send.amount.input
+- inputText: "1"
+- tapOn:
+    id: send.quote.button
+- tapOn:
+    id: send.confirm.button
+- assertVisible:
+    id: send.result.local-hash
+- assertVisible:
+    id: send.retry.button

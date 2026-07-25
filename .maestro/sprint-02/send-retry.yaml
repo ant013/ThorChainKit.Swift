@@ -1,0 +1,11 @@
+appId: org.horizontalsystems.thorchainkit.example.fixture
+name: send-retry
+---
+- tapOn:
+    id: send-open
+- assertVisible:
+    id: send.retry.fee-change
+- tapOn:
+    id: send.retry.button
+- assertVisible:
+    id: send.result.local-hash

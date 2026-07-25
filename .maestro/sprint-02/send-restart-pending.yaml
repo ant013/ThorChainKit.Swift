@@ -1,0 +1,10 @@
+appId: org.horizontalsystems.thorchainkit.example.fixture
+name: send-restart-pending
+---
+- tapOn:
+    id: send-open
+- assertVisible:
+    id: send.pending.list
+- launchApp
+- assertVisible:
+    id: send.pending.list
