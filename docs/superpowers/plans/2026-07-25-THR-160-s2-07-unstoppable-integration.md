@@ -1,10 +1,10 @@
 # THR-160 — S2-07 Unstoppable Native RUNE Send Integration Plan
 
-Design revision 2 for
+Design revision 3 for
 `docs/specs/sprint-02-native-send/S2-07-unstoppable-integration.md`, based on
 architecture revision 10 at commit
-`518835315a65996b9321665213adb0516503df65`. Discovery is bounded at 1/2;
-closure remains 0/5; revision 1 was returned `REVISE` and implementation
+`518835315a65996b9321665213adb0516503df65`. Discovery is bounded at 2/2;
+closure remains 0/5; revisions 1 and 2 were returned `REVISE` and implementation
 remains approval-gated.
 
 ## Goal
@@ -20,8 +20,10 @@ with the local transaction hash.
   - Owner: ThorChainSwiftEngineer
   - Acceptance: `ISendThorChainAdapter` exposes account ID, the S1 receive
     address projection, and an actor-safe MainActor client factory; the
-    adapter strongly owns the wrapper while the client holds only an
-    invalidation lease. The manager, wrapper, and factory store no signer or
+    adapter strongly owns the wrapper while the client holds only a
+    synchronized monotonic-generation lease with active-use permits. Stop
+    revokes before wrapper release and waits for active permits to drain. The
+    manager, wrapper, and factory store no signer or
     account secret; the client validates complete quote binding and rejects
     fake/same-client-swapped/cross-client/stopped handles before any signer or
     kit call. Native RUNE is registered through existing
@@ -32,7 +34,9 @@ with the local transaction hash.
     `Core/Adapters/ThorChain/ThorChainAdapter.swift`, new
     `ThorChainSendClient.swift`, `ThorChainSendData.swift`, and
     `SendHandlerFactory.swift`.
-  - Depends on: approved S2-01 through S2-06 package revision.
+  - Depends on: released package head
+    `4c2e82bb17aa48379235a9f01ccdba489bb46e69`; S2-06 acceptance is a
+    consumer prerequisite and does not change this package pin.
   - Check: WalletCore/AppTests fake/live-handle contract tests and factory
     registration tests.
 
@@ -41,10 +45,11 @@ with the local transaction hash.
   - Acceptance: `ThorChainSignerProvider` is the only construction path;
     `ThorChainSigner` is an ephemeral actor exposing only its immutable public
     key and Sendable key-source capability; each public-key/sign operation
-    checks unlocked foreground state, authorization epoch, current visible
+    checks unlocked foreground state, monotonic authorization generation,
+    current visible
     active-account object/ID/type/key, and fails closed on lock, background,
     account switch, duress/passcode change, same-ID replacement, removal, or
-    mismatch. No signer, seed, private key, `Account`, or `AccountType` is
+    mismatch immediately before the synchronous crypto call. No signer, seed, private key, `Account`, or `AccountType` is
     stored by adapter/manager/factory or logged.
   - Paths: new `ThorChainSigner.swift`, `ThorChainSignerProvider.swift`,
     `ThorChainSigningKeySource.swift`; manager/factory files from step 1.
@@ -54,7 +59,10 @@ with the local transaction hash.
 
 - [ ] 3. SendNew quote, expiry, and outcome UX
   - Owner: ThorChainSwiftEngineer
-  - Acceptance: pre-send conversion is exact and fail-closed; review renders
+  - Acceptance: pre-send conversion is exact and fail-closed; the separate
+    MainActor `SendViewModel.sendOutcome() async` entry reads/captures
+    non-Sendable `ISendData` only on MainActor and never passes it across an
+    actor; review renders
     the stored handle quote, fee, total, memo, and height; immutable complete
     quote binding rejects same-client swaps; absolute expiry blocks
     send; accepted/unknown outcomes retain the full local hash and bypass the

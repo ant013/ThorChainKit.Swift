@@ -1,7 +1,7 @@
 # S2-07 — Unstoppable Native RUNE Send Integration
 
-**Formalization revision:** 2 — discovery 1/2; closure 0/5; supersedes
-revision 1 after adversarial `REVISE`.
+**Formalization revision:** 3 — discovery 2/2; closure 0/5; supersedes
+revision 2 after adversarial `REVISE`.
 
 This document is the implementation contract for THR-160. The design is
 approval-gated: no Unstoppable source, test, project, script, or acceptance
@@ -9,8 +9,10 @@ artifact may change until this revision is explicitly approved. The reviewed
 architecture base remains commit `518835315a65996b9321665213adb0516503df65`.
 
 **Risk:** critical
-**Depends on:** accepted/released S2-01 through S2-06 package revision and
-completed S1-07 MarketKit/WalletCore host release
+**Depends on:** completed S2-06 merge/status on `main` at
+`65c8e370db983c6bd500448266a4f8f51561ca5f` (PR #17), released ThorChainKit
+package head `4c2e82bb17aa48379235a9f01ccdba489bb46e69`, and completed S1-07
+MarketKit/WalletCore host release
 **Produces:** standard WalletCore SendNew integration and controlled real mainnet send
 
 ## Goal
@@ -67,13 +69,16 @@ Modify:
 
 `Core/Core.swift` requires no edit or THOR-specific branch: its existing
 registration loops consume the updated handler arrays. `SendHandlerFactory`,
-`ISendHandler`, and `ISendData` remain nonisolated legacy contracts. The
-`SendViewModel` type is not made globally `@MainActor`; only its new
-outcome-send entry and UI result-consumption methods are MainActor-isolated.
-This keeps the existing non-Sendable `ISendData` boundary on its baseline path
-and avoids an unjustified actor crossing. Any extra transitive diagnostic in
-the strict gate requires a spec revision rather than an opportunistic
-annotation.
+`ISendHandler`, `ISendData`, and the existing `SendViewModel.send()` remain
+nonisolated legacy contracts. The new outcome path is a separate declaration,
+`@MainActor func sendOutcome() async`, called only by the MainActor-owned
+SendNew UI action. It reads the current `ISendData` and outcome handler inside
+that MainActor method, creates the outcome closure, and invokes it there;
+neither `ISendData` nor an existential handler is captured by a non-MainActor
+`Task` or passed across an actor. UI result-consumption methods are also
+MainActor-isolated. The strict probe must compile this exact declaration and
+call sequence; any extra transitive diagnostic requires a spec revision rather
+than an opportunistic annotation.
 
 ## Adapter and Wrapper Contract
 
@@ -136,12 +141,21 @@ quote B.
 Production `ThorChainSendClient` is a `@MainActor final class` created only by
 `ThorChainAdapter.makeThorChainSendClient()`. The adapter remains the strong
 owner of the S1 wrapper; the client stores a weak adapter/lease reference and
-never stores the wrapper. `ThorChainAdapter.stop()` invalidates the lease
-before releasing the wrapper. A `ThorChainSendData` retained after removal
-therefore fails closed with `adapterUnavailable`, while a later send on a
-reconstructed adapter creates a fresh client and namespace; it cannot reuse a
-stopped client's handle. The lease is a small `Sendable` invalidation token,
-not a wrapper or secret owner.
+never stores the wrapper. The lease is a shared atomic state with a monotonic
+generation, a revoked bit, and an active-use count. Client use performs one
+compare-and-acquire operation: it rejects a revoked/stale generation and
+increments the active-use count while holding the permit through the complete
+wrapper/kit call; release decrements the count before the client operation
+returns. `ThorChainAdapter.stop()` performs the matching compare-and-revoke
+operation before releasing the wrapper, so no new permit can be acquired after
+revocation, then waits for the active-use count to reach zero before wrapper
+release. The same synchronization primitive orders stop, lease validation,
+wrapper use, and release; a check followed by an unsynchronized wrapper call
+is forbidden. A `ThorChainSendData` retained after removal therefore fails
+closed with `adapterUnavailable`, while a later send on a reconstructed adapter
+creates a fresh client and namespace; it cannot reuse a stopped client's handle.
+The lease state and immutable generation token are Sendable but never contain a
+wrapper or secret, and the implementation may not use `@unchecked Sendable`.
 
 The client owns one private immutable `LiveQuoteOwner: Sendable` reference per
 client. `LiveThorChainQuoteHandle` stores only that owner reference, the now
@@ -206,9 +220,10 @@ MainActor from the MainActor send submission path, so no synchronous MainActor
 hop occurs on `AdapterManager.initAdaptersQueue`; a strict probe also compiles
 a non-MainActor caller that awaits the adapter client factory before entering
 that path. The provider creates the source from injected MainActor
-authorization/key operations, obtains the public key, and returns the actor
-in one MainActor-isolated operation. `ThorChainSigner.sign` awaits the source
-closures and passes only `request.digest` plus the expected public key. No
+authorization/key operations, obtains the public key, captures the current
+monotonic authorization generation, and returns the actor in one MainActor-
+isolated operation. `ThorChainSigner.sign` awaits the source closures and
+passes only `request.digest` plus the expected public key. No
 `Account`/`AccountType` or raw key crosses into the signer actor.
 
 On both public-key creation and every `sign`, the MainActor authorization
@@ -217,18 +232,28 @@ non-nil mnemonic active account with the bound ID, and identity equality with
 the current visible `AccountManager.accounts` entry. The identity check catches
 same-ID replacement because `AccountManager.save(account:)` updates the
 visible map without replacing its cached active object. The closure then
-rederives the compressed key and requires it to equal the immutable signer
-key. A lock, background transition, passcode/duress-level change,
-active-account switch, removal/replacement, non-mnemonic type, or key mismatch
-fails before any signature is returned.
+rederives the compressed key and requires it to equal the immutable signer key.
+`LockManager` and the injected foreground/account authorization source expose a
+monotonic `authorizationGeneration` and increment it on both lock and unlock,
+background/foreground, passcode/duress-level, active-account, and account
+replacement transitions. The signer captures the generation at provider
+creation. Immediately before the crypto primitive is called, one synchronous
+MainActor authorization section atomically checks the captured generation,
+current unlocked/foreground/account identity, and key equality, then invokes
+the synchronous key-source operation without an await; the transition cannot
+interleave between the check and that operation. A lock followed by unlock
+therefore cannot revive an old signer. Any generation mismatch, lock,
+background transition, passcode/duress-level change, active-account switch,
+removal/replacement, non-mnemonic type, or key mismatch fails before a
+signature or broadcast is returned.
 
-`AppManager.didEnterBackground()` increments the injected authorization epoch
+`AppManager.didEnterBackground()` increments the same authorization generation
 and cancels the ViewModel's outstanding submission task before the existing
-background publication. The signer source compares the captured epoch at
-actual sign time; tests lock/background between quote, provider, and sign and
-require zero signer/kit/broadcast calls. A transition ordered after sign
-authorization may complete that already-authorized operation; one ordered
-first fails closed.
+background publication. The signer source compares the captured generation at
+actual sign time; tests lock, unlock, or background between quote, provider,
+and sign and require zero crypto/kit/broadcast calls. A transition ordered after
+the synchronous authorization section may complete that already-authorized
+operation; one ordered first fails closed.
 
 The scoped key operation uses the exact S1 account contract:
 
@@ -246,8 +271,8 @@ let key = try wallet.privateKey(account: 0, index: 0, chain: .external)
 This is exactly `m/44'/931'/0'/0/0`. At ephemeral signer construction the
 source performs one scoped derivation from the currently authorized active
 account and returns only the compressed public key, which must equal the key
-used by S1 address creation. For `sign(_:)`, it repeats the authorization/epoch
-check, obtains `AccountType.mnemonicSeed`, rederives the temporary private key,
+used by S1 address creation. For `sign(_:)`, it repeats the authorization/
+generation check, obtains `AccountType.mnemonicSeed`, rederives the temporary private key,
 checks the compressed public key, calls
 `HsCryptoKit.Crypto.sign(data:request.digest, privateKey:key.raw, compact:true)`,
 and returns only the compact signature. Each invocation consumes one scoped
@@ -305,17 +330,39 @@ protocol IOutcomeSendHandler: AnyObject {
 }
 ```
 
-`SendViewModel` remains nonisolated to preserve the existing
-`ISendHandler`/`ISendData` boundary. Only `send()`'s new outcome branch and
-`consumeGenericCompletionPermission()` are `@MainActor`; they receive the
-already-main-thread UI value and call a `@MainActor` outcome closure with no
-non-Sendable parameter crossing an actor. Legacy handlers keep the unchanged
+`SendViewModel.send()` remains nonisolated and is unchanged for legacy handlers;
+it never branches into the outcome protocol. The new entry is exactly:
+
+```swift
+@MainActor
+func sendOutcome() async throws -> SendOutcome {
+    guard let handler else {
+        throw SendError.noHandler
+    }
+    guard let data = sendData else { throw SendError.noSendData }
+    guard let outcomeHandler = handler as? any IOutcomeSendHandler else {
+        throw SendError.noHandler
+    }
+    let action = outcomeHandler.outcomeAction(for: data)
+    let outcome = try await action()
+    record(outcome: outcome)
+    return outcome
+}
+```
+
+`RegularSendView` calls `try await viewModel.sendOutcome()` from its existing
+MainActor action closure. `sendData`, `handler`, the
+non-Sendable `ISendData`, and the returned outcome closure are accessed and
+invoked only within this MainActor declaration; no `Task` created by a
+non-MainActor caller captures them. `consumeGenericCompletionPermission()` is
+also MainActor-isolated. Legacy handlers keep the unchanged
 `ISendHandler.send(data:)` path and record `.sent`. The Swift 5
-complete-concurrency probe must compile this exact shape with no suppression,
-including the `Task` created by `sync()`. The ViewModel stores the result and
-saves the recent address for every submitted outcome, and resets any prior
-result before a new attempt. Background/lock cancellation invalidates the
-submission task and prevents a resumed task from reaching signer creation.
+complete-concurrency probe must compile this exact declaration and call
+sequence with no suppression, including the `Task` created by `sync()`. The
+ViewModel stores the result and saves the recent address for every submitted
+outcome, and resets any prior result before a new attempt. Background/lock
+cancellation invalidates the submission task and prevents a resumed task from
+reaching signer creation.
 
 The `Task` created by `SendViewModel.sync()` is written as `Task { @MainActor ... }`; it awaits existing async services but assigns `ISendData`, state, rates, and outcome only on MainActor and removes the current `MainActor.run` transfer. `SendHandlerFactory` retains its existing synchronous surface so `OpenCryptoPayManager` and `OpenCryptoPaySendHandlerFactory` are not pulled into an unrelated global-actor migration. The strict baseline-delta build-for-testing must prove this smaller change introduces no new actor diagnostics anywhere in repository-owned Swift, including unchanged transitive callers.
 
@@ -329,7 +376,7 @@ The `Task` created by `SendViewModel.sync()` is written as `Task { @MainActor ..
   handle/review projection; background adapter construction never performs
   this call;
 - an internal MainActor `submit(data:)` type-checks `ThorChainSendData`,
-  guards its absolute deadline and authorization epoch, calls the stored
+  guards its absolute deadline and authorization generation, calls the stored
   client's synchronous `validate(quote:)`, compares the stored
   `ThorChainQuoteBinding` against the handle review, then constructs the
   ephemeral signer and calls that same client with the stored handle. It never
@@ -404,11 +451,12 @@ The current SendNew screen has no honest retry/action-state seam. Sprint 2 there
 - `ThorChainSendData` fields, fee/total conversion at 8 decimals, cautions, no settings;
 - quote review uses canonical Sendable string snapshots; strict compile/source tests reject stored `BigUInt`, non-Sendable `SendQuote`, unchecked/preconcurrency suppression, malformed base-unit strings, and inconsistent total;
 - mnemonic account creates the adapter/wrapper but stores no signer; watch-only/unsupported account creates no wrapper/adapter; exactly one ephemeral signer is requested only after the final send guard;
-- signer compressed key/address vector and compact signing; no active account, passcode/duress-level switch, active-account switch, removal/replacement, non-mnemonic type, and key mismatch between quote and sign make zero Crypto.sign/broadcast calls; each invocation performs one scoped key operation and no long-lived property contains seed/private-key/account type;
+- signer compressed key/address vector and compact signing; no active account, passcode/duress-level switch, active-account switch, removal/replacement, non-mnemonic type, and key mismatch between quote and sign make zero Crypto.sign/broadcast calls; lock→unlock increments authorization generation and cannot revive an old signer; each invocation performs one scoped key operation and no long-lived property contains seed/private-key/account type;
 - the exact baseline-delta strict-concurrency gate below constructs the signer only through awaited `ThorChainSignerProvider.signer`, proves SendQuote/live-handle crossing, compiles AppTests, compares every repository-owned diagnostic including unchanged transitive call sites, and uses the real `Debug-Dev` configuration; synchronous AdapterFactory/wrapper/OpenCryptoPay construction contains no newly actor-isolated factory call;
 - a public-only negative compile test still cannot construct kit quote/request authority, while `FakeThorChainSendClient` creates its own handle/outcomes and deterministically drives accepted, unknown, and expired host UI with no network;
 - public-only external signer compiles against the exact `SigningRequest` accessors and cannot construct or mutate it;
 - production client accepts its own live handle but rejects fake and another production client's same-type live handle during pre-signer validation and again at send; rejected cases make zero signer/kit calls;
+- concurrent client use versus adapter stop proves the lease's atomic revoke/acquire ordering, drains active-use permits before wrapper release, and leaves stale retained SendData fail-closed;
 - default handlers still produce `.sent`; drag and accessibility SlideButton entry closures each call the sole `performAction()` and complete exactly once for generic success; THOR accepted/unknown make the scheduled generic completion a no-op, show their dedicated full-hash result, and dismiss through the direct-navigation or wrapper outcome closure without `onSuccess`/`HudHelper.banner(.sent)`; rejection remains on the typed error path and never completes;
 - changing/malicious public-key reads cannot affect the sign request because `nonisolated let` is immutable and kit snapshots it once;
 - adapter/manager reconstruction preserves journal namespace and pending hash;
@@ -421,12 +469,16 @@ Tests that mutate `Core.shared`, `SendHandlerFactory` registries, active/passcod
 
 `packages/WalletCore/Package.swift` adds the public product
 `ThorChainKit` from `https://github.com/ant013/ThorChainKit.Swift.git` at exact
-revision `0f572e455be07df798a233eff31bbc27bb0940c5`, the S1-06 approved
-revision. The package URL is remote-only; no sibling path, branch, or floating
-version is allowed. `packages/WalletCore/Package.resolved` is committed and
-must resolve that SHA. The root `.gitignore` removes the blanket ignore for
-this file. A clean detached worktree must resolve the same graph before any
-test/build command; a mismatch is a hard failure.
+released package revision
+`4c2e82bb17aa48379235a9f01ccdba489bb46e69`, the current package head
+containing the accepted S2 send contract. S2-06 is a consumer-side Example
+acceptance slice and does not change the package product; its completed
+acceptance is still a prerequisite, but it does not justify pinning an older
+package revision. The package URL is remote-only; no sibling path, branch, or
+floating version is allowed. `packages/WalletCore/Package.resolved` is
+committed and must resolve that SHA. The root `.gitignore` removes the blanket
+ignore for this file. A clean detached worktree must resolve the same graph
+before any test/build command; a mismatch is a hard failure.
 
 The checked-in `Unstoppable/Unstoppable/Configuration/Config.template.xcconfig`
 is the only clean-worktree input. The build gate copies it to the ignored
@@ -459,7 +511,7 @@ runs from the Unstoppable root. It verifies the baseline is an ancestor,
 checks Xcode's version against the recorded implementation toolchain, resolves
 the exact public ThorChainKit URL
 `https://github.com/ant013/ThorChainKit.Swift.git` at revision
-`0f572e455be07df798a233eff31bbc27bb0940c5` and product `ThorChainKit`, and
+`4c2e82bb17aa48379235a9f01ccdba489bb46e69` and product `ThorChainKit`, and
 fails if `Package.resolved` is missing, ignored, or resolves another SHA. It
 creates a disposable detached worktree and performs the same exact
 Development build-for-testing for baseline and HEAD in separate DerivedData
@@ -568,8 +620,8 @@ production keychain is used.
 - Controlled mainnet send returns the local hash and honest CheckTx/unknown state; internal classification accepts only a matching node hash, and neither path can display the generic sent/confirmed banner.
 - Unsupported account types remain outside the mnemonic-only S1/S2 adapter contract.
 - Unstoppable contains no Maestro or fixture-only runtime.
-- The host package resolves the public ThorChainKit product at exact S1-06
-  revision `0f572e455be07df798a233eff31bbc27bb0940c5` from a tracked
+- The host package resolves the public ThorChainKit product at exact released
+  revision `4c2e82bb17aa48379235a9f01ccdba489bb46e69` from a tracked
   `Package.resolved`; clean detached build/test inputs are reproducible.
 - The strict-concurrency gate reports no new raw diagnostics, rejects the
   actor-boundary canary and all suppression/unchecked escapes, and proves the
@@ -585,21 +637,21 @@ production keychain is used.
 
 Vultisig is not a host architecture analog here. No KeysignPayload, TSS response, WalletCore transaction compiler, or global THOR service is imported into Unstoppable or ThorChainKit.
 
-## Revision 2 Blocker Resolution Map
+## Revision 3 Blocker Resolution Map
 
-The following stable findings from discovery 1/2 are resolved by this revision;
-they remain allowlisted for the next bounded review:
+The following stable findings from discovery 2/2 are resolved by this revision;
+they remain allowlisted for closure-only review:
 
 | ID | Resolution in this revision |
 |---|---|
-| `THR160-ARCH-001` | Keep `SendViewModel` nonisolated; isolate only the outcome entry and pass no `ISendData` across an actor. The exact Swift 5 complete probe is mandatory. |
+| `THR160-ARCH-001` | Keep legacy `send()` nonisolated and add the exact `@MainActor sendOutcome() async` declaration. It reads/captures `ISendData` and invokes `IOutcomeSendHandler` entirely on MainActor; no non-MainActor task captures either value. The exact Swift 5 complete probe is mandatory. |
 | `THR160-ARCH-002` | Replace synchronous client lookup with `@MainActor makeThorChainSendClient()`; background adapter construction never creates the client, and the valid non-MainActor probe must compile. |
-| `THR160-ARCH-003` | Adapter strongly owns the wrapper; client holds only a weak adapter plus Sendable invalidation lease. Stop invalidates the lease before wrapper release; reconstruction creates a fresh client/namespace. |
+| `THR160-ARCH-003` | Define the lease as synchronized monotonic generation/revocation plus active-use count. Client use atomically acquires and holds a permit through wrapper/kit use; stop atomically revokes before waiting for permits and releasing the wrapper. Reconstruction creates a fresh client/namespace. |
 | `THR160-ARCH-004` | Add `thorChainReceiveAddress` as the adapter's exact S1 `IDepositAdapter.receiveAddress` projection and require the pre-handler's deposit-adapter boundary. |
-| `THR160-SEC-001` | Inject lock/foreground/epoch authorization, cancel on background, and recheck immediately before signing; lock/background transitions require zero signer/broadcast calls. |
+| `THR160-SEC-001` | Replace the reversible lock check with a monotonic authorization generation incremented on lock and unlock plus other authorization transitions. Capture it at provider creation and atomically compare it in one non-suspending MainActor section immediately before the crypto call; lock→unlock cannot revive an old signer. |
 | `THR160-SEC-002` | Store immutable `ThorChainQuoteBinding`, compare all review/signing fields on validation and send, and render signing-relevant review fields from the handle. |
 | `THR160-SEC-003` | Require active-account object identity to equal the current visible entry as well as ID/type/key; same-ID replacement is a fail-closed test. |
-| `THR160-VO-001` | Add `Package.swift`, tracked `Package.resolved`, and the `.gitignore` exception; pin the public `ThorChainKit` product to the exact S1-06 SHA. |
+| `THR160-VO-001` | Pin the public `ThorChainKit` product and tracked `Package.resolved` to released package head `4c2e82bb17aa48379235a9f01ccdba489bb46e69`. Document that S2-06 is consumer acceptance and does not alter the package product. |
 | `THR160-VO-002` | Use the checked-in template-only config, detached-worktree generation, tracked package graph, and recorded Xcode/Swift toolchain. |
 | `THR160-VO-003` | Compare raw diagnostic records including location, severity, notes/fix-its, and multiplicity; replacement-diagnostic mutation must fail. |
 | `THR160-VO-005` | Add literal per-suite `-only-testing` commands and nonzero discovery checks for every converter/source/signer/quote/expiry/SlideButton/outcome suite. |
