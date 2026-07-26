@@ -8,6 +8,22 @@ public enum FixtureScenarioID: String, CaseIterable, Sendable {
     case restartPending = "send-restart-pending"
 }
 
+public struct FixtureRequestPattern: Sendable {
+    public let method: String
+    public let origin: String
+    public let path: String
+    public let query: String?
+    public let bodyRequired: Bool
+
+    public init(method: String, origin: String, path: String, query: String? = nil, bodyRequired: Bool = false) {
+        self.method = method
+        self.origin = origin
+        self.path = path
+        self.query = query
+        self.bodyRequired = bodyRequired
+    }
+}
+
 public struct FixtureScenario: Sendable {
     public let id: FixtureScenarioID
     public let namespace: String

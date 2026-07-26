@@ -1,5 +1,6 @@
 import Foundation
 import ThorChainKit
+import LiveSupport
 #if canImport(CryptoKit)
 import CryptoKit
 #endif
@@ -37,6 +38,9 @@ public struct LiveSendSession {
     public init(secretURL: URL, endpoints: EndpointConfiguration) throws {
 #if canImport(HdWalletKit) && canImport(HsCryptoKit)
         let secret = try LiveSecretLoader().load(from: secretURL)
+        guard (try? Mnemonic.validate(words: secret.words)) != nil else {
+            throw LiveSecretError.malformed
+        }
         let recipient = try Address(secret.recipient, network: .mainnet)
         guard let seed = Mnemonic.seed(mnemonic: secret.words, passphrase: "", iterations: 2048) else {
             throw LiveSecretError.malformed

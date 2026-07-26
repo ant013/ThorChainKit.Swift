@@ -1,8 +1,4 @@
 import Foundation
-import ThorChainKit
-#if canImport(HdWalletKit)
-import HdWalletKit
-#endif
 
 // LiveSupport resolves HdWalletKit.Swift at 2fc0dbfc089f78a9804baafe8e1bc4aab69cbad1;
 // its signing closure uses the package-pinned HsCryptoKit 1.3.2 and secp256k1 0.10.0.
@@ -17,6 +13,17 @@ public struct LiveSecretLoader {
     public init() {}
 
     public func load(from url: URL) throws -> (words: [String], recipient: String) {
+        let fileManager = FileManager.default
+        guard let attributes = try? fileManager.attributesOfItem(atPath: url.path),
+              attributes[.type] as? FileAttributeType == .typeRegular,
+              let size = attributes[.size] as? NSNumber,
+              (1...4096).contains(size.intValue)
+        else { throw LiveSecretError.unavailable }
+        if let permissions = attributes[.posixPermissions] as? NSNumber,
+           permissions.intValue & 0o777 != 0o600 {
+            throw LiveSecretError.unavailable
+        }
+        defer { try? fileManager.removeItem(at: url) }
         let data: Data
         do { data = try Data(contentsOf: url, options: [.uncached]) } catch { throw LiveSecretError.unavailable }
         guard let text = String(data: data, encoding: .utf8) else { throw LiveSecretError.malformed }
@@ -39,16 +46,10 @@ public struct LiveSecretLoader {
               let recipient = values["THORCHAIN_MAINNET_RECIPIENT_ADDRESS"]
         else { throw LiveSecretError.unavailable }
         let words = mnemonic.split(separator: " ").map(String.init)
-        var validMnemonic = true
-#if canImport(HdWalletKit)
-        validMnemonic = (try? Mnemonic.validate(words: words)) != nil
-#endif
         guard words.count == 12,
               words.allSatisfy({ $0 == $0.lowercased() && !$0.isEmpty }),
-              words.joined(separator: " ") == mnemonic,
-              validMnemonic,
-              (try? Address(recipient, network: .mainnet)) != nil
+              words.joined(separator: " ") == mnemonic
         else { throw LiveSecretError.malformed }
-        return (words, try Address(recipient, network: .mainnet).raw)
+        return (words, recipient)
     }
 }

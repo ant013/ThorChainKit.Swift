@@ -19,30 +19,6 @@ public struct FixtureRequest: Equatable, Sendable {
     }
 }
 
-public struct FixtureRequestPattern: Sendable {
-    public let method: String
-    public let origin: String
-    public let path: String
-    public let query: String?
-    public let bodyRequired: Bool
-
-    public init(method: String, origin: String, path: String, query: String? = nil, bodyRequired: Bool = false) {
-        self.method = method
-        self.origin = origin
-        self.path = path
-        self.query = query
-        self.bodyRequired = bodyRequired
-    }
-
-    func matches(_ request: FixtureRequest) -> Bool {
-        method == request.method
-            && origin == request.origin
-            && path == request.path
-            && (query == nil || query == request.query)
-            && (!bodyRequired || request.body != nil)
-    }
-}
-
 public actor FixtureTranscript {
     private let expected: [FixtureRequestPattern]
     public private(set) var requests = [FixtureRequest]()
@@ -68,6 +44,16 @@ public actor FixtureTranscript {
 
     public func finish() throws {
         guard expected.count >= 3, position == expected.count else { throw URLError(.cannotParseResponse) }
+    }
+}
+
+private extension FixtureRequestPattern {
+    func matches(_ request: FixtureRequest) -> Bool {
+        method == request.method
+            && origin == request.origin
+            && path == request.path
+            && (query == nil || query == request.query)
+            && (!bodyRequired || request.body != nil)
     }
 }
 

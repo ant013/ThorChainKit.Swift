@@ -4,17 +4,14 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 package="$root/Package.swift"
 project="$root/iOS Example/iOS Example.xcodeproj/project.pbxproj"
-grep -q 'name: "ThorChainExampleLiveSupport"' "$package"
-grep -q 'type: .dynamic' "$package"
 grep -q 'revision: "2fc0dbfc089f78a9804baafe8e1bc4aab69cbad1"' "$package"
-grep -q 'path: "iOS Example/LiveSupport"' "$package"
+if rg -n 'name: "ThorChainExampleLiveSupport"|name: "LiveSupport"' "$package"; then
+  echo "LiveSupport must remain an Xcode Foundation-only target" >&2
+  exit 1
+fi
 test "$(rg -c 'isa = XCLocalSwiftPackageReference' "$project")" -eq 1
 if rg -n 'XCRemoteSwiftPackageReference|HdWalletKit.Swift' "$project"; then
   echo "direct remote package root remains" >&2
-  exit 1
-fi
-if rg -n 'PBXNativeTarget.*LiveSupport' "$project"; then
-  echo "native LiveSupport target remains" >&2
   exit 1
 fi
 grep -q 'ThorChainExampleLive' "$project"
@@ -24,6 +21,22 @@ grep -q 'ThorChainExampleLiveSupport' "$project"
 grep -q 'EXAMPLE_FIXTURE' "$project"
 grep -q 'FixtureSupport' "$project"
 grep -q 'LiveSupport' "$project"
+grep -q 'name = ThorChainExampleLive; packageProductDependencies = (B90000000000000000000001, B90000000000000000000004, B90000000000000000000005, B90000000000000000000006);' "$project"
+grep -q 'name = ThorChainExampleFixture; packageProductDependencies = (B90000000000000000000001);' "$project"
+grep -q 'name = ThorChainExampleFixtureSupport;' "$project"
+if rg -n 'name = ThorChainExampleFixtureSupport;.*packageProductDependencies|name = ThorChainExampleFixtureSupport;.*B400|B40000000000000000000004 = .*B20000000000000000000020' "$project"; then
+  echo "FixtureSupport must not link ThorChainKit" >&2
+  exit 1
+fi
+test "$(find "$root/iOS Example/LiveSupport" -type f -name '*.swift' | wc -l | tr -d ' ')" -eq 1
+test "$(find "$root/iOS Example/FixtureSupport" -type f -name '*.swift' | wc -l | tr -d ' ')" -eq 1
+if rg -n 'import ThorChainKit|import HdWalletKit|import HsCryptoKit|import secp256k1' "$root/iOS Example/LiveSupport" "$root/iOS Example/FixtureSupport"; then
+  echo "support targets must remain Foundation-only" >&2
+  exit 1
+fi
+for source in LiveSendSession.swift FixtureSigner.swift FixtureTransport.swift; do
+  test -f "$root/iOS Example/Sources/Signing/$source"
+done
 if rg -n 'UIKit|AppDelegate|UIViewController|UIViewRepresentable' "$root/iOS Example"; then
   echo "forbidden UIKit Example surface" >&2
   exit 1

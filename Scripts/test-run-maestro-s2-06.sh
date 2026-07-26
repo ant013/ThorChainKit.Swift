@@ -26,12 +26,13 @@ if python3 "$validator" "$tmp/manifest.json" "$tmp/scenario-flows" >/dev/null 2>
     exit 1
 fi
 rg -q 'parts\.count == 1 \|\| !fraction\.isEmpty' "$root/iOS Example/Sources/Send/SendAmountInput.swift"
-rg -q 'Address\(recipient, network: \.mainnet\)' "$root/iOS Example/LiveSupport/LiveSecretLoader.swift"
+rg -q 'Mnemonic\.validate\(words: secret\.words\)' "$root/iOS Example/Sources/Signing/LiveSendSession.swift"
+rg -q 'attributes\[\.type\].*\.typeRegular' "$root/iOS Example/LiveSupport/LiveSecretLoader.swift"
 rg -q 'FixtureTranscript\(expected: scenario\.expectedRequests\)' "$root/iOS Example/Sources/Core/ExampleRuntime.swift"
-rg -q 'acceptedBytes' "$root/iOS Example/FixtureSupport/FixtureTransport.swift"
-rg -q 'scenario\.id == \.unknown \|\| scenario\.id == \.retry' "$root/iOS Example/FixtureSupport/FixtureTransport.swift"
-rg -q 'guard raw == scenario\.expectedSignedBytes else' "$root/iOS Example/FixtureSupport/FixtureTransport.swift"
-python3 - "$root/iOS Example/FixtureSupport/FixtureTransport.swift" <<'PY'
+rg -q 'acceptedBytes' "$root/iOS Example/Sources/Signing/FixtureTransport.swift"
+rg -q 'scenario\.id == \.unknown \|\| scenario\.id == \.retry' "$root/iOS Example/Sources/Signing/FixtureTransport.swift"
+rg -q 'guard raw == scenario\.expectedSignedBytes else' "$root/iOS Example/Sources/Signing/FixtureTransport.swift"
+python3 - "$root/iOS Example/Sources/Signing/FixtureTransport.swift" <<'PY'
 import sys
 from pathlib import Path
 
