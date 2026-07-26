@@ -26,9 +26,9 @@ struct LifecycleView: View {
                 }
                 Text("Requests: \(model.requestCount)")
                     .accessibilityIdentifier("fixture-request-count")
-                Text("Offline: \(model.offline)")
+                Text("Offline: \(String(model.offline))")
                     .accessibilityIdentifier("fixture-offline-state")
-                Text("Pending: \(model.pending)")
+                Text("Pending: \(String(model.pending))")
                     .accessibilityIdentifier("fixture-pending-state")
             } header: {
                 Text("Fixture")

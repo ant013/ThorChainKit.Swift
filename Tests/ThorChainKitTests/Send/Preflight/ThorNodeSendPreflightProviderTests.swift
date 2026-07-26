@@ -4,6 +4,19 @@ import SwiftProtobuf
 @testable import ThorChainKit
 
 final class ThorNodeSendPreflightProviderTests: XCTestCase {
+    func testSendManifestRejectsUnregisteredFixtureFamily() throws {
+        let registered = try XCTUnwrap(NativeRuneEndpointRegistry.families().first { $0.id == "rorcual-mainnet" })
+        let route = try XCTUnwrap(NativeRuneEndpointRegistry.capabilities().first { $0.familyID == registered.id }?.routes.first)
+        XCTAssertTrue(NativeRuneEndpointRegistry.matches(route, family: registered))
+
+        let unregistered = try EndpointFamilyDescriptor(
+            id: "example-mainnet",
+            cosmosRestURL: URL(string: "https://rest.invalid")!,
+            cometBftURL: URL(string: "https://rpc.invalid")!
+        )
+        XCTAssertFalse(NativeRuneEndpointRegistry.matches(route, family: unregistered))
+    }
+
     func testCompletePinnedRouteMatrixBuildsOneSnapshotForEachFamilyManifest() async throws {
         let sender = "thor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhudkmnn2"
         let recipient = "thor1tgxm5jw6hrlvslrd6lqpk4jwuu4g29dxytrean"

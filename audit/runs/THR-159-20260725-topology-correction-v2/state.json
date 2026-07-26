@@ -1,0 +1,865 @@
+{
+  "analog_candidates": [
+    {
+      "callers": [
+        "Unstoppable/Unstoppable.xcodeproj App target"
+      ],
+      "candidate_id": "C-TOPO-UW-ROOT",
+      "counterevidence": [],
+      "dimensions": [
+        "dependencies"
+      ],
+      "disposition": "kept",
+      "fact_id": "F-TOPO-004",
+      "freshness": "known_current",
+      "material_differences": [
+        "One WalletCore package root owns crypto dependencies; app consumes WalletCore product."
+      ],
+      "path": "/Users/ant013/Ios/HorizontalSystems/unstoppable-wallet-ios/packages/WalletCore/Package.swift",
+      "qualified_name": "uw-ios-app WalletCore package/application composition",
+      "recorded_at": "2026-07-25T11:31:53+00:00",
+      "revision": 1,
+      "roles": [
+        "composition"
+      ],
+      "slice_id": "S2-06-TOPOLOGY",
+      "source_range": "29-78",
+      "source_scope": "project",
+      "tests": []
+    },
+    {
+      "callers": [],
+      "candidate_id": "C-TOPO-CONTRACT",
+      "counterevidence": [],
+      "dimensions": [
+        "boundary"
+      ],
+      "disposition": "supporting",
+      "fact_id": "F-TOPO-002",
+      "freshness": "known_current",
+      "material_differences": [
+        "Live support remains Example-only and FixtureSupport remains native fixture-only; library must not link either."
+      ],
+      "path": "docs/specs/sprint-02-native-send/S2-06-example-acceptance.md",
+      "qualified_name": "S2-06 Live/Fixture support boundary contract",
+      "recorded_at": "2026-07-25T11:31:53+00:00",
+      "revision": 1,
+      "roles": [
+        "contract"
+      ],
+      "slice_id": "S2-06-TOPOLOGY",
+      "source_range": "40-47",
+      "source_scope": "project",
+      "tests": []
+    },
+    {
+      "callers": [],
+      "candidate_id": "C-TOPO-CURRENT-PACKAGE",
+      "counterevidence": [],
+      "dimensions": [
+        "dependencies"
+      ],
+      "disposition": "supporting",
+      "fact_id": "F-TOPO-001",
+      "freshness": "known_current",
+      "material_differences": [
+        "Root package already owns HsCryptoKit; correction adds only the pinned HdWalletKit closure and LiveSupport product."
+      ],
+      "path": "Package.swift",
+      "qualified_name": "ThorChainKit root Package.swift dependency graph",
+      "recorded_at": "2026-07-25T11:31:53+00:00",
+      "revision": 1,
+      "roles": [
+        "implementation"
+      ],
+      "slice_id": "S2-06-TOPOLOGY",
+      "source_range": "4-50",
+      "source_scope": "project",
+      "tests": []
+    },
+    {
+      "callers": [],
+      "candidate_id": "C-TOPO-DIRECT-ROOT",
+      "counterevidence": [
+        "Exact-head build log /tmp/thr159-65589a4-fixture-debug.log:1333-1346"
+      ],
+      "dimensions": [
+        "dependencies"
+      ],
+      "disposition": "rejected",
+      "fact_id": "F-TOPO-002",
+      "freshness": "known_current",
+      "material_differences": [
+        "Direct HdWalletKit package root leaves overlapping swift-crypto/HsCryptoKit dependency roots and reproduces the missing Crypto wrapper binary."
+      ],
+      "path": "iOS Example/iOS Example.xcodeproj/project.pbxproj",
+      "qualified_name": "Current native LiveSupport direct remote package root",
+      "recorded_at": "2026-07-25T11:31:53+00:00",
+      "revision": 1,
+      "roles": [
+        "counterexample"
+      ],
+      "slice_id": "S2-06-TOPOLOGY",
+      "source_range": "89-145",
+      "source_scope": "project",
+      "tests": []
+    },
+    {
+      "callers": [],
+      "candidate_id": "C-TOPO-BUILD-FAILURE",
+      "counterevidence": [],
+      "dimensions": [
+        "state_errors"
+      ],
+      "disposition": "supporting",
+      "fact_id": "F-TOPO-003",
+      "freshness": "known_current",
+      "material_differences": [
+        "The correction must make both direct builds produce a real Crypto package-product binary before Live/Fixture QA."
+      ],
+      "path": "/tmp/thr159-65589a4-fixture-debug.log",
+      "qualified_name": "Exact-head Xcode package-product link failure",
+      "recorded_at": "2026-07-25T11:31:53+00:00",
+      "revision": 1,
+      "roles": [
+        "lifecycle_error"
+      ],
+      "slice_id": "S2-06-TOPOLOGY",
+      "source_range": "1333-1346",
+      "source_scope": "generated",
+      "tests": [
+        "xcodebuild exact Fixture Debug and Live Release commands"
+      ]
+    },
+    {
+      "callers": [],
+      "candidate_id": "C-TOPO-UW-RESP",
+      "counterevidence": [],
+      "dimensions": [
+        "responsibility"
+      ],
+      "disposition": "kept",
+      "fact_id": "F-TOPO-004",
+      "freshness": "known_current",
+      "material_differences": [
+        "The package root, not the app project, owns the dependency closure."
+      ],
+      "path": "/Users/ant013/Ios/HorizontalSystems/unstoppable-wallet-ios/packages/WalletCore/Package.swift",
+      "qualified_name": "uw-ios-app WalletCore package/application composition",
+      "recorded_at": "2026-07-25T11:33:26+00:00",
+      "revision": 1,
+      "roles": [
+        "implementation"
+      ],
+      "slice_id": "S2-06-TOPOLOGY",
+      "source_range": "29-78",
+      "source_scope": "project",
+      "tests": []
+    },
+    {
+      "callers": [
+        "Unstoppable App packageProductDependencies"
+      ],
+      "candidate_id": "C-TOPO-UW-CONSUMER",
+      "counterevidence": [],
+      "dimensions": [
+        "boundary"
+      ],
+      "disposition": "supporting",
+      "fact_id": "F-TOPO-004",
+      "freshness": "known_current",
+      "material_differences": [],
+      "path": "/Users/ant013/Ios/HorizontalSystems/unstoppable-wallet-ios/Unstoppable/Unstoppable.xcodeproj/project.pbxproj",
+      "qualified_name": "uw-ios-app WalletCore package/application composition",
+      "recorded_at": "2026-07-25T11:33:26+00:00",
+      "revision": 1,
+      "roles": [
+        "consumer"
+      ],
+      "slice_id": "S2-06-TOPOLOGY",
+      "source_range": "339-345;1419-1423",
+      "source_scope": "project",
+      "tests": []
+    },
+    {
+      "callers": [],
+      "candidate_id": "C-TOPO-UW-LIFE",
+      "counterevidence": [],
+      "dimensions": [
+        "lifecycle"
+      ],
+      "disposition": "supporting",
+      "fact_id": "F-TOPO-004",
+      "freshness": "known_current",
+      "material_differences": [
+        "WalletCore target owns dependency construction; app composition does not duplicate package-level dependency roots."
+      ],
+      "path": "/Users/ant013/Ios/HorizontalSystems/unstoppable-wallet-ios/packages/WalletCore/Package.swift",
+      "qualified_name": "uw-ios-app WalletCore package/application composition",
+      "recorded_at": "2026-07-25T11:33:26+00:00",
+      "revision": 1,
+      "roles": [
+        "lifecycle_error"
+      ],
+      "slice_id": "S2-06-TOPOLOGY",
+      "source_range": "59-78",
+      "source_scope": "project",
+      "tests": []
+    },
+    {
+      "callers": [],
+      "candidate_id": "C-TOPO-UW-TRUST",
+      "counterevidence": [],
+      "dimensions": [
+        "trust"
+      ],
+      "disposition": "supporting",
+      "fact_id": "F-TOPO-004",
+      "freshness": "known_current",
+      "material_differences": [
+        "Crypto dependency ownership remains below app integration and does not expand app secrets or storage."
+      ],
+      "path": "/Users/ant013/Ios/HorizontalSystems/unstoppable-wallet-ios/packages/WalletCore/Package.swift",
+      "qualified_name": "uw-ios-app WalletCore package/application composition",
+      "recorded_at": "2026-07-25T11:33:26+00:00",
+      "revision": 1,
+      "roles": [
+        "contract"
+      ],
+      "slice_id": "S2-06-TOPOLOGY",
+      "source_range": "29-78",
+      "source_scope": "project",
+      "tests": []
+    },
+    {
+      "callers": [],
+      "candidate_id": "C-TOPO-VERIFY-TEST",
+      "counterevidence": [],
+      "dimensions": [
+        "tests"
+      ],
+      "disposition": "supporting",
+      "fact_id": "F-TOPO-005",
+      "freshness": "known_current",
+      "material_differences": [],
+      "path": "Scripts/audit-example-target-graph.sh",
+      "qualified_name": "S2-06 target and release boundary audits",
+      "recorded_at": "2026-07-25T11:33:26+00:00",
+      "revision": 1,
+      "roles": [
+        "test"
+      ],
+      "slice_id": "S2-06-TOPOLOGY",
+      "source_range": "5-20",
+      "source_scope": "project",
+      "tests": [
+        "Scripts/audit-example-target-graph.sh; Scripts/audit-example-release-binary.sh"
+      ]
+    },
+    {
+      "callers": [],
+      "candidate_id": "C-TOPO-ERROR-STATE",
+      "counterevidence": [],
+      "dimensions": [
+        "state_errors"
+      ],
+      "disposition": "supporting",
+      "fact_id": "F-TOPO-003",
+      "freshness": "known_current",
+      "material_differences": [
+        "The failure remains fail-closed until direct builds produce actual app artifacts."
+      ],
+      "path": "/tmp/thr159-65589a4-fixture-debug.log",
+      "qualified_name": "Exact-head Xcode package-product link failure",
+      "recorded_at": "2026-07-25T11:33:26+00:00",
+      "revision": 1,
+      "roles": [
+        "lifecycle_error"
+      ],
+      "slice_id": "S2-06-TOPOLOGY",
+      "source_range": "1333-1346",
+      "source_scope": "generated",
+      "tests": []
+    }
+  ],
+  "analog_history": [],
+  "analog_mode": {
+    "evidence": "Primary Unstoppable/WalletCore one-package-root composition, current S2-06 boundary/package/build evidence, fail-closed verification scripts, and rejected direct remote package-root counterexample establish a coherent topology correction. Gimle trust remains RED due missing ThorChainKit mapping; all load-bearing facts use current-tree rg/Git fallback.",
+    "recorded_at": "2026-07-25T11:33:45+00:00",
+    "status": "verified"
+  },
+  "analog_selections": [
+    {
+      "conflict_resolutions": [
+        "Use WalletCore only for package-root dependency ownership; keep ThorChainKit library target free of HdWalletKit and put LiveSupport sources in a separate Example-only package product."
+      ],
+      "conflicts": [
+        "WalletCore is a library package while ThorChainKit LiveSupport is an Example-only boundary."
+      ],
+      "counterexample_candidate_ids": [
+        "C-TOPO-DIRECT-ROOT"
+      ],
+      "depth_waiver": null,
+      "greenfield_reason": null,
+      "primary_candidate_id": "C-TOPO-UW-ROOT",
+      "recorded_at": "2026-07-25T11:32:09+00:00",
+      "revision": 1,
+      "search_evidence": [
+        "Current-tree rg/Git verified Package.swift, iOS Example project graph, S2-06 spec, exact Xcode log, and Unstoppable WalletCore analog."
+      ],
+      "slice_id": "S2-06-TOPOLOGY",
+      "supporting_candidate_ids": [
+        "C-TOPO-CONTRACT",
+        "C-TOPO-CURRENT-PACKAGE",
+        "C-TOPO-BUILD-FAILURE"
+      ]
+    },
+    {
+      "conflict_resolutions": [
+        "Use WalletCore only for package-root dependency ownership; keep ThorChainKit library target free of HdWalletKit and put LiveSupport sources in a separate Example-only package product."
+      ],
+      "conflicts": [
+        "WalletCore is a library package while ThorChainKit LiveSupport is an Example-only boundary."
+      ],
+      "counterexample_candidate_ids": [
+        "C-TOPO-DIRECT-ROOT"
+      ],
+      "depth_waiver": null,
+      "greenfield_reason": null,
+      "primary_candidate_id": "C-TOPO-UW-ROOT",
+      "recorded_at": "2026-07-25T11:33:40+00:00",
+      "revision": 2,
+      "search_evidence": [
+        "Current-tree rg/Git verified Package.swift, iOS Example project graph, S2-06 spec, exact Xcode log, fail-closed audits, and Unstoppable WalletCore analog."
+      ],
+      "slice_id": "S2-06-TOPOLOGY",
+      "supporting_candidate_ids": [
+        "C-TOPO-CONTRACT",
+        "C-TOPO-CURRENT-PACKAGE",
+        "C-TOPO-BUILD-FAILURE",
+        "C-TOPO-UW-RESP",
+        "C-TOPO-UW-CONSUMER",
+        "C-TOPO-UW-LIFE",
+        "C-TOPO-UW-TRUST",
+        "C-TOPO-VERIFY-TEST",
+        "C-TOPO-ERROR-STATE"
+      ]
+    }
+  ],
+  "artifact_history": [
+    {
+      "absolute_path": "/Users/ant013/Data/AI/thorchain/audit/runs/THR-159-20260725-topology-correction-v2/topology-spec-delta.md",
+      "kind": "spec",
+      "path": "audit/runs/THR-159-20260725-topology-correction-v2/topology-spec-delta.md",
+      "recorded_at": "2026-07-25T11:35:07+00:00",
+      "revision": 1,
+      "sha256": "8f843b7b297c507c97f312241dca508b39e1c81a545b8d944cbc42ff5d299936"
+    },
+    {
+      "absolute_path": "/Users/ant013/Data/AI/thorchain/audit/runs/THR-159-20260725-topology-correction-v2/delta-matrix.md",
+      "kind": "delta_matrix",
+      "path": "audit/runs/THR-159-20260725-topology-correction-v2/delta-matrix.md",
+      "recorded_at": "2026-07-25T11:35:08+00:00",
+      "revision": 1,
+      "sha256": "4e93e26ec540945587f6fa65d8832d198842a9e7ce873039eaf07c69df48909d"
+    },
+    {
+      "absolute_path": "/Users/ant013/Data/AI/thorchain/audit/runs/THR-159-20260725-topology-correction-v2/test-plan.md",
+      "kind": "test_plan",
+      "path": "audit/runs/THR-159-20260725-topology-correction-v2/test-plan.md",
+      "recorded_at": "2026-07-25T11:35:08+00:00",
+      "revision": 1,
+      "sha256": "67e003f260c74cd956641db3467b765f13e84cf0178b2d43038fec3a5d5deb38"
+    }
+  ],
+  "artifacts": {
+    "delta_matrix": {
+      "absolute_path": "/Users/ant013/Data/AI/thorchain/audit/runs/THR-159-20260725-topology-correction-v2/delta-matrix.md",
+      "kind": "delta_matrix",
+      "path": "audit/runs/THR-159-20260725-topology-correction-v2/delta-matrix.md",
+      "recorded_at": "2026-07-25T11:47:03+00:00",
+      "revision": 2,
+      "sha256": "06283f12ef2cb1207c416027e1d5455488518c76ab6e6b4765d9bb241217259b"
+    },
+    "report": null,
+    "spec": {
+      "absolute_path": "/Users/ant013/Data/AI/thorchain/audit/runs/THR-159-20260725-topology-correction-v2/topology-spec-delta.md",
+      "kind": "spec",
+      "path": "audit/runs/THR-159-20260725-topology-correction-v2/topology-spec-delta.md",
+      "recorded_at": "2026-07-25T11:47:03+00:00",
+      "revision": 2,
+      "sha256": "364db87ac3d79e74cbfe574af33a15d09061b521fcd0c7c8d16835dcfc4ae1ff"
+    },
+    "supporting_design": [],
+    "test_plan": {
+      "absolute_path": "/Users/ant013/Data/AI/thorchain/audit/runs/THR-159-20260725-topology-correction-v2/test-plan.md",
+      "kind": "test_plan",
+      "path": "audit/runs/THR-159-20260725-topology-correction-v2/test-plan.md",
+      "recorded_at": "2026-07-25T11:47:03+00:00",
+      "revision": 2,
+      "sha256": "dbfa508bd78eced4f471409ab56f9913c0a68009a92b96f78df4e12e33724352"
+    },
+    "verification_results": null
+  },
+  "behavioral_slices": [
+    {
+      "name": "Collapse Example Live crypto package graph to one local package root",
+      "recorded_at": "2026-07-25T11:30:39+00:00",
+      "required_dimensions": [
+        "boundary",
+        "dependencies",
+        "lifecycle",
+        "state_errors",
+        "tests",
+        "trust"
+      ],
+      "required_roles": [
+        "composition",
+        "consumer",
+        "contract",
+        "counterexample",
+        "implementation",
+        "lifecycle_error",
+        "test"
+      ],
+      "responsibility": "Restore direct Xcode builds by collapsing LiveSupport crypto dependencies under the repository-owned package root while preserving Live/Fixture and library boundaries.",
+      "revision": 1,
+      "risk": "high",
+      "role_waivers": {},
+      "slice_id": "S2-06-TOPOLOGY"
+    }
+  ],
+  "bugs": [
+    {
+      "actual": "The requested project is absent; no native ThorChainKit passthrough is available.",
+      "anchors": [
+        "/Users/ant013/Data/AI/thorchain@65589a4"
+      ],
+      "bug_id": "GIMLE-THR159-TOPO-001",
+      "classification": "mapping_bug",
+      "confidence": "confirmed",
+      "expected": "The exact ThorChainKit code and memory project should resolve to a registered project with repository mapping and freshness metadata.",
+      "forces_red": true,
+      "impact": "Gimle cannot be used as load-bearing evidence for the current repository; design must rely on codebase-memory plus targeted rg/Git.",
+      "minimal_repro": "palace.memory.list_projects omitted Users-ant013-Data-AI-thorchain; passthrough routing exposes only unrelated registered repositories.",
+      "recorded_at": "2026-07-25T11:30:06+00:00",
+      "related_claim_ids": [],
+      "related_event_ids": [
+        "E-0003"
+      ],
+      "revision": 1,
+      "severity": "high",
+      "status": "workaround",
+      "title": "ThorChainKit project is not registered in Gimle",
+      "tool": "palace.memory.list_projects",
+      "workaround": "Use Users-ant013-Data-AI-thorchain codebase-memory and current-tree rg/Git evidence; keep Gimle trust RED."
+    },
+    {
+      "actual": "Usage preview was unavailable; local source reads were required for app/package composition facts.",
+      "anchors": [
+        "uw-ios-app indexed commit 44d6df8db07bd7165481e02fc61cae72ad64743a"
+      ],
+      "bug_id": "GIMLE-THR159-TOPO-002",
+      "classification": "coverage_gap",
+      "confidence": "confirmed",
+      "expected": "Selected analog context should include complete usage previews and freshness evidence.",
+      "forces_red": false,
+      "impact": "Gimle search is non-authoritative for the package topology decision.",
+      "minimal_repro": "Semantic search on uw-ios-app returned current WalletCore hits but warning_code=usage_preview_unavailable.",
+      "recorded_at": "2026-07-25T11:30:06+00:00",
+      "related_claim_ids": [],
+      "related_event_ids": [
+        "E-0005"
+      ],
+      "revision": 1,
+      "severity": "medium",
+      "status": "workaround",
+      "title": "WalletCore semantic analog context has unavailable usage preview",
+      "tool": "palace.code.semantic_search",
+      "workaround": "Use only the current-tree rg/Git reads for the load-bearing analog and treat the Gimle hit as discovery context."
+    },
+    {
+      "actual": "The endpoint rejected query mode inside a successful MCP response envelope.",
+      "anchors": [
+        "palace.code.search_graph phase2_required envelope"
+      ],
+      "bug_id": "GIMLE-THR159-TOPO-003",
+      "classification": "confirmed_mcp_bug",
+      "confidence": "confirmed",
+      "expected": "Bounded graph search should accept the deployed query form or expose a valid pattern-mode fallback.",
+      "forces_red": false,
+      "impact": "This Gimle discovery lane was unusable; no load-bearing claim was taken from it.",
+      "minimal_repro": "palace.code.search_graph(project=uw-ios-app, query=WalletCore, limit=10) returned ok=false error_code=phase2_required.",
+      "recorded_at": "2026-07-25T11:30:06+00:00",
+      "related_claim_ids": [],
+      "related_event_ids": [
+        "E-0007"
+      ],
+      "revision": 1,
+      "severity": "medium",
+      "status": "workaround",
+      "title": "Native search_graph rejects query mode in deployed phase",
+      "tool": "palace.code.search_graph",
+      "workaround": "Use semantic search and current-tree source verification."
+    }
+  ],
+  "checks": [],
+  "context_history": [],
+  "created_at": "2026-07-25T11:27:55+00:00",
+  "decisions": [],
+  "evidence_claims": [
+    {
+      "accepted": true,
+      "anchors": [
+        "Package.swift:4-50"
+      ],
+      "bug_ids": [],
+      "claim": "At exact head 65589a4, the repository root Package.swift owns HsCryptoKit 1.3.2 but has no HdWalletKit dependency or Example LiveSupport package target/product.",
+      "decision_basis": "rg",
+      "fact_id": "F-TOPO-001",
+      "fallback_claim_id": null,
+      "fallback_used": false,
+      "freshness": "known_current",
+      "gimle_event_ids": [],
+      "gimle_evidence": null,
+      "load_bearing": true,
+      "location_validity": "valid",
+      "recorded_at": "2026-07-25T11:31:14+00:00",
+      "repository_head": "65589a48129789ad32f4c7a9a373ed3c5b523d0c",
+      "revision": 1,
+      "rg_result": "Package.swift:4-50; current manifest lists HsCryptoKit exact 1.3.2 and no HdWalletKit/LiveSupport target.",
+      "serena_result": null,
+      "verdict": "MATCH",
+      "worktree_fingerprint": "d621141d3ef20cf1"
+    },
+    {
+      "accepted": true,
+      "anchors": [
+        "iOS Example/iOS Example.xcodeproj/project.pbxproj:89-145"
+      ],
+      "bug_ids": [],
+      "claim": "At exact head 65589a4, iOS Example has a local package root plus a direct remote HdWalletKit root; the native LiveSupport target directly consumes HdWalletKit while HsCryptoKit is only transitive through ThorChainKit.",
+      "decision_basis": "rg",
+      "fact_id": "F-TOPO-002",
+      "fallback_claim_id": null,
+      "fallback_used": false,
+      "freshness": "known_current",
+      "gimle_event_ids": [],
+      "gimle_evidence": null,
+      "load_bearing": true,
+      "location_validity": "valid",
+      "recorded_at": "2026-07-25T11:31:14+00:00",
+      "repository_head": "65589a48129789ad32f4c7a9a373ed3c5b523d0c",
+      "revision": 1,
+      "rg_result": "iOS Example.xcodeproj/project.pbxproj:89-145; local package reference B900...00, remote HdWalletKit B900...20, LiveSupport packageProductDependencies ThorChainKit + HdWalletKit.",
+      "serena_result": null,
+      "verdict": "MATCH",
+      "worktree_fingerprint": "d621141d3ef20cf1"
+    },
+    {
+      "accepted": true,
+      "anchors": [
+        "/tmp/thr159-65589a4-fixture-debug.log:1333-1346"
+      ],
+      "bug_ids": [],
+      "claim": "The exact-head Fixture Debug build reaches HsCryptoKit product linking and fails because Xcode generated Crypto_*_PackageProduct.framework/Info.plist but no Crypto_*_PackageProduct binary.",
+      "decision_basis": "rg",
+      "fact_id": "F-TOPO-003",
+      "fallback_claim_id": null,
+      "fallback_used": false,
+      "freshness": "known_current",
+      "gimle_event_ids": [],
+      "gimle_evidence": null,
+      "load_bearing": true,
+      "location_validity": "valid",
+      "recorded_at": "2026-07-25T11:31:14+00:00",
+      "repository_head": "65589a48129789ad32f4c7a9a373ed3c5b523d0c",
+      "revision": 1,
+      "rg_result": "/tmp/thr159-65589a4-fixture-debug.log: ProcessInfoPlistFile followed by HsCryptoKit link and clang missing Crypto_17A3B1FFC41E47_PackageProduct binary.",
+      "serena_result": null,
+      "verdict": "MATCH",
+      "worktree_fingerprint": "d621141d3ef20cf1"
+    },
+    {
+      "accepted": true,
+      "anchors": [
+        "uw-ios-app local checkout: packages/WalletCore/Package.swift:29-78; Unstoppable/Unstoppable.xcodeproj/project.pbxproj:341,1420-1423"
+      ],
+      "bug_ids": [],
+      "claim": "The verified Unstoppable/WalletCore analog uses one package root: packages/WalletCore/Package.swift owns HdWalletKit and HsCryptoKit as WalletCore target dependencies, while Unstoppable.xcodeproj consumes only the WalletCore package product.",
+      "decision_basis": "rg",
+      "fact_id": "F-TOPO-004",
+      "fallback_claim_id": null,
+      "fallback_used": false,
+      "freshness": "known_current",
+      "gimle_event_ids": [],
+      "gimle_evidence": null,
+      "load_bearing": false,
+      "location_validity": "valid",
+      "recorded_at": "2026-07-25T11:31:21+00:00",
+      "repository_head": "65589a48129789ad32f4c7a9a373ed3c5b523d0c",
+      "revision": 1,
+      "rg_result": "unstoppable-wallet-ios/packages/WalletCore/Package.swift:29-78; Unstoppable/Unstoppable.xcodeproj/project.pbxproj:341 and 1420-1423 show WalletCore-only package product dependency.",
+      "serena_result": null,
+      "verdict": "MATCH",
+      "worktree_fingerprint": "d621141d3ef20cf1"
+    },
+    {
+      "accepted": true,
+      "anchors": [
+        "uw-ios-app local checkout: packages/WalletCore/Package.swift:29-78; Unstoppable/Unstoppable.xcodeproj:341,1420-1423"
+      ],
+      "bug_ids": [],
+      "claim": "The verified Unstoppable/WalletCore analog uses one package root: packages/WalletCore/Package.swift owns HdWalletKit and HsCryptoKit as WalletCore target dependencies, while Unstoppable.xcodeproj consumes only the WalletCore package product.",
+      "decision_basis": "rg",
+      "fact_id": "F-TOPO-004",
+      "fallback_claim_id": null,
+      "fallback_used": false,
+      "freshness": "known_current",
+      "gimle_event_ids": [],
+      "gimle_evidence": null,
+      "load_bearing": true,
+      "location_validity": "valid",
+      "recorded_at": "2026-07-25T11:32:39+00:00",
+      "repository_head": "65589a48129789ad32f4c7a9a373ed3c5b523d0c",
+      "revision": 2,
+      "rg_result": "unstoppable-wallet-ios/packages/WalletCore/Package.swift:29-78; Unstoppable/Unstoppable.xcodeproj:341 and 1420-1423 show WalletCore-only package product dependency.",
+      "serena_result": null,
+      "verdict": "MATCH",
+      "worktree_fingerprint": "d621141d3ef20cf1"
+    },
+    {
+      "accepted": true,
+      "anchors": [
+        "Scripts/audit-example-target-graph.sh:5-20; Scripts/audit-example-release-binary.sh:15-23"
+      ],
+      "bug_ids": [],
+      "claim": "The current S2-06 verification seam already has dedicated target-graph and Live-binary boundary audits that fail closed on missing targets, unresolved executables, or fixture symbols.",
+      "decision_basis": "rg",
+      "fact_id": "F-TOPO-005",
+      "fallback_claim_id": null,
+      "fallback_used": false,
+      "freshness": "known_current",
+      "gimle_event_ids": [],
+      "gimle_evidence": null,
+      "load_bearing": true,
+      "location_validity": "valid",
+      "recorded_at": "2026-07-25T11:32:49+00:00",
+      "repository_head": "65589a48129789ad32f4c7a9a373ed3c5b523d0c",
+      "revision": 1,
+      "rg_result": "Scripts/audit-example-target-graph.sh:5-20 and Scripts/audit-example-release-binary.sh:15-23.",
+      "serena_result": null,
+      "verdict": "MATCH",
+      "worktree_fingerprint": "d621141d3ef20cf1"
+    }
+  ],
+  "final_context": null,
+  "gimle_events": [
+    {
+      "args_hash": "44136fa355b3678a",
+      "args_keys": [],
+      "duration_ms": null,
+      "event_id": "E-0001",
+      "intent": "Check Palace project/index health and freshness envelope",
+      "outcome": "success",
+      "phase": "preflight",
+      "protocol_status": "success",
+      "recorded_at": "2026-07-25T11:28:10+00:00",
+      "response_bytes": null,
+      "returned": null,
+      "seq": 1,
+      "tool": "palace.memory.health",
+      "total": null,
+      "truncated": false,
+      "used": false,
+      "warnings": []
+    },
+    {
+      "args_hash": "44136fa355b3678a",
+      "args_keys": [],
+      "duration_ms": null,
+      "event_id": "E-0002",
+      "intent": "Resolve native versus passthrough code routing for ThorChainKit",
+      "outcome": "success",
+      "phase": "preflight",
+      "protocol_status": "success",
+      "recorded_at": "2026-07-25T11:28:10+00:00",
+      "response_bytes": null,
+      "returned": null,
+      "seq": 2,
+      "tool": "palace.code.list_passthrough_projects",
+      "total": null,
+      "truncated": false,
+      "used": true,
+      "warnings": []
+    },
+    {
+      "args_hash": "44136fa355b3678a",
+      "args_keys": [],
+      "duration_ms": null,
+      "event_id": "E-0003",
+      "intent": "Resolve whether Users-ant013-Data-AI-thorchain is registered in Gimle",
+      "outcome": "success",
+      "phase": "preflight",
+      "protocol_status": "success",
+      "recorded_at": "2026-07-25T11:28:10+00:00",
+      "response_bytes": null,
+      "returned": null,
+      "seq": 3,
+      "tool": "palace.memory.list_projects",
+      "total": null,
+      "truncated": false,
+      "used": true,
+      "warnings": []
+    },
+    {
+      "args_hash": "44136fa355b3678a",
+      "args_keys": [],
+      "duration_ms": null,
+      "event_id": "E-0004",
+      "intent": "Resolve Gimle runtime identity and health before analog discovery",
+      "outcome": "success",
+      "phase": "preflight",
+      "protocol_status": "success",
+      "recorded_at": "2026-07-25T11:28:18+00:00",
+      "response_bytes": null,
+      "returned": null,
+      "seq": 4,
+      "tool": "palace.health.status",
+      "total": null,
+      "truncated": false,
+      "used": true,
+      "warnings": []
+    },
+    {
+      "args_hash": "0a5695a722879083",
+      "args_keys": [
+        "include_context",
+        "limit",
+        "project"
+      ],
+      "duration_ms": null,
+      "event_id": "E-0005",
+      "intent": "Discover an app consuming only WalletCore package product",
+      "outcome": "warning",
+      "phase": "preflight",
+      "protocol_status": "success",
+      "recorded_at": "2026-07-25T11:29:21+00:00",
+      "response_bytes": null,
+      "returned": null,
+      "seq": 5,
+      "tool": "palace.code.semantic_search",
+      "total": null,
+      "truncated": false,
+      "used": true,
+      "warnings": [
+        "usage_preview_unavailable"
+      ]
+    },
+    {
+      "args_hash": "0a5695a722879083",
+      "args_keys": [
+        "include_context",
+        "limit",
+        "project"
+      ],
+      "duration_ms": null,
+      "event_id": "E-0006",
+      "intent": "Discover a current WalletCore composition analog for package-owned dependency closure",
+      "outcome": "success",
+      "phase": "preflight",
+      "protocol_status": "success",
+      "recorded_at": "2026-07-25T11:29:42+00:00",
+      "response_bytes": null,
+      "returned": null,
+      "seq": 6,
+      "tool": "palace.code.semantic_search",
+      "total": null,
+      "truncated": false,
+      "used": false,
+      "warnings": []
+    },
+    {
+      "args_hash": "af1b63f33e4faf04",
+      "args_keys": [
+        "limit",
+        "project",
+        "query"
+      ],
+      "duration_ms": null,
+      "event_id": "E-0007",
+      "intent": "Confirm WalletCore graph nodes for package composition",
+      "outcome": "false_success",
+      "phase": "preflight",
+      "protocol_status": "success",
+      "recorded_at": "2026-07-25T11:29:42+00:00",
+      "response_bytes": null,
+      "returned": null,
+      "seq": 7,
+      "tool": "palace.code.search_graph",
+      "total": null,
+      "truncated": false,
+      "used": false,
+      "warnings": [
+        "phase2_required"
+      ]
+    }
+  ],
+  "gimle_snapshot": {
+    "commits_behind_head": null,
+    "indexed_commit": null,
+    "runtime_id": "native-dev"
+  },
+  "phase": "design",
+  "phase_history": [
+    {
+      "at": "2026-07-25T11:27:55+00:00",
+      "phase": "preflight",
+      "reason": "run initialized"
+    },
+    {
+      "at": "2026-07-25T11:30:33+00:00",
+      "phase": "evidence",
+      "reason": "Current head and repository identity confirmed; Gimle mapping limitations recorded with independent fallback."
+    },
+    {
+      "at": "2026-07-25T11:35:01+00:00",
+      "phase": "design",
+      "reason": "Analog family verified; proposed topology delta, matrix, and test plan written for adversarial review."
+    }
+  ],
+  "projects": {
+    "code": "Users-ant013-Data-AI-thorchain",
+    "git": "thorchain",
+    "memory": "Users-ant013-Data-AI-thorchain"
+  },
+  "repository": {
+    "approved_head": null,
+    "approved_worktree_fingerprint": null,
+    "base_head": "65589a48129789ad32f4c7a9a373ed3c5b523d0c",
+    "base_worktree_manifest": {
+      "docs/reports/gimle/THR-104-s1-06-gimle-verification-preview-20260722.md": "2b6e085954291fc6dea16e744a2b5778ad8e7231707ead2c674e0b88bc33a028",
+      "docs/reports/gimle/THR-104-s1-06-verification-results-20260722.md": "254370641ab81f36ce14ce86f0c1a416e7744ccb42b949b31058e285b2bf4a28"
+    },
+    "branch": "feature/THR-159-s2-06-send-acceptance",
+    "identity_frozen": true,
+    "integration_branch": "main",
+    "root": "/Users/ant013/Data/AI/thorchain",
+    "worktree_fingerprint": "d621141d3ef20cf1"
+  },
+  "repository_change": true,
+  "revision": 41,
+  "run_id": "THR-159-20260725-topology-correction-v2",
+  "schema_version": "2.1",
+  "skill_versions": {
+    "gimle-evidence": "analog-driven-change,gimle-evidence"
+  },
+  "spec": {
+    "approval": null,
+    "status": "ready"
+  },
+  "task_id": "0789ec25-0253-4710-bb86-9383253a1640",
+  "trust": "RED",
+  "updated_at": "2026-07-25T11:47:03+00:00",
+  "workflow": "analog_change"
+}

@@ -14,7 +14,6 @@ final class LifecycleViewModel: ObservableObject {
 
     let runtime: ExampleRuntime
     private var cancellables = Set<AnyCancellable>()
-    private let commandQueue = DispatchQueue(label: "ThorChainKitExample.LifecycleCommandQueue")
 
     init(runtime: ExampleRuntime) {
         self.runtime = runtime
@@ -56,10 +55,7 @@ final class LifecycleViewModel: ObservableObject {
     func start() { runtime.kit.start(); updateRequestCount() }
     func stop() { runtime.kit.stop(); updateRequestCount() }
     func refresh() {
-        let kit = runtime.kit
-        commandQueue.async {
-            _ = kit.refresh()
-        }
+        runtime.kit.refresh()
         updateRequestCount()
     }
 

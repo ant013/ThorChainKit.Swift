@@ -1,0 +1,33 @@
+appId: org.horizontalsystems.thorchainkit.example.fixture
+name: send-checktx-accepted
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: lifecycle-open
+- tapOn:
+    id: lifecycle-start
+- extendedWaitUntil:
+    visible: "synced"
+    timeout: 10000
+- tapOn:
+    text: THORChainKit
+- tapOn:
+    id: send-open
+- tapOn:
+    id: send.amount.input
+- inputText: "1"
+- tapOn:
+    id: send.quote.button
+- scrollUntilVisible:
+    element:
+      id: send.confirm.button
+    direction: DOWN
+- tapOn:
+    id: send.confirm.button
+- assertVisible:
+    id: send.result.state
+- assertVisible:
+    text: "CheckTx accepted — not confirmed"
+- assertVisible:
+    id: send.result.local-hash

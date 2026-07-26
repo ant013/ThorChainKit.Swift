@@ -2,23 +2,29 @@ import SwiftUI
 
 @main
 struct ThorChainExampleApp: App {
-    @StateObject private var diagnostics: DiagnosticsViewModel
+    private let diagnostics: DiagnosticsViewModel?
+    private let unavailableMessage: String?
 
     init() {
         do {
             let runtime = try ExampleRuntime()
-            _diagnostics = StateObject(
-                wrappedValue: DiagnosticsViewModel(runtime: runtime)
-            )
+            diagnostics = DiagnosticsViewModel(runtime: runtime)
+            unavailableMessage = nil
         } catch {
-            fatalError("Unable to construct fixture runtime")
+            diagnostics = nil
+            unavailableMessage = "Unavailable — configure the approved local live input to continue."
         }
     }
 
     var body: some Scene {
         WindowGroup {
-            NavigationView {
-                DiagnosticsView(model: diagnostics)
+            if let diagnostics {
+                NavigationView {
+                    DiagnosticsView(model: diagnostics)
+                }
+            } else {
+                Text(unavailableMessage ?? "Unavailable")
+                    .accessibilityIdentifier("example.unavailable")
             }
         }
     }

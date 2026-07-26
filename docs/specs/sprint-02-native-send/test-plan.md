@@ -102,19 +102,16 @@ dispatched without a new explicit operator approval for that exact run.
 - Every request asserts provider-family ID, configured proof mode, and its own exact height evidence.
 - Registry/storage tests prove physical database identity, one file-migration owner, one namespace-recovery owner, signature request count and maximum in-flight count across two Kit instances; initial send and retry persist/register/publish an active generation before Kit B can perform endpoint I/O; one-time recovery cannot run when Kit B joins Kit A's live broadcast; client, operation, and repair holds preserve cleanup across stop; attempt-generation checks discard late signer and broadcaster completions.
 
-## Example Maestro Manifest
+## Example Maestro Flow
 
-The guarded runner is the sole Example UI entry and targets one exact `THORCHAIN_SIMULATOR_UDID`:
-
-| Flow | Required state |
-|---|---|
-| `send-quote-review.yaml` | amount, recipient, non-empty memo, fee, total, height, absolute expiry, FIXTURE badge; exact-deadline clock advance hides/disables confirm, shows Refresh, signer calls remain zero |
-| `send-checktx-accepted.yaml` | one signature request, canonical local hash, `CheckTx accepted — not confirmed`; classifier integration separately proves the node hash matched |
-| `send-unknown.yaml` | response loss produces unknown with same local hash |
-| `send-retry.yaml` | fee acknowledgement and exact-byte idempotent rebroadcast; no new signature |
-| `send-restart-pending.yaml` | relaunch restores unknown/CheckTx-accepted pending record and bytes identity |
-
-Selectors use stable accessibility identifiers. Each flow has a unique reset namespace; only the restart flow preserves its own namespace between phases. The runner requires JUnit `tests=5`, `failures=0`, `errors=0`, `skipped=0`, scans text artifacts for byte canaries, and scans every screenshot with a Vision/OCR path whose temporary rendered-canary self-test must first fail as expected. A Release binary audit proves the Live scheme does not link fixture support.
+The guarded runner is the sole Example UI entry and targets one exact
+`THORCHAIN_SIMULATOR_UDID`. The mandatory flow
+`send-checktx-accepted.yaml` starts the fixture lifecycle, quotes and confirms
+a native RUNE send through the public Kit facade, and asserts one passing JUnit
+case with `CheckTx accepted — not confirmed` and the canonical local hash.
+Package tests own unknown, retry, duplicate-broadcast, and restart contracts.
+The runner also builds Live Release and audits that the resolved product does
+not contain FixtureSupport.
 
 Every narrow Swift test filter is wrapped by a discovery assertion that fails when the selected test count is zero; a command that exits successfully after running no matching test is not evidence.
 

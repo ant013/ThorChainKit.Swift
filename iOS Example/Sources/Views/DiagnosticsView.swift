@@ -5,18 +5,20 @@ struct DiagnosticsView: View {
     @StateObject private var endpoints: EndpointsViewModel
     @StateObject private var accountRead: AccountReadViewModel
     @StateObject private var lifecycle: LifecycleViewModel
+    @StateObject private var send: SendViewModel
 
     init(model: DiagnosticsViewModel) {
         self.model = model
         _endpoints = StateObject(wrappedValue: EndpointsViewModel(runtime: model.runtime))
         _accountRead = StateObject(wrappedValue: AccountReadViewModel(runtime: model.runtime))
         _lifecycle = StateObject(wrappedValue: LifecycleViewModel(runtime: model.runtime))
+        _send = StateObject(wrappedValue: SendViewModel(runtime: model.runtime))
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                row("Data Source", value: "FIXTURE", identifier: "data-source")
+                row("Data Source", value: model.dataSource, identifier: "data-source")
                 row("Network", value: model.network, identifier: "network")
                 row("Address", value: model.address, identifier: "address")
                 row("Sync State", value: model.syncDescription, identifier: "sync-state")
@@ -38,22 +40,32 @@ struct DiagnosticsView: View {
         }
         .navigationTitle("THORChainKit")
         .toolbar {
-            HStack {
-                NavigationLink(destination: AddressView(network: model.runtime.network)) {
-                    Text("Address")
-                        .accessibilityIdentifier("address-codec-open")
-                }
-                NavigationLink(destination: EndpointsView(model: endpoints)) {
-                    Text("Endpoints")
-                        .accessibilityIdentifier("endpoint-policy-open")
-                }
-                NavigationLink(destination: AccountReadView(model: accountRead)) {
-                    Text("Account Read")
-                        .accessibilityIdentifier("account-read-open")
-                }
+            ToolbarItem(placement: .primaryAction) {
                 NavigationLink(destination: LifecycleView(model: lifecycle)) {
                     Text("Lifecycle")
-                        .accessibilityIdentifier("lifecycle-open")
+                }
+                .accessibilityIdentifier("lifecycle-open")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                NavigationLink(destination: SendView(model: send)) {
+                    Text("Send")
+                }
+                .accessibilityIdentifier("send-open")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                HStack {
+                    NavigationLink(destination: AddressView(network: model.runtime.network)) {
+                        Text("Address")
+                            .accessibilityIdentifier("address-codec-open")
+                    }
+                    NavigationLink(destination: EndpointsView(model: endpoints)) {
+                        Text("Endpoints")
+                            .accessibilityIdentifier("endpoint-policy-open")
+                    }
+                    NavigationLink(destination: AccountReadView(model: accountRead)) {
+                        Text("Account Read")
+                            .accessibilityIdentifier("account-read-open")
+                    }
                 }
             }
         }
