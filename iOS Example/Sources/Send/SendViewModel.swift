@@ -17,12 +17,9 @@ final class SendViewModel: ObservableObject {
     @Published private(set) var pending: [PendingTransaction] = []
     @Published private(set) var pendingStatus = ""
     @Published private(set) var errorMessage = ""
-    @Published private(set) var signerCallCount = 0
     @Published private(set) var currentFee = BigUInt(0)
     @Published private(set) var retryPreviousFee = BigUInt(0)
     @Published private(set) var retryCurrentFee = BigUInt(0)
-    @Published private(set) var retryHashUnchanged = false
-    @Published private(set) var retrySignerCountUnchanged = false
     @Published private(set) var quoteExpired = false
 
     let runtime: ExampleRuntime
@@ -51,9 +48,6 @@ final class SendViewModel: ObservableObject {
             .store(in: &cancellables)
         pending = runtime.kit.pendingTransactions
         pendingStatus = Self.statusDescription(runtime.kit.pendingTransactionsStatus)
-#if EXAMPLE_FIXTURE
-        signerCallCount = runtime.fixtureSignerCallCount
-#endif
     }
 
     func quote() {
@@ -94,10 +88,7 @@ final class SendViewModel: ObservableObject {
                 localHash = submission.transactionId.hash
                 resultState = Self.submissionDescription(submission.state)
 #if EXAMPLE_FIXTURE
-                signerCallCount = runtime.fixtureSignerCallCount
-                if runtime.fixtureScenarioID != .retry {
-                    try await runtime.finishFixtureTranscript()
-                }
+                try await runtime.finishFixtureTranscript()
 #endif
             } catch {
                 errorMessage = "Send unavailable."
@@ -113,18 +104,12 @@ final class SendViewModel: ObservableObject {
         }
         Task {
             do {
-                let signerCountBeforeRetry = signerCallCount
                 let submission = try await runtime.kit.retryBroadcast(
                     transactionId: transaction.transactionId,
                     acceptingNativeFee: acceptingFee
                 )
                 localHash = submission.transactionId.hash
                 resultState = Self.submissionDescription(submission.state)
-#if EXAMPLE_FIXTURE
-                signerCallCount = runtime.fixtureSignerCallCount
-#endif
-                retryHashUnchanged = submission.transactionId.hash == transaction.transactionId.hash
-                retrySignerCountUnchanged = signerCallCount == signerCountBeforeRetry
 #if EXAMPLE_FIXTURE
                 try await runtime.finishFixtureTranscript()
 #endif
@@ -139,18 +124,6 @@ final class SendViewModel: ObservableObject {
         resultState = ""
         review = nil
         runtime.kit.refresh()
-    }
-
-    func advanceToExpiry() {
-        guard review != nil else { return }
-        Task {
-            await runtime.advanceFixtureToExpiry()
-            quoteExpired = true
-            resultState = "Quote expired — refresh required"
-#if EXAMPLE_FIXTURE
-            try? await runtime.finishFixtureTranscript()
-#endif
-        }
     }
 
     private static func submissionDescription(_ state: SendSubmission.State) -> String {

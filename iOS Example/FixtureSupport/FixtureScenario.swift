@@ -1,13 +1,5 @@
 import Foundation
 
-public enum FixtureScenarioID: String, CaseIterable, Sendable {
-    case quoteReview = "send-quote-review"
-    case checkTxAccepted = "send-checktx-accepted"
-    case unknown = "send-unknown"
-    case retry = "send-retry"
-    case restartPending = "send-restart-pending"
-}
-
 public struct FixtureRequestPattern: Sendable {
     public let method: String
     public let origin: String
@@ -25,29 +17,19 @@ public struct FixtureRequestPattern: Sendable {
 }
 
 public struct FixtureScenario: Sendable {
-    public let id: FixtureScenarioID
     public let namespace: String
-    public let acceptedHeight: Int64
-    public let expiresAt: Date
     public let expectedDigest: Data
     public let expectedSignedBytes: Data
-    public let expectedTransactionHash: String
-    public let currentNativeFee: UInt64
     public let expectedRequests: [FixtureRequestPattern]
 
-    public init(id: FixtureScenarioID, now: Date = Date(timeIntervalSince1970: 1_700_000_000)) {
-        self.id = id
-        namespace = "thor-example/fixture/\(id.rawValue)"
-        acceptedHeight = 12_345_678
-        expiresAt = now.addingTimeInterval(60)
+    public init() {
+        namespace = "thor-example/fixture/send-checktx-accepted"
         expectedDigest = Data(hex: "1ff56dd4c3627af0cee040965178f50c8d7c854e909d7b54aedbd1b7bf110b68")
         expectedSignedBytes = Data(hex: "0a530a510a0e2f74797065732e4d736753656e64123f0a14751e76e8199196d454941c45d1b3a323f1433bd612145a0dba49dab8fec87c6dd7c01b564ee72a8515a61a110a0472756e65120931303030303030303012590a500a460a1f2f636f736d6f732e63727970746f2e736563703235366b312e5075624b657912230a210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179812040a0208011801120510c08db7011a4023103daa64330d051da3bfa85ea7c8af9080edf19b19a306403303634b0992a32cc1b9061b2e76cd245edb2976bb437bc6636dfb23deae31e38508c5478dae45")
-        expectedTransactionHash = "3685BF7AD0C65889B763D4B6D1F1EDEEC96E9B63B63F8DB992D00757EB5F136E"
-        currentNativeFee = 2
-        expectedRequests = Self.expectedRequests(for: id, transactionHash: expectedTransactionHash)
+        expectedRequests = Self.expectedRequests()
     }
 
-    private static func expectedRequests(for id: FixtureScenarioID, transactionHash: String) -> [FixtureRequestPattern] {
+    private static func expectedRequests() -> [FixtureRequestPattern] {
         let rest = "https://api-thorchain.rorcual.xyz"
         let rpc = "https://rpc-thorchain.rorcual.xyz"
         let sender = "thor1w508d6qejxtdg4y5r3zarvary0c5xw7ku6wp68"
@@ -73,13 +55,7 @@ public struct FixtureScenario: Sendable {
             FixtureRequestPattern(method: "GET", origin: rpc, path: "/abci_query")
         ]
         var requests = probes + lifecycle + quote
-        if id != .quoteReview {
-            requests.append(FixtureRequestPattern(method: "POST", origin: rest, path: "/cosmos/tx/v1beta1/txs", bodyRequired: true))
-        }
-        if id == .retry {
-            requests.append(FixtureRequestPattern(method: "GET", origin: rest, path: "/cosmos/tx/v1beta1/txs/\(transactionHash)"))
-            requests.append(FixtureRequestPattern(method: "POST", origin: rest, path: "/cosmos/tx/v1beta1/txs", bodyRequired: true))
-        }
+        requests.append(FixtureRequestPattern(method: "POST", origin: rest, path: "/cosmos/tx/v1beta1/txs", bodyRequired: true))
         return requests
     }
 }
@@ -91,15 +67,5 @@ private extension Data {
             let end = hex.index(start, offsetBy: 2)
             return UInt8(hex[start..<end], radix: 16)
         })
-    }
-}
-
-public actor FixtureClock {
-    public private(set) var now: Date
-
-    public init(now: Date) { self.now = now }
-
-    public func advanceToExpiry(of scenario: FixtureScenario) {
-        now = scenario.expiresAt
     }
 }

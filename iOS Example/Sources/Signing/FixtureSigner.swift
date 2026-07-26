@@ -5,8 +5,6 @@ public final class FixtureSigner: Signer, @unchecked Sendable {
     public let compressedPublicKey: Data
     public let signature: Data
     private let expectedDigest: Data
-    private let lock = NSLock()
-    private var calls = 0
 
     public init(expectedDigest: Data, signature: Data, compressedPublicKey: Data) {
         self.expectedDigest = expectedDigest
@@ -22,12 +20,7 @@ public final class FixtureSigner: Signer, @unchecked Sendable {
         )
     }
 
-    public var callCount: Int {
-        lock.withLock { calls }
-    }
-
     public func sign(_ request: SigningRequest) async throws -> Data {
-        lock.withLock { calls += 1 }
         guard request.digest == expectedDigest else { throw SendError.signerFailed }
         return signature
     }

@@ -18,12 +18,6 @@ struct SendView: View {
                 .accessibilityIdentifier("send.memo.input")
             Button("Quote") { model.quote() }
                 .accessibilityIdentifier("send.quote.button")
-#if EXAMPLE_FIXTURE
-            Button("Advance to expiry") { model.advanceToExpiry() }
-                .accessibilityIdentifier("send.fixture.advance-to-expiry")
-            Text(String(model.signerCallCount))
-                .accessibilityIdentifier("send.fixture.signer-call-count")
-#endif
             if let review = model.review {
                 SendReviewView(model: model, review: review)
             }

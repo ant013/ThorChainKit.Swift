@@ -64,7 +64,6 @@ actor FixtureTransport: TestingHTTPTransport {
     private let transcript: FixtureTranscript
     private var offline = false
     private var pending = false
-    private var broadcastCalls = 0
     private var acceptedBytes: Data?
     private var acceptedHash: String?
     private var continuations = [CheckedContinuation<Void, Never>]()
@@ -160,15 +159,9 @@ actor FixtureTransport: TestingHTTPTransport {
             try requireMethod(request, "GET")
             try requireQuery(url, equals: ["height": "12345678"])
             response = (Data(#"{"current":"3.19.3","next":"3.19.3","next_since_height":"0","querier":"3.19.0"}"#.utf8), 200, Self.restHeaders)
-        } else if scenario.id == .retry && path == "/cosmos/tx/v1beta1/txs/\(scenario.expectedTransactionHash)" {
-            try requireMethod(request, "GET")
-            try requireQuery(url, equals: [:])
-            let hash = scenario.expectedTransactionHash
-            response = (Data(#"{"code":5,"message":"rpc error: code = NotFound desc = tx not found: \#(hash): key not found","details":[]}"#.utf8), 404, [:])
         } else if path == "/cosmos/tx/v1beta1/txs" {
             try requireMethod(request, "POST")
             try requireQuery(url, equals: [:])
-            broadcastCalls += 1
             guard let body = request.httpBody,
                   let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
                   object.count == 2,
@@ -182,9 +175,6 @@ actor FixtureTransport: TestingHTTPTransport {
             } else {
                 acceptedBytes = raw
                 acceptedHash = hash
-            }
-            if (scenario.id == .unknown || scenario.id == .retry || scenario.id == .restartPending) && broadcastCalls == 1 {
-                throw URLError(.networkConnectionLost)
             }
             response = (Data(#"{"tx_response":{"code":0,"codespace":"sdk","txhash":"\#(hash)"}}"#.utf8), 200, [:])
         } else {

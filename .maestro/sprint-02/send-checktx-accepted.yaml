@@ -3,8 +3,6 @@ name: send-checktx-accepted
 ---
 - launchApp:
     clearState: true
-    arguments:
-      "--example-scenario": "send-checktx-accepted"
 - tapOn:
     id: lifecycle-open
 - tapOn:

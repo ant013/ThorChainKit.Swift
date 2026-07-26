@@ -55,7 +55,6 @@ struct ExampleRuntime {
     let signer: (any Signer)?
 #if EXAMPLE_FIXTURE
     private let fixtureTransport: FixtureTransport
-    private let fixtureClock: FixtureClock
     private let fixtureScenario: FixtureScenario
 #endif
 
@@ -75,11 +74,10 @@ struct ExampleRuntime {
             )])
 #if EXAMPLE_FIXTURE
         mode = .fixture
-        let scenario = FixtureScenario(id: Self.scenarioID)
+        let scenario = FixtureScenario()
         let transcript = FixtureTranscript(expected: scenario.expectedRequests)
         let transport = FixtureTransport(scenario: scenario, transcript: transcript)
         fixtureScenario = scenario
-        fixtureClock = FixtureClock(now: Date(timeIntervalSince1970: 1_700_000_000))
         fixtureTransport = transport
         let address = try Address(Configuration.address, network: network)
         recipient = Configuration.recipient
@@ -120,12 +118,6 @@ struct ExampleRuntime {
     }
 
 #if EXAMPLE_FIXTURE
-    var fixtureSignerCallCount: Int {
-        (signer as? FixtureSigner)?.callCount ?? 0
-    }
-
-    var fixtureScenarioID: FixtureScenarioID { fixtureScenario.id }
-
     func finishFixtureTranscript() async throws {
         try await fixtureTransport.finishTranscript()
     }
@@ -177,18 +169,8 @@ struct ExampleRuntime {
 #endif
     }
 
-    func advanceFixtureToExpiry() async {
-#if EXAMPLE_FIXTURE
-        await fixtureClock.advanceToExpiry(of: fixtureScenario)
-#endif
-    }
-
     func isQuoteExpired(_ date: Date) async -> Bool {
-#if EXAMPLE_FIXTURE
-        return await fixtureClock.now >= date
-#else
         return Date() >= date
-#endif
     }
 
     func endpointSnapshot(scenario: EndpointScenario) async -> EndpointPolicySnapshot {
@@ -225,15 +207,6 @@ struct ExampleRuntime {
             family: projection.providerFamilyId
         )
     }
-
-#if EXAMPLE_FIXTURE
-    private static var scenarioID: FixtureScenarioID {
-        let arguments = ProcessInfo.processInfo.arguments
-        let raw = arguments.first(where: { $0.hasPrefix("--example-scenario=") })?.split(separator: "=", maxSplits: 1).last.map(String.init)
-            ?? arguments.drop { $0 != "--example-scenario" }.dropFirst().first
-        return FixtureScenarioID(rawValue: raw ?? "send-quote-review") ?? .quoteReview
-    }
-#endif
 
     private static func fixtureDatabasePath(namespace: String) throws -> String {
         let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
