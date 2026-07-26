@@ -4,73 +4,17 @@ import ThorChainKit
 import FixtureSupport
 @_spi(Testing) import ThorChainKit
 
-public struct FixtureRequest: Equatable, Sendable {
-    public let method: String
-    public let origin: String
-    public let path: String
-    public let query: String
-    public let body: Data?
-
-    public init(method: String, origin: String, path: String, query: String = "", body: Data? = nil) {
-        self.method = method
-        self.origin = origin
-        self.path = path
-        self.query = query
-        self.body = body
-    }
-}
-
-public actor FixtureTranscript {
-    private let expected: [FixtureRequestPattern]
-    public private(set) var requests = [FixtureRequest]()
-    private var position = 0
-    private var probeMatches = Set<Int>()
-
-    public init(expected: [FixtureRequestPattern]) { self.expected = expected }
-
-    public func record(_ request: FixtureRequest) throws {
-        requests.append(request)
-        guard expected.count >= 3 else { throw URLError(.cannotParseResponse) }
-        if position < 3 {
-            guard let match = (0..<3).first(where: { !probeMatches.contains($0) && expected[$0].matches(request) }) else {
-                throw URLError(.cannotParseResponse)
-            }
-            probeMatches.insert(match)
-            position += 1
-            return
-        }
-        guard position < expected.count, expected[position].matches(request) else { throw URLError(.cannotParseResponse) }
-        position += 1
-    }
-
-    public func finish() throws {
-        guard expected.count >= 3, position == expected.count else { throw URLError(.cannotParseResponse) }
-    }
-}
-
-private extension FixtureRequestPattern {
-    func matches(_ request: FixtureRequest) -> Bool {
-        method == request.method
-            && origin == request.origin
-            && path == request.path
-            && (query == nil || query == request.query)
-            && (!bodyRequired || request.body != nil)
-    }
-}
-
 actor FixtureTransport: TestingHTTPTransport {
     public private(set) var requestCount = 0
     private let scenario: FixtureScenario
-    private let transcript: FixtureTranscript
     private var offline = false
     private var pending = false
     private var acceptedBytes: Data?
     private var acceptedHash: String?
     private var continuations = [CheckedContinuation<Void, Never>]()
 
-    public init(scenario: FixtureScenario, transcript: FixtureTranscript) {
+    public init(scenario: FixtureScenario) {
         self.scenario = scenario
-        self.transcript = transcript
     }
 
     public func setOffline(_ value: Bool) { offline = value }
@@ -89,13 +33,6 @@ actor FixtureTransport: TestingHTTPTransport {
     public func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         requestCount += 1
         let url = try requireURL(request)
-        try await transcript.record(FixtureRequest(
-            method: request.httpMethod ?? "GET",
-            origin: "\(url.scheme ?? "")://\(url.host ?? "")\(url.port.map { ":\($0)" } ?? "")",
-            path: url.path,
-            query: url.query ?? "",
-            body: request.httpBody
-        ))
         if pending {
             await withTaskCancellationHandler(operation: {
                 await withCheckedContinuation { continuations.append($0) }
@@ -170,6 +107,7 @@ actor FixtureTransport: TestingHTTPTransport {
                   let raw = Data(base64Encoded: encoded) else { throw URLError(.cannotParseResponse) }
             guard raw == scenario.expectedSignedBytes else { throw URLError(.cannotParseResponse) }
             let hash = Data(SHA256.hash(data: raw)).map { String(format: "%02X", $0) }.joined()
+            guard hash == scenario.expectedTransactionHash else { throw URLError(.cannotParseResponse) }
             if let acceptedBytes {
                 guard raw == acceptedBytes, hash == acceptedHash else { throw URLError(.cannotParseResponse) }
             } else {
@@ -228,5 +166,4 @@ actor FixtureTransport: TestingHTTPTransport {
         "x-cosmos-block-height": "12345678"
     ]
 
-    public func finishTranscript() async throws { try await transcript.finish() }
 }

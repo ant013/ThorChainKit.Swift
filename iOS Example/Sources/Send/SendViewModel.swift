@@ -87,9 +87,6 @@ final class SendViewModel: ObservableObject {
                 let submission = try await runtime.kit.send(quote: review, signer: signer)
                 localHash = submission.transactionId.hash
                 resultState = Self.submissionDescription(submission.state)
-#if EXAMPLE_FIXTURE
-                try await runtime.finishFixtureTranscript()
-#endif
             } catch {
                 errorMessage = "Send unavailable."
             }
@@ -110,9 +107,6 @@ final class SendViewModel: ObservableObject {
                 )
                 localHash = submission.transactionId.hash
                 resultState = Self.submissionDescription(submission.state)
-#if EXAMPLE_FIXTURE
-                try await runtime.finishFixtureTranscript()
-#endif
             } catch {
                 errorMessage = "Retry unavailable."
             }

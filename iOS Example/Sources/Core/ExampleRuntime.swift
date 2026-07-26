@@ -75,8 +75,7 @@ struct ExampleRuntime {
 #if EXAMPLE_FIXTURE
         mode = .fixture
         let scenario = FixtureScenario()
-        let transcript = FixtureTranscript(expected: scenario.expectedRequests)
-        let transport = FixtureTransport(scenario: scenario, transcript: transcript)
+        let transport = FixtureTransport(scenario: scenario)
         fixtureScenario = scenario
         fixtureTransport = transport
         let address = try Address(Configuration.address, network: network)
@@ -117,11 +116,6 @@ struct ExampleRuntime {
 #endif
     }
 
-#if EXAMPLE_FIXTURE
-    func finishFixtureTranscript() async throws {
-        try await fixtureTransport.finishTranscript()
-    }
-#endif
 
     func writeFixtureEvidence(syncState: String, acceptedHeight: Int64?, lastBlockHeight: Int64?, rune: String, requestCount: Int) {
         guard mode == .fixture else { return }
