@@ -4,15 +4,21 @@ Date: 2026-07-27
 
 Gimle trust: RED.
 
-This report covers formalization revision 3 after discovery 2/2 adversarial
-`REVISE`. The current-tree fallback remains the authority for the revised
-design; no host implementation was performed. Revision 3 closes the four
-frozen blockers without changing the selected analog family.
+This report covers formalization revision 4 after discovery 2/2 and closure
+1/5 `REVISE`. The current-tree fallback remains the authority for the revised
+design; no host implementation was performed. Revision 4 resolves the
+package-state blocker without changing the selected analog family; the prior
+allowlisted findings remain unchanged.
 
 The prerequisite gate was rechecked after S2-06 merged: `origin/main` is
 `65c8e370db983c6bd500448266a4f8f51561ca5f`, and its canonical roadmap row is
 `✅ Implemented — PR #17 — 2026-07-27`. The package pin used by this design is
-the released library head `4c2e82bb17aa48379235a9f01ccdba489bb46e69`.
+the required S2-06 package-state head
+`65c8e370db983c6bd500448266a4f8f51561ca5f`. The S2-06 merge beneath this
+head changes `Package.swift`, `Package.resolved`, and
+`Sources/ThorChainKit/Core/KitFactory.swift`; those package graph/source
+changes are part of the prerequisite and must be present in the clean host
+resolution.
 
 The required codebase-memory project `Users-ant013-Data-AI-thorchain` was
 queried first and reported ready. The exact Unstoppable codebase-memory project
@@ -31,6 +37,20 @@ alias points to a different `/Users/Shared/.../unstoppable-wallet-ios` mount.
 Serena was not exposed in this run. These are recorded as
 `GIMLE-THR160-001` through `GIMLE-THR160-008` in the local checkpoint; none of
 their results was used as a load-bearing design fact.
+
+## Revision 4 package-state correction evidence
+
+The exact current-tree checks for the closure blocker passed:
+
+- `git merge-base --is-ancestor 09bb94f8404cd56af3f5ef6169948a4fe1a13195 65c8e370db983c6bd500448266a4f8f51561ca5f` passed.
+- `git diff --name-status 4c2e82bb17aa48379235a9f01ccdba489bb46e69 65c8e370db983c6bd500448266a4f8f51561ca5f -- Package.swift Package.resolved Sources/ThorChainKit/Core/KitFactory.swift` reports all three required package/source changes.
+- `git show 65c8e370:Package.swift` contains the pinned `HdWalletKit.Swift` dependency, and `git show 65c8e370:Sources/ThorChainKit/Core/KitFactory.swift` contains the native-RUNE endpoint capability wiring.
+- The S2-07 spec, plan, and concurrency-gate text contain the single required package-state SHA `65c8e370db983c6bd500448266a4f8f51561ca5f`; the superseded `4c2e82bb` pin is absent from those artifacts.
+
+No implementation, host checkout, build, AppTests, simulator, or mainnet
+acceptance was run. Gimle trust remains RED because the previously recorded
+runtime/project mapping and Serena availability remain unresolved; this
+revision relies on the independently verified Git fallback above.
 
 ## Accepted current-tree evidence
 
@@ -59,7 +79,7 @@ No host implementation, build, AppTests, simulator, or controlled mainnet
 acceptance was run in this formalization phase. Those checks belong to the
 approved implementation/QA phases. The dirty external checkout, absent Serena,
 and Gimle project/runtime mapping must be rechecked on the fresh implementation
-branch before relying on any line-level evidence. Revision 3 specifically adds
+branch before relying on any line-level evidence. Revision 4 specifically adds
 an exact package SHA, tracked resolution/config inputs, raw diagnostic
 comparison, hermetic global-state tests, and a bounded no-run/no-broadcast
 mainnet protocol; these remain unverified until implementation/QA.

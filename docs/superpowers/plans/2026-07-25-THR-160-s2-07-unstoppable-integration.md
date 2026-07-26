@@ -1,10 +1,10 @@
 # THR-160 — S2-07 Unstoppable Native RUNE Send Integration Plan
 
-Design revision 3 for
+Design revision 4 for
 `docs/specs/sprint-02-native-send/S2-07-unstoppable-integration.md`, based on
 architecture revision 10 at commit
 `518835315a65996b9321665213adb0516503df65`. Discovery is bounded at 2/2;
-closure remains 0/5; revisions 1 and 2 were returned `REVISE` and implementation
+closure is 1/5; revisions 1–3 were returned `REVISE` and implementation
 remains approval-gated.
 
 ## Goal
@@ -34,9 +34,10 @@ with the local transaction hash.
     `Core/Adapters/ThorChain/ThorChainAdapter.swift`, new
     `ThorChainSendClient.swift`, `ThorChainSendData.swift`, and
     `SendHandlerFactory.swift`.
-  - Depends on: released package head
-    `4c2e82bb17aa48379235a9f01ccdba489bb46e69`; S2-06 acceptance is a
-    consumer prerequisite and does not change this package pin.
+  - Depends on: S2-06 package-state head
+    `65c8e370db983c6bd500448266a4f8f51561ca5f`; this exact `main` head
+    includes the S2-06 package graph/source changes and is the reproducible
+    host dependency pin.
   - Check: WalletCore/AppTests fake/live-handle contract tests and factory
     registration tests.
 

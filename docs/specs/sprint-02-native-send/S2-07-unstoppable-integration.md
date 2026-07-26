@@ -1,7 +1,7 @@
 # S2-07 — Unstoppable Native RUNE Send Integration
 
-**Formalization revision:** 3 — discovery 2/2; closure 0/5; supersedes
-revision 2 after adversarial `REVISE`.
+**Formalization revision:** 4 — discovery 2/2; closure 1/5; supersedes
+revision 3 after closure `REVISE`.
 
 This document is the implementation contract for THR-160. The design is
 approval-gated: no Unstoppable source, test, project, script, or acceptance
@@ -10,8 +10,8 @@ architecture base remains commit `518835315a65996b9321665213adb0516503df65`.
 
 **Risk:** critical
 **Depends on:** completed S2-06 merge/status on `main` at
-`65c8e370db983c6bd500448266a4f8f51561ca5f` (PR #17), released ThorChainKit
-package head `4c2e82bb17aa48379235a9f01ccdba489bb46e69`, and completed S1-07
+`65c8e370db983c6bd500448266a4f8f51561ca5f` (PR #17), the required
+ThorChainKit package state at that S2-06 `main` head, and completed S1-07
 MarketKit/WalletCore host release
 **Produces:** standard WalletCore SendNew integration and controlled real mainnet send
 
@@ -469,13 +469,13 @@ Tests that mutate `Core.shared`, `SendHandlerFactory` registries, active/passcod
 
 `packages/WalletCore/Package.swift` adds the public product
 `ThorChainKit` from `https://github.com/ant013/ThorChainKit.Swift.git` at exact
-released package revision
-`4c2e82bb17aa48379235a9f01ccdba489bb46e69`, the current package head
-containing the accepted S2 send contract. S2-06 is a consumer-side Example
-acceptance slice and does not change the package product; its completed
-acceptance is still a prerequisite, but it does not justify pinning an older
-package revision. The package URL is remote-only; no sibling path, branch, or
-floating version is allowed. `packages/WalletCore/Package.resolved` is
+S2-06 package-state revision
+`65c8e370db983c6bd500448266a4f8f51561ca5f`. This is the required `main` head
+whose S2-06 merge includes the package graph/source changes for the
+`HdWalletKit` resolution and native-RUNE endpoint capability wiring; the
+consumer acceptance and its package prerequisite are therefore one coherent
+reproducibility input. The package URL is remote-only; no sibling path, branch,
+or floating version is allowed. `packages/WalletCore/Package.resolved` is
 committed and must resolve that SHA. The root `.gitignore` removes the blanket
 ignore for this file. A clean detached worktree must resolve the same graph
 before any test/build command; a mismatch is a hard failure.
@@ -511,7 +511,7 @@ runs from the Unstoppable root. It verifies the baseline is an ancestor,
 checks Xcode's version against the recorded implementation toolchain, resolves
 the exact public ThorChainKit URL
 `https://github.com/ant013/ThorChainKit.Swift.git` at revision
-`4c2e82bb17aa48379235a9f01ccdba489bb46e69` and product `ThorChainKit`, and
+`65c8e370db983c6bd500448266a4f8f51561ca5f` and product `ThorChainKit`, and
 fails if `Package.resolved` is missing, ignored, or resolves another SHA. It
 creates a disposable detached worktree and performs the same exact
 Development build-for-testing for baseline and HEAD in separate DerivedData
@@ -620,9 +620,10 @@ production keychain is used.
 - Controlled mainnet send returns the local hash and honest CheckTx/unknown state; internal classification accepts only a matching node hash, and neither path can display the generic sent/confirmed banner.
 - Unsupported account types remain outside the mnemonic-only S1/S2 adapter contract.
 - Unstoppable contains no Maestro or fixture-only runtime.
-- The host package resolves the public ThorChainKit product at exact released
-  revision `4c2e82bb17aa48379235a9f01ccdba489bb46e69` from a tracked
-  `Package.resolved`; clean detached build/test inputs are reproducible.
+- The host package resolves the public ThorChainKit product at exact S2-06
+  package-state revision `65c8e370db983c6bd500448266a4f8f51561ca5f` from a
+  tracked `Package.resolved`; clean detached build/test inputs are
+  reproducible.
 - The strict-concurrency gate reports no new raw diagnostics, rejects the
   actor-boundary canary and all suppression/unchecked escapes, and proves the
   non-Sendable legacy UI boundary is not crossed by the new outcome path.
@@ -637,7 +638,7 @@ production keychain is used.
 
 Vultisig is not a host architecture analog here. No KeysignPayload, TSS response, WalletCore transaction compiler, or global THOR service is imported into Unstoppable or ThorChainKit.
 
-## Revision 3 Blocker Resolution Map
+## Revision 4 Blocker Resolution Map
 
 The following stable findings from discovery 2/2 are resolved by this revision;
 they remain allowlisted for closure-only review:
@@ -651,7 +652,7 @@ they remain allowlisted for closure-only review:
 | `THR160-SEC-001` | Replace the reversible lock check with a monotonic authorization generation incremented on lock and unlock plus other authorization transitions. Capture it at provider creation and atomically compare it in one non-suspending MainActor section immediately before the crypto call; lock→unlock cannot revive an old signer. |
 | `THR160-SEC-002` | Store immutable `ThorChainQuoteBinding`, compare all review/signing fields on validation and send, and render signing-relevant review fields from the handle. |
 | `THR160-SEC-003` | Require active-account object identity to equal the current visible entry as well as ID/type/key; same-ID replacement is a fail-closed test. |
-| `THR160-VO-001` | Pin the public `ThorChainKit` product and tracked `Package.resolved` to released package head `4c2e82bb17aa48379235a9f01ccdba489bb46e69`. Document that S2-06 is consumer acceptance and does not alter the package product. |
+| `THR160-VO-001` | Pin the public `ThorChainKit` product and tracked `Package.resolved` to the required S2-06 package-state head `65c8e370db983c6bd500448266a4f8f51561ca5f`, including the S2-06 package graph/source changes. |
 | `THR160-VO-002` | Use the checked-in template-only config, detached-worktree generation, tracked package graph, and recorded Xcode/Swift toolchain. |
 | `THR160-VO-003` | Compare raw diagnostic records including location, severity, notes/fix-its, and multiplicity; replacement-diagnostic mutation must fail. |
 | `THR160-VO-005` | Add literal per-suite `-only-testing` commands and nonzero discovery checks for every converter/source/signer/quote/expiry/SlideButton/outcome suite. |
