@@ -4,15 +4,20 @@
 **Depends on:** S2-01 through S2-05
 **Produces:** runnable package-owned fixture/live send demonstration and guarded Maestro evidence
 
-## Topology correction revision 7 — explicit ownership and fail-closed LIVE gate
+## Topology correction revision 8 — explicit ownership and fail-closed LIVE gate
 
-This revision binds the slice to Xcode `26.3 (17C529)` and the iOS `26.2`
-simulator runtime on the approved iPhone 17 Pro UDID. It supersedes the
-obsolete Xcode 26.2 toolchain requirement; Xcode 26.6 remains only a later
-fallback.
+This revision binds formal acceptance to Xcode `26.6 (17F113)`, the iOS `26.5`
+simulator runtime, and iPhone 17 Pro UDID
+`5AD222A4-19E7-48A2-BA76-A4540893DB36`. It supersedes the prior Xcode 26.3 /
+iOS 26.2 environment binding. This is an environment-only correction: product
+code, provider policy, slice acceptance, and the five-flow gate are unchanged.
+The corrected documentation is applied on top of reviewed implementation head
+`e0c4ff1e5b49bf2d6c790b792d5bd74347ca8ae6`; QA must use the resulting corrected
+head for exact-head evidence.
 
-At exact PR head `ea51548e82c1f96814050e49bc34462028f35c66`, Fixture Debug does
-not link LiveSupport, but Xcode 26.3 still materializes the shared
+The prior compatibility evidence at implementation head
+`ea51548e82c1f96814050e49bc34462028f35c66` showed that Fixture Debug did not
+link LiveSupport, but Xcode 26.3 still materialized the shared
 `HsCryptoKit` → `swift-crypto` package-product closure and asks for the absent
 hashed `Crypto_17A3B1FFC41E47_PackageProduct` executable. The real arm64
 `Crypto.framework/Crypto` is present; the requested wrapper executable is not.
@@ -32,17 +37,19 @@ allowed.
 
 ### Compatibility decision
 
-No safe repository-only package-graph delta is proven by the current evidence.
-The smallest fail-closed decision is to keep the existing pins and target
-boundary unchanged, record the Xcode 26.3 incompatibility as a separate
-compatibility blocker, and prohibit S2-06 implementation/acceptance claims
-until a separately approved delta proves all of the following on the exact
-toolchain/runtime: one valid Crypto executable per package closure, no
-duplicate ThorChainKit linkage, FixtureSupport exclusion from Live artifacts,
-and successful Fixture Debug plus Live Release builds.
+No safe repository-only package-graph delta is proven by the historical
+Xcode 26.3 evidence. The smallest fail-closed decision is to keep the
+existing pins and target boundary unchanged, retain that incompatibility as
+historical evidence, and prohibit S2-06 implementation/acceptance claims
+until the separately approved delta proves all of the following on the exact
+Xcode 26.6/iOS 26.5 toolchain/runtime: one valid Crypto executable per package
+closure, no duplicate ThorChainKit linkage, FixtureSupport exclusion from Live
+artifacts, and successful Fixture Debug plus Live Release builds.
 
 Revision-6 resolves the ownership ambiguity for the eventual implementation,
-without claiming that the Xcode 26.3 wrapper failure is fixed:
+without claiming that the historical Xcode 26.3 wrapper failure is fixed by a
+product-code change. The current acceptance rerun is bound to Xcode 26.6/iOS
+26.5 above:
 
 - Each app target directly owns its `ThorChainKit` package product. No local
   support target depends on `ThorChainKit`, and no app depends on a support

@@ -1,20 +1,19 @@
 # THR-159 — S2-06 iOS Example Send Acceptance Plan
 
-Design revision 7 for `docs/specs/sprint-02-native-send/S2-06-example-acceptance.md`,
+Design revision 8 for `docs/specs/sprint-02-native-send/S2-06-example-acceptance.md`,
 based on architecture revision 10 at commit
 `518835315a65996b9321665213adb0516503df65`. The prior draft was superseded by
 the discovery-1/2 adversarial findings. Discovery is frozen at 2/2;
 implementation remains approval-gated. The Board selected a dedicated BIP39
 test wallet; revision 4 specifies fail-closed local loading and THOR derivation.
 
-Revision 7 reopens only the package-graph compatibility gate and closes the
-ownership, ingress, derivation-vector, LIVE-barrier, and terminal-retry gaps
-for Xcode 26.3
-(17C529) with the iOS 26.2 simulator runtime. The exact-head failure is in the
-shared HsCryptoKit → swift-crypto wrapper, even for Fixture without LiveSupport.
-No safe repository-only delta is currently proven. Implementation is paused at
-this gate; direct-Crypto and static-product experiments are rejected and must
-not recur.
+Revision 8 keeps the package-graph compatibility gate and all existing
+ownership, ingress, derivation-vector, LIVE-barrier, terminal-retry, and
+five-flow acceptance criteria, but binds verification to Xcode 26.6 (17F113),
+the iOS 26.5 simulator runtime, and exact iPhone 17 Pro UDID
+5AD222A4-19E7-48A2-BA76-A4540893DB36. The prior Xcode 26.3/iOS 26.2 wrapper
+failure remains historical evidence; this is an environment-only correction.
+Product code, provider policy, and the acceptance gate are unchanged.
 
 ## Goal
 
@@ -23,9 +22,10 @@ five-flow Maestro acceptance described by the authoritative spec.
 
 ## Steps
 
-- [ ] 0. Xcode 26.3 package-graph compatibility decision and ownership proof
+- [ ] 0. Xcode 26.6 package-graph compatibility decision and ownership proof
   - Owner: ThorChainCTO / separately approved compatibility slice.
-  - Acceptance: On exact Xcode `26.3 (17C529)` and iOS `26.2`, the explicit
+  - Acceptance: On exact Xcode `26.6 (17F113)`, iOS `26.5`, and simulator UDID
+    `5AD222A4-19E7-48A2-BA76-A4540893DB36`, the explicit
     graph has each app as the sole direct owner of its `ThorChainKit` product;
     Live directly owns `ThorChainKit`, `HdWalletKit`, `HsCryptoKit`, and
     `secp256k1`, while Foundation-only LiveSupport/FixtureSupport own none of
@@ -39,8 +39,9 @@ five-flow Maestro acceptance described by the authoritative spec.
     and any separately approved compatibility design only.
   - Depends on: none; blocks Steps 1–4.
   - Check: exact-head package-graph build logs plus target-graph, Archive/Profile,
-    and resolved executable audits. The current saved log fails at the hashed
-    Crypto wrapper, so no implementation or acceptance evidence is claimed.
+    and resolved executable audits. The current saved Xcode 26.3 log fails at
+    the hashed Crypto wrapper, so no implementation or acceptance evidence is
+    claimed from that historical environment.
 
 - [ ] 1. Example targets and runtime composition
   - Owner: ThorChainSwiftEngineer
@@ -121,7 +122,7 @@ five-flow Maestro acceptance described by the authoritative spec.
   - Paths: `.maestro/sprint-02`, `Scripts/run-maestro.sh`,
     `Scripts/test-run-maestro.sh`, `Tests/ThorChainKitTests/ExampleAcceptanceManifestTests.swift`.
   - Depends on: 0–3 and S2-01 through S2-05.
-  - Check: runner shim/mutant tests; `THORCHAIN_SIMULATOR_UDID=<UDID> Scripts/run-maestro.sh s2-06`; and an evidence
+  - Check: runner shim/mutant tests; `THORCHAIN_SIMULATOR_UDID=5AD222A4-19E7-48A2-BA76-A4540893DB36 Scripts/run-maestro.sh s2-06`; and an evidence
     manifest under `artifacts/s2-06/<git-head>/<udid>/` containing exact head,
     UDID, scheme/configuration, resolved executable, JUnit, logs, screenshot
     inventory/OCR results, and failure artifacts. Missing, extra, ambiguous,
