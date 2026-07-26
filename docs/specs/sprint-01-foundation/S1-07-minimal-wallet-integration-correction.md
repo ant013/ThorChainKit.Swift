@@ -1,128 +1,202 @@
 # S1-07 Minimal Unstoppable Wallet Integration Correction
 
-Status: Proposed correction; implementation is not authorized until this exact
-revision is reviewed and approved.
+Status: Proposed correction revision 2; implementation is not authorized until
+this exact revision is reviewed and approved.
 
 ## Goal
 
-Keep the proven Unstoppable Wallet v0.50 lifecycle and storage behavior intact.
-Integrate native RUNE through the same existing seams used by other kits, with
-only the smallest THOR-specific differences required for the kit to work.
+Keep Unstoppable Wallet v0.50 behavior and style intact. Add native RUNE through
+the same concrete seams used by Ethereum, Tron, and TON, changing generic
+WalletCore code only where native THORChain support requires it.
 
-This correction supersedes only the `WalletQuerying`, `UnavailableWallet`,
-unavailable-row retry/delete, and identity-keyed deletion requirements in
-`S1-07-unstoppable-rune-surface.md`. All real native-RUNE integration
-requirements remain in force.
+This revision combines the already reviewed removal of the speculative
+wallet-recovery contour with the remaining verified simplifications:
+
+- direct `(.thorChain, .native)` routing instead of a THOR-only token helper;
+- a concrete manager and kit construction path with all three endpoint
+  families;
+- a small balance/deposit adapter without a second lifecycle or numeric state
+  machine;
+- removal of the unrelated generic cache migration;
+- deferral of send address parsing to S2-07.
 
 ## Assumptions
 
-- Unstoppable Wallet v0.50 is a valid production baseline with 49 released
-  versions and is the primary lifecycle and storage authority.
-- MarketKit supplies valid token and blockchain metadata during normal app
-  operation, as it does for existing kits.
-- ThorChainKit is responsible for THORChain synchronization and adapter
-  behavior; WalletCore should compose it like sibling kits rather than invent a
-  second recovery subsystem.
-- Existing generic failure behavior remains acceptable unless a reproduced
-  product bug demonstrates otherwise.
+- `origin/version/0.50` at `8a63bfda` is the host behavior and style authority.
+- MarketKit supplies valid blockchain/token metadata during normal operation.
+- ThorChainKit owns synchronization and node failover. WalletCore composes it;
+  WalletCore does not reproduce kit policy.
+- S1-07 owns discovery, adapter lifecycle, balance, status, and receive.
+- S2-07 owns real Unstoppable `SendNew` integration and THORChain send-address
+  handling.
+- A generic host behavior is not changed without a reproduced requirement
+  specific to this integration.
 
-## Verified analog decision
+## Verified analog design
 
-At upstream v0.50, `WalletStorage` owns `MarketKit.Kit` directly,
-`wallets(account:)` reconstructs ordinary wallets, `WalletManager` uses the
-existing generic failure path, `WalletView` renders only normal wallet rows,
-and deletion operates on constructed `Wallet` values.
+### Native token routing
 
-The current local THOR checkout adds an independent `WalletQuerying` protocol,
-`UnavailableWallet` publication and UI, retry behavior, and deletion by
-`accountId + tokenQueryId`. ThorChainKit itself does not require or expose that
-recovery model. These additions are therefore rejected as unnecessary
-divergence from the proven host lifecycle.
+`AccountType.supports(token:)` expresses Ethereum, Tron, and TON support with
+direct blockchain/token-type tuples. Native RUNE uses the same form:
+`(.thorChain, .native)`. `AdapterFactory` routes that tuple directly.
+
+Delete `BlockchainType.isNativeThorChainRune`. It duplicates already trusted
+MarketKit metadata with coin UID, code, decimals, and blockchain checks and has
+no sibling-chain analog. Where Send/Swap remains intentionally hidden until
+S2-07, use the existing direct chain/type or capability checks rather than a
+new helper.
+
+### Manager and endpoints
+
+`ThorChainKitManager` follows `TronKitManager`/`TonKitManager`:
+
+- weakly retain the concrete `ThorChainKit.Kit`;
+- retain the current account needed to decide reuse;
+- construct the kit directly with `ThorChainKit.Kit.instance`;
+- start it and return it through the serial manager queue.
+
+Keep exactly the existing three mainnet endpoint families:
+
+1. Rorcual;
+2. IBS;
+3. Keplr.
+
+Store their concrete `ThorChainKit.EndpointConfiguration` as a private static
+manager value. Delete the test-only endpoint-provider, kit, factory, and
+diagnostic-logger protocols and implementations. Delete the endpoint-record
+duplication, self-derived allowlists, runtime `validate`, and compound
+endpoint/address `CacheIdentity`. `Core` constructs the manager directly.
+
+### Adapter
+
+`ThorChainAdapter` holds the concrete `ThorChainKit.Kit` and provides only the
+established WalletCore surfaces:
+
+- Combine-backed balance/status/debug publication;
+- `Token.decimalValue(value:)` balance mapping;
+- receive address;
+- direct `start`, `stop`, and `refresh` delegation.
+
+Delete both `NSRecursiveLock` instances, stopped-state gating,
+`withActiveKitCall`, `conversionFailure`, the private 38-digit roundtrip
+conversion policy, and their abstraction-only tests. The kit remains the
+authority for synchronization state and thread safety.
+
+### Host storage and UI
+
+Restore the v0.50 host lifecycle:
+
+- direct `MarketKit.Kit` ownership in `WalletStorage`;
+- ordinary `[Wallet]` publication and normal wallet rows;
+- deletion of resolved `Wallet` values;
+- existing generic failure behavior.
+
+Delete `WalletQuerying`, `WalletLoadResult`, `UnavailableWallet`, unavailable
+retry/UI/deletion, and identity-keyed deletion. Also restore
+`StorageMigrator` and `EnabledWalletCache` to v0.50: the added cache-preservation
+migration is generic, has no THORChain dependency, and belongs in a separate
+task only if independently required.
+
+### Address parsing boundary
+
+Keep `ThorChainAdapter.receiveAddress`; it needs no URI parser. Delete
+`ThorChainAddressParser`, remove its `AddressParserFactory` registration, and
+restore `AddressEventHandler` to v0.50. The current add-then-reject path is not
+useful: it registers a THOR parser and then rejects `.thorChain` in the generic
+event handler. S2-07 will add the real send parser with its SendNew behavior.
 
 ## Scope
 
-Remove the complete uncommitted hypothetical recovery contour:
+### Remove
 
-- Delete `WalletQuerying.swift` and restore direct `MarketKit.Kit` ownership in
-  `WalletStorage`.
-- Delete `UnavailableWallet.swift`, `WalletLoadResult`, and unavailable-wallet
-  propagation through `WalletManager.WalletData`, `WalletService`, and
-  `WalletListViewModel`.
-- Remove `unavailableWalletsView()` and its call from `WalletView`.
-- Remove unavailable-wallet retry and deletion actions.
-- Remove identity-keyed `delete(accountId:tokenQueryId:)` from
-  `EnabledWalletStorage`, `WalletStorage`, `WalletManager`, and
-  `WalletListViewModel`.
-- Remove tests and spies whose only purpose is the rejected hypothetical
-  metadata-error/recovery model.
-- Restore the original generic `wallets(account:)` reconstruction and normal
-  resolved-wallet deletion path.
+- `WalletQuerying.swift`, `UnavailableWallet.swift`, `WalletLoadResult`, their
+  full propagation contour, retry/UI/actions, and recovery-only tests/spies.
+- `delete(accountId:tokenQueryId:)` and its call sites.
+- `BlockchainType.isNativeThorChainRune` and all call sites/tests.
+- `ThorChainKitFactory.swift`; move only its three concrete provider families
+  into a private static configuration in `ThorChainKitManager`.
+- endpoint/factory/kit/logger protocols, runtime allowlist validation,
+  endpoint-record duplication, and compound cache identity.
+- adapter locks, stopped gate, custom numeric failure state, and tests that
+  exist only for those policies.
+- the `EnabledWalletCache` preservation migration/initializer and
+  migration-only tests introduced by this integration.
+- `ThorChainAddressParser.swift`, its factory registration, THOR-specific
+  generic `AddressEventHandler` changes, and parser-only tests.
 
-Preserve the actual native-RUNE integration:
+### Preserve
 
-- ThorChainKit dependency and its factory, manager, adapter, address parser,
-  lifecycle composition, and provider behavior.
-- MarketKit THORChain/native-RUNE metadata.
-- Exact native-RUNE identity checks only where required to avoid constructing
-  the wrong chain/token.
-- Account support, discovery/restore integration, balance/receive/status
-  surfaces, and existing Send/Swap availability rules.
-- Real migrations required by the existing schema.
-- Existing BTC, ETH, and other wallet behavior.
+- the local ThorChainKit package dependency;
+- MarketKit THORChain/native-RUNE metadata;
+- `.thorChain` description, ordering, and block-time metadata;
+- account-address derivation/provider behavior;
+- direct `(.thorChain, .native)` account and adapter routing;
+- all Rorcual, IBS, and Keplr endpoint values;
+- concrete manager/adapter composition;
+- balance, receive, status, debug, discovery, and restore surfaces;
+- temporary direct Send/Swap hiding until S2-07;
+- existing BTC, ETH, Tron, TON, and other wallet behavior.
+
+No remote Unstoppable commit, push, or PR is authorized.
 
 ## Affected areas
 
-- `packages/WalletCore/Sources/WalletCore/Core/Storage/WalletStorage.swift`
-- `packages/WalletCore/Sources/WalletCore/Core/Storage/EnabledWalletStorage.swift`
-- `packages/WalletCore/Sources/WalletCore/Core/Storage/WalletQuerying.swift`
-- `packages/WalletCore/Sources/WalletCore/Core/Managers/WalletManager.swift`
-- `packages/WalletCore/Sources/WalletCore/Models/UnavailableWallet.swift`
-- `packages/WalletCore/Sources/WalletCore/Modules/Wallet/WalletService.swift`
-- `packages/WalletCore/Sources/WalletCore/Modules/Wallet/WalletListViewModel.swift`
-- `packages/WalletCore/Sources/WalletCore/Modules/Wallet/WalletView.swift`
-- THORChain tests that exist only for the removed recovery contour
-
-No remote Unstoppable change, commit, push, or PR is authorized by this spec.
+- `packages/WalletCore/Sources/WalletCore/Core/Core.swift`
+- `packages/WalletCore/Sources/WalletCore/Core/Factories/AdapterFactory.swift`
+- `packages/WalletCore/Sources/WalletCore/Core/Factories/ThorChainKitFactory.swift`
+- `packages/WalletCore/Sources/WalletCore/Core/Managers/ThorChainKitManager.swift`
+- `packages/WalletCore/Sources/WalletCore/Core/Adapters/ThorChain/ThorChainAdapter.swift`
+- `packages/WalletCore/Sources/WalletCore/Core/Address/ThorChainAddressParser.swift`
+- `packages/WalletCore/Sources/WalletCore/Core/Factories/AddressParserFactory.swift`
+- `packages/WalletCore/Sources/WalletCore/Core/Storage/StorageMigrator.swift`
+- `packages/WalletCore/Sources/WalletCore/Extensions/BlockchainType.swift`
+- `packages/WalletCore/Sources/WalletCore/Models/AccountType.swift`
+- `packages/WalletCore/Sources/WalletCore/Models/EnabledWalletCache.swift`
+- `packages/WalletCore/Sources/WalletCore/Modules/Main/Workers/SendAppShowWorker/AddressEventHandler.swift`
+- THOR-specific Wallet/ManageWallets capability call sites
+- THOR tests that cover removed abstractions instead of retained behavior
+- the previously reviewed recovery-contour files and call sites
 
 ## Acceptance criteria
 
-1. No `WalletQuerying`, `UnavailableWallet`, `WalletLoadResult`,
-   `unavailableWalletsView`, unavailable retry, or identity-keyed delete symbol
-   remains in the local Unstoppable change.
-2. `WalletStorage` again owns `MarketKit.Kit` directly and follows the original
-   v0.50 `wallets(account:)` flow.
-3. `WalletView` renders the existing wallet list without a new technical-error
-   row, raw diagnostic strings, hard-coded fallback `RUNE`, or `n/a`.
-4. Existing resolved-wallet deletion remains unchanged.
-5. Native RUNE remains discoverable and constructible through the normal
-   MarketKit/WalletCore path and uses ThorChainKit for its adapter lifecycle.
-6. Existing BTC/ETH and other wallet paths retain their original behavior.
-7. The change contains no speculative retry, recovery, fallback, or persistence
-   abstraction without a reproduced requirement.
-8. All verification runs locally on the MacBook. GitHub Actions and
-   Unstoppable remote operations are not used.
-9. The completion handoff explains every retained MarketKit change and the
-   bundled dump delta in plain language. It must state that MarketKit 3.6.12
-   already contains the THORChain coin and blockchain records, while the local
-   branch adds exactly one native token relation:
-   `thorchain + thorchain + native + 8 decimals`. No dump-driven recovery logic
-   is introduced.
+1. No rejected recovery symbol or identity-keyed deletion remains.
+2. No `isNativeThorChainRune` symbol remains; native RUNE routing is the direct
+   `(.thorChain, .native)` tuple.
+3. The concrete manager follows the Tron/Ton ownership and construction shape
+   and retains Rorcual, IBS, and Keplr.
+4. No endpoint-provider/factory/kit/logger protocol, self-derived allowlist,
+   runtime validation, or compound cache identity remains.
+5. The adapter has no locks, stopped gate, or custom numeric failure state and
+   uses `Token.decimalValue(value:)`.
+6. Balance, status/debug, receive address, and direct lifecycle delegation
+   remain functional.
+7. `StorageMigrator` and `EnabledWalletCache` contain no integration-owned
+   generic cache-preservation change.
+8. No THOR address parser or generic `AddressEventHandler` modification remains;
+   receive remains available and send parsing is explicitly deferred to S2-07.
+9. Existing non-THOR behavior is unchanged.
+10. Focused local tests and a local WalletCore/package build pass. App build and
+    manual RUNE balance/receive smoke run locally when the operator chooses to
+    launch it. GitHub Actions is not used.
+11. The completion handoff explains the retained MarketKit dump delta: the base
+    already contains THORChain coin/blockchain rows; the local branch adds one
+    `thorchain + thorchain + native + 8 decimals` token relation.
 
 ## Verification plan
 
-- Compare the final WalletStorage, WalletManager, WalletView, and deletion
-  paths against upstream v0.50.
-- Run targeted symbol searches proving the rejected contour is absent.
-- Run focused WalletCore/App tests for normal native-RUNE discovery,
-  construction, balance/receive/status composition, and existing wallet
-  behavior.
-- Build the local Unstoppable application only after the code correction is
-  approved and implemented.
-- Perform a manual happy-path RUNE check; do not add acceptance scenarios for
-  hypothetical database or MarketKit corruption.
-- Compare MarketKit `3.6.12..feature/THR-104-thorchain-metadata` and include a
-  plain-language dump explanation in the final handoff.
+- Prove rejected symbols and generic diffs are absent with targeted `rg` and
+  `git diff`.
+- Compare manager/adapter/routing shapes with exact Tron/Ton/EVM analogs.
+- Verify all three endpoint families are present exactly once.
+- Run focused WalletCore tests for direct account/adapter routing,
+  manager reuse/account switching, balance/status/receive projection, and
+  retained wallet discovery.
+- Remove tests for deleted abstractions; do not replace them with speculative
+  corruption or concurrency scenarios.
+- Run the smallest local package/WalletCore build covering changed files.
+- Perform app/manual RUNE balance and receive smoke only locally.
+- Do not use hosted CI or modify Unstoppable remotely.
 
 ## Open questions
 
-None. The operator explicitly selected the minimal, normal-operation model.
+None. The operator selected the complete minimal-style correction.
