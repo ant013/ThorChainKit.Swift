@@ -22,6 +22,7 @@ EXPECTED = {
             ("review total", ["- assertVisible:\n    id: send.review.total"]),
             ("review height", ["- assertVisible:\n    id: send.review.height"]),
             ("absolute expiry", ["- assertVisible:\n    id: send.review.expiry"]),
+            ("confirm enabled before expiry", ["- assertVisible:\n    id: send.confirm.button\n    enabled: true"]),
             ("expiry disables confirm", ["- assertVisible:\n    id: send.confirm.button\n    enabled: false"]),
             ("zero signer calls", ["- assertVisible:\n    id: send.fixture.signer-call-count\n    text: \"0\""]),
         ],

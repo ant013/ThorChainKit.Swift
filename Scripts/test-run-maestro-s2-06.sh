@@ -30,6 +30,24 @@ if python3 "$validator" "$tmp/manifest.json" "$tmp/confirm-flows" >/dev/null 2>&
     echo "Confirm-action negative mutation unexpectedly passed" >&2
     exit 1
 fi
+cp -R "$root/.maestro/sprint-02" "$tmp/expiry-flows"
+perl -0pi -e 's/    enabled: true\n//' "$tmp/expiry-flows/send-quote-review.yaml"
+if python3 "$validator" "$tmp/manifest.json" "$tmp/expiry-flows" >/dev/null 2>&1; then
+    echo "pre-expiry enabled-removal mutation unexpectedly passed" >&2
+    exit 1
+fi
+cp -R "$root/.maestro/sprint-02" "$tmp/expiry-true-flows"
+perl -0pi -e 's/    enabled: true/    enabled: false/' "$tmp/expiry-true-flows/send-quote-review.yaml"
+if python3 "$validator" "$tmp/manifest.json" "$tmp/expiry-true-flows" >/dev/null 2>&1; then
+    echo "pre-expiry enabled-inversion mutation unexpectedly passed" >&2
+    exit 1
+fi
+cp -R "$root/.maestro/sprint-02" "$tmp/expiry-false-flows"
+perl -0pi -e 's/    enabled: false/    enabled: true/' "$tmp/expiry-false-flows/send-quote-review.yaml"
+if python3 "$validator" "$tmp/manifest.json" "$tmp/expiry-false-flows" >/dev/null 2>&1; then
+    echo "expiry disabled-state inversion mutation unexpectedly passed" >&2
+    exit 1
+fi
 cp -R "$root/.maestro/sprint-02" "$tmp/scenario-flows"
 perl -0pi -e 's/("--example-scenario":\s*")send-checktx-accepted("\s*)/$1send-unknown$2/' "$tmp/scenario-flows/send-checktx-accepted.yaml"
 if python3 "$validator" "$tmp/manifest.json" "$tmp/scenario-flows" >/dev/null 2>&1; then
