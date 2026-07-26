@@ -3,6 +3,8 @@ import Combine
 import Foundation
 import ThorChainKit
 
+extension Kit: @retroactive @unchecked Sendable {}
+
 @MainActor
 final class SendViewModel: ObservableObject {
     @Published var recipient: String

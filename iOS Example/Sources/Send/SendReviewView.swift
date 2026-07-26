@@ -1,11 +1,12 @@
 import SwiftUI
+import ThorChainKit
 
 struct SendReviewView: View {
     @ObservedObject var model: SendViewModel
     let review: SendQuote
 
     var body: some View {
-        Section("Review") {
+        Section {
             Text(review.amount.description).accessibilityIdentifier("send.review.amount")
             Text(review.recipient.raw).accessibilityIdentifier("send.review.recipient")
             Text(review.memo ?? "").accessibilityIdentifier("send.review.memo")
@@ -18,6 +19,8 @@ struct SendReviewView: View {
                 .accessibilityIdentifier("send.confirm.button")
             Button("Refresh") { model.refresh() }
                 .accessibilityIdentifier("send.refresh.button")
+        } header: {
+            Text("Review")
         }
     }
 

@@ -21,6 +21,11 @@ grep -q 'ThorChainExampleLiveSupport' "$project"
 grep -q 'EXAMPLE_FIXTURE' "$project"
 grep -q 'FixtureSupport' "$project"
 grep -q 'LiveSupport' "$project"
+grep -q 'PRODUCT_MODULE_NAME = FixtureSupport; PRODUCT_NAME = FixtureSupport;' "$project"
+test "$(rg -c 'IPHONEOS_DEPLOYMENT_TARGET = 14.0; PRODUCT_MODULE_NAME = FixtureSupport; PRODUCT_NAME = FixtureSupport;' "$project")" -eq 2
+test "$(rg -c 'PRODUCT_MODULE_NAME = LiveSupport; PRODUCT_NAME = LiveSupport;' "$project")" -eq 2
+test "$(rg -c 'IPHONEOS_DEPLOYMENT_TARGET = 14.0; PRODUCT_MODULE_NAME = LiveSupport; PRODUCT_NAME = LiveSupport;' "$project")" -eq 2
+test "$(rg -c '"EXCLUDED_ARCHS\[sdk=iphonesimulator\*\]" = x86_64;' "$project")" -eq 10
 grep -q 'name = ThorChainExampleLive; packageProductDependencies = (B90000000000000000000001, B90000000000000000000004, B90000000000000000000005, B90000000000000000000006);' "$project"
 grep -q 'name = ThorChainExampleFixture; packageProductDependencies = (B90000000000000000000001);' "$project"
 grep -q 'name = ThorChainExampleFixtureSupport;' "$project"

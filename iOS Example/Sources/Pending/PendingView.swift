@@ -1,10 +1,11 @@
 import SwiftUI
+import ThorChainKit
 
 struct PendingView: View {
     @ObservedObject var model: SendViewModel
 
     var body: some View {
-        Section("Pending") {
+        Section {
             Text(model.pendingStatus).accessibilityIdentifier("send.pending.list")
 #if EXAMPLE_FIXTURE
             if let namespace = model.runtime.fixtureNamespace {
@@ -17,9 +18,9 @@ struct PendingView: View {
                         .accessibilityIdentifier("send.pending.\(transaction.transactionId.hash).state")
                     Text(Self.state(transaction.state))
                     if case .unknown = transaction.state {
-                        Text("Previous native fee: \(model.retryPreviousFee)")
+                        Text("Previous native fee: \(model.retryPreviousFee.description)")
                             .accessibilityIdentifier("send.retry.previous-fee")
-                        Text("Current native fee: \(model.retryCurrentFee)")
+                        Text("Current native fee: \(model.retryCurrentFee.description)")
                             .accessibilityIdentifier("send.retry.current-fee")
                         Text("sdk/19")
                             .accessibilityIdentifier("send.retry.response")
@@ -34,6 +35,8 @@ struct PendingView: View {
                 .accessibilityIdentifier("send.retry.hash-unchanged")
             Text(String(model.retrySignerCountUnchanged))
                 .accessibilityIdentifier("send.retry.signer-count-unchanged")
+        } header: {
+            Text("Pending")
         }
     }
 

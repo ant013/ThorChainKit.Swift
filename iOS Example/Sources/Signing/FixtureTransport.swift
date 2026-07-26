@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import ThorChainKit
+import FixtureSupport
 @_spi(Testing) import ThorChainKit
 
 public struct FixtureRequest: Equatable, Sendable {
@@ -57,7 +58,7 @@ private extension FixtureRequestPattern {
     }
 }
 
-public actor FixtureTransport: TestingHTTPTransport {
+actor FixtureTransport: TestingHTTPTransport {
     public private(set) var requestCount = 0
     private let scenario: FixtureScenario
     private let transcript: FixtureTranscript

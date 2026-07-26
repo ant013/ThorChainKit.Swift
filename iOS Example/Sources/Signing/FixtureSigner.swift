@@ -23,14 +23,11 @@ public final class FixtureSigner: Signer, @unchecked Sendable {
     }
 
     public var callCount: Int {
-        lock.lock(); defer { lock.unlock() }
-        return calls
+        lock.withLock { calls }
     }
 
     public func sign(_ request: SigningRequest) async throws -> Data {
-        lock.lock()
-        calls += 1
-        lock.unlock()
+        lock.withLock { calls += 1 }
         guard request.digest == expectedDigest else { throw SendError.signerFailed }
         return signature
     }

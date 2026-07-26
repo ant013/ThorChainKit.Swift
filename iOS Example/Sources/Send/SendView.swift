@@ -9,7 +9,7 @@ struct SendView: View {
                 .accessibilityIdentifier("send.mode-badge")
                 .accessibilityValue(model.runtime.mode.accessibilityValue)
             TextField("Recipient", text: $model.recipient)
-                .textInputAutocapitalization(.never)
+                .autocapitalization(.none)
                 .accessibilityIdentifier("send.recipient.input")
             TextField("RUNE amount", text: $model.amount)
                 .keyboardType(.decimalPad)
