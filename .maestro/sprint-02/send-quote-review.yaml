@@ -29,14 +29,16 @@ name: send-quote-review
     id: send.review.height
 - assertVisible:
     id: send.review.expiry
-- assertEnabled:
+- assertVisible:
     id: send.confirm.button
+    enabled: true
 - tapOn:
     id: send.fixture.advance-to-expiry
 - assertVisible:
     text: "Quote expired — refresh required"
-- assertNotEnabled:
+- assertVisible:
     id: send.confirm.button
+    enabled: false
 - assertVisible:
     id: send.refresh.button
 - assertVisible:
