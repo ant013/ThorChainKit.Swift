@@ -7,8 +7,8 @@ enum Configuration {
     static let fixtureOfflineKey = "thorchainkit.example.fixture-offline"
     static let fixturePendingKey = "thorchainkit.example.fixture-pending"
     static let fixtureRequestCountKey = "thorchainkit.example.fixture-request-count"
-    static let cosmosRestURL = URL(string: "https://rest.invalid")!
-    static let cometBftURL = URL(string: "https://rpc.invalid")!
+    static let cosmosRestURL = URL(string: "https://api-thorchain.rorcual.xyz/")!
+    static let cometBftURL = URL(string: "https://rpc-thorchain.rorcual.xyz/")!
     static let liveCosmosRestURL = URL(string: "https://thornode.ninerealms.com")!
     static let liveCometBftURL = URL(string: "https://thornode.ninerealms.com")!
     static let liveSecretURL = URL(fileURLWithPath: ".env", relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))

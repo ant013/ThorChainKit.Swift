@@ -41,6 +41,12 @@ struct DiagnosticsView: View {
         .navigationTitle("THORChainKit")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
+                NavigationLink(destination: LifecycleView(model: lifecycle)) {
+                    Text("Lifecycle")
+                }
+                .accessibilityIdentifier("lifecycle-open")
+            }
+            ToolbarItem(placement: .primaryAction) {
                 NavigationLink(destination: SendView(model: send)) {
                     Text("Send")
                 }
@@ -59,10 +65,6 @@ struct DiagnosticsView: View {
                     NavigationLink(destination: AccountReadView(model: accountRead)) {
                         Text("Account Read")
                             .accessibilityIdentifier("account-read-open")
-                    }
-                    NavigationLink(destination: LifecycleView(model: lifecycle)) {
-                        Text("Lifecycle")
-                            .accessibilityIdentifier("lifecycle-open")
                     }
                 }
             }

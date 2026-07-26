@@ -6,12 +6,25 @@ name: send-checktx-accepted
     arguments:
       "--example-scenario": "send-checktx-accepted"
 - tapOn:
+    id: lifecycle-open
+- tapOn:
+    id: lifecycle-start
+- extendedWaitUntil:
+    visible: "synced"
+    timeout: 10000
+- tapOn:
+    id: BackButton
+- tapOn:
     id: send-open
 - tapOn:
     id: send.amount.input
 - inputText: "1"
 - tapOn:
     id: send.quote.button
+- scrollUntilVisible:
+    element:
+      id: send.confirm.button
+    direction: DOWN
 - tapOn:
     id: send.confirm.button
 - assertVisible:

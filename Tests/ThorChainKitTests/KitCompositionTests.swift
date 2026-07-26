@@ -1,4 +1,6 @@
+import CryptoKit
 import Foundation
+import secp256k1
 import XCTest
 @_spi(Testing) @testable import ThorChainKit
 
@@ -190,6 +192,91 @@ final class KitCompositionTests: XCTestCase {
         if case .ready = fixture.pendingTransactionsStatus {} else { XCTFail("fixture pending status must be ready after journal recovery") }
     }
 
+    func testFixtureFactoryUsesRegisteredFamilyAndInjectedTransportAfterStart() async throws {
+        let address = try sendTestAddress()
+        let family = try XCTUnwrap(NativeRuneEndpointRegistry.families().first { $0.id == "rorcual-mainnet" })
+        let endpoints = try EndpointConfiguration(families: [family])
+        let transport = CompositionTransport()
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("thorchain-s2-06-(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+
+        let fixture = try Kit.fixture(
+            address: address,
+            walletId: "composition-s2-06",
+            endpoints: endpoints,
+            transport: transport,
+            databasePath: databaseURL.path,
+            observedAt: Date(timeIntervalSince1970: 1)
+        )
+        fixture.start()
+
+        let isActive = await fixture.dependencies.sendRuntime.isAdmissionActive()
+        XCTAssertTrue(isActive)
+        let urls = await transport.requestURLs()
+        XCTAssertFalse(urls.isEmpty)
+        XCTAssertTrue(urls.allSatisfy { $0.host == family.cosmosRestURL.host || $0.host == family.cometBftURL.host })
+    }
+
+    func testFixtureSendReachesInjectedTransportOnceAndAcceptsCheckTx() async throws {
+        let signer = try FixtureBroadcastSigner()
+        let address = try AccountAddressFactory.address(
+            compressedPublicKey: signer.compressedPublicKey,
+            network: .mainnet
+        )
+        let family = try XCTUnwrap(NativeRuneEndpointRegistry.families().first { $0.id == "rorcual-mainnet" })
+        let endpoints = try EndpointConfiguration(families: [family])
+        let transport = FixtureBroadcastTransport()
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("thorchain-s2-06-broadcast-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+
+        let fixture = try Kit.fixture(
+            address: address,
+            walletId: "composition-s2-06-broadcast",
+            endpoints: endpoints,
+            transport: transport,
+            databasePath: databaseURL.path,
+            observedAt: Date(timeIntervalSince1970: 1)
+        )
+        let runtime = fixture.dependencies.sendRuntime
+        await runtime.activate(generation: 1)
+        let snapshot = try SendSnapshot(
+            familyID: family.id,
+            chainID: "thorchain-1",
+            height: 12,
+            sender: address.raw,
+            recipient: try sendOtherAddress().raw,
+            accountNumber: 1,
+            sequence: 2,
+            amount: 100,
+            nativeFee: 2,
+            spendableRune: 102,
+            mimir: MimirSnapshot(haltChainGlobal: -1, nodePauseChainGlobal: -1, haltTHORChain: -1, solvencyHaltTHORChain: -1),
+            memoMaximumBytes: 256,
+            nodeVersion: "3.19.3",
+            querierVersion: "3.19.0",
+            accountPublicKey: "/cosmos.crypto.secp256k1.PubKey",
+            accountPublicKeyData: signer.compressedPublicKey
+        )
+        let quote = try await runtime.issuePreflightQuote(
+            request: SendQuoteRequest(
+                sender: address,
+                recipient: try sendOtherAddress(),
+                amount: .exact(snapshot.amount)
+            ),
+            snapshot: snapshot
+        )
+
+        let submission = try await fixture.send(quote: quote, signer: signer)
+
+        let postCount = await transport.postCount()
+        let requestPath = await transport.requestPath()
+        XCTAssertEqual(submission.state, .checkTxAccepted)
+        XCTAssertEqual(postCount, 1)
+        XCTAssertEqual(requestPath, "/cosmos/tx/v1beta1/txs")
+    }
+
 }
 
 private final class InitializationProbe: @unchecked Sendable {
@@ -233,7 +320,54 @@ private final class InitializationProbe: @unchecked Sendable {
 }
 
 private actor CompositionTransport: TestingHTTPTransport {
+    private var requests = [URLRequest]()
+
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        (Data(), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        requests.append(request)
+        return (Data(), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+    }
+
+    func requestURLs() -> [URL] { requests.compactMap(\.url) }
+}
+
+private actor FixtureBroadcastTransport: TestingHTTPTransport {
+    private var posts = 0
+    private var path: String?
+
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        guard request.httpMethod == "POST", let url = request.url, let body = request.httpBody,
+              let object = try? JSONSerialization.jsonObject(with: body) as? [String: String],
+              let txBytes = object["tx_bytes"], object["mode"] == "BROADCAST_MODE_SYNC",
+              let raw = Data(base64Encoded: txBytes) else {
+            throw BroadcastTransportError.invalidResponse
+        }
+        posts += 1
+        path = url.path
+        let hash = SHA256.hash(data: raw).map { String(format: "%02X", $0) }.joined()
+        let response = Data("{\"tx_response\":{\"txhash\":\"\(hash)\",\"code\":0}}".utf8)
+        return (response, HTTPURLResponse(
+            url: url,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )!)
+    }
+
+    func postCount() -> Int { posts }
+    func requestPath() -> String? { path }
+}
+
+private final class FixtureBroadcastSigner: Signer, @unchecked Sendable {
+    private let key: secp256k1.Signing.PrivateKey
+    let compressedPublicKey: Data
+
+    init() throws {
+        let key = try secp256k1.Signing.PrivateKey()
+        self.key = key
+        compressedPublicKey = key.publicKey.rawRepresentation
+    }
+
+    func sign(_ request: SigningRequest) async throws -> Data {
+        try key.ecdsa.signature(for: SHA256.hash(data: request.serializedSignDoc)).compactRepresentation
     }
 }

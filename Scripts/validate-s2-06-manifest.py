@@ -5,10 +5,18 @@ import pathlib
 import re
 import sys
 
+LIFECYCLE = [
+    ("open lifecycle", ["- tapOn:\n    id: lifecycle-open"]),
+    ("start lifecycle", ["- tapOn:\n    id: lifecycle-start"]),
+    ("wait for lifecycle", ["- extendedWaitUntil:\n    visible: \"synced\"\n    timeout: 10000"]),
+    ("return from lifecycle", ["- tapOn:\n    id: BackButton"]),
+]
+
 EXPECTED = {
     "send-quote-review": {
         "actions": [
             ("launch send-quote-review", ["launchApp:", '"--example-scenario": "send-quote-review"']),
+            *LIFECYCLE,
             ("enter amount", ["- tapOn:\n    id: send.amount.input", 'inputText: "1.25"']),
             ("enter memo", ["- tapOn:\n    id: send.memo.input", 'inputText: "fixture memo"']),
             ("quote", ["- tapOn:\n    id: send.quote.button"]),
@@ -30,6 +38,7 @@ EXPECTED = {
     "send-checktx-accepted": {
         "actions": [
             ("launch send-checktx-accepted", ["launchApp:", '"--example-scenario": "send-checktx-accepted"']),
+            *LIFECYCLE,
             ("quote", ["- tapOn:\n    id: send.quote.button"]),
             ("confirm", ["- tapOn:\n    id: send.confirm.button"]),
         ],
@@ -41,6 +50,7 @@ EXPECTED = {
     "send-unknown": {
         "actions": [
             ("launch send-unknown", ["launchApp:", '"--example-scenario": "send-unknown"']),
+            *LIFECYCLE,
             ("quote", ["- tapOn:\n    id: send.quote.button"]),
             ("confirm", ["- tapOn:\n    id: send.confirm.button"]),
         ],
@@ -53,6 +63,7 @@ EXPECTED = {
     "send-retry": {
         "actions": [
             ("launch send-retry", ["launchApp:", '"--example-scenario": "send-retry"']),
+            *LIFECYCLE,
             ("restore unknown pending", ["- tapOn:\n    id: send.confirm.button"]),
             ("acknowledge current fee", ["- tapOn:\n    id: send.retry.button"]),
             ("retry", ["- tapOn:\n    id: send.retry.button"]),
@@ -70,6 +81,7 @@ EXPECTED = {
     "send-restart-pending": {
         "actions": [
             ("launch send-restart-pending", ["launchApp:", '"--example-scenario": "send-restart-pending"']),
+            *LIFECYCLE,
             ("create pending", ["- tapOn:\n    id: send.confirm.button"]),
             ("relaunch same namespace", ["- launchApp\n- assertVisible:"]),
         ],

@@ -69,7 +69,7 @@ struct ExampleRuntime {
         let comet = Configuration.liveCometBftURL
 #endif
         endpointConfiguration = try EndpointConfiguration(families: [try EndpointFamilyDescriptor(
-                id: "example-mainnet",
+                id: "rorcual-mainnet",
                 cosmosRestURL: cosmos,
                 cometBftURL: comet
             )])

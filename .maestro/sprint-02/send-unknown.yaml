@@ -6,6 +6,15 @@ name: send-unknown
     arguments:
       "--example-scenario": "send-unknown"
 - tapOn:
+    id: lifecycle-open
+- tapOn:
+    id: lifecycle-start
+- extendedWaitUntil:
+    visible: "synced"
+    timeout: 10000
+- tapOn:
+    id: BackButton
+- tapOn:
     id: send-open
 - tapOn:
     id: send.amount.input

@@ -48,13 +48,17 @@ public struct FixtureScenario: Sendable {
     }
 
     private static func expectedRequests(for id: FixtureScenarioID, transactionHash: String) -> [FixtureRequestPattern] {
-        let rest = "https://rest.invalid"
-        let rpc = "https://rpc.invalid"
+        let rest = "https://api-thorchain.rorcual.xyz"
+        let rpc = "https://rpc-thorchain.rorcual.xyz"
         let sender = "thor1w508d6qejxtdg4y5r3zarvary0c5xw7ku6wp68"
         let probes = [
             FixtureRequestPattern(method: "GET", origin: rest, path: "/cosmos/base/tendermint/v1beta1/node_info"),
             FixtureRequestPattern(method: "GET", origin: rest, path: "/cosmos/base/tendermint/v1beta1/blocks/latest"),
             FixtureRequestPattern(method: "GET", origin: rpc, path: "/status")
+        ]
+        let lifecycle = [
+            FixtureRequestPattern(method: "GET", origin: rest, path: "/cosmos/auth/v1beta1/accounts/\(sender)"),
+            FixtureRequestPattern(method: "GET", origin: rest, path: "/cosmos/bank/v1beta1/balances/\(sender)", query: "pagination.limit=100")
         ]
         let quote = [
             FixtureRequestPattern(method: "GET", origin: rpc, path: "/abci_query"),
@@ -68,9 +72,8 @@ public struct FixtureScenario: Sendable {
             FixtureRequestPattern(method: "GET", origin: rest, path: "/thorchain/version", query: "height=12345678"),
             FixtureRequestPattern(method: "GET", origin: rpc, path: "/abci_query")
         ]
-        var requests = probes + quote
+        var requests = probes + lifecycle + quote
         if id != .quoteReview {
-            requests += quote + quote
             requests.append(FixtureRequestPattern(method: "POST", origin: rest, path: "/cosmos/tx/v1beta1/txs", bodyRequired: true))
         }
         if id == .retry {

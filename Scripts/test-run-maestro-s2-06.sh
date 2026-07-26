@@ -14,9 +14,15 @@ if python3 "$validator" "$tmp/mutated.json" "$tmp/flows" >/dev/null 2>&1; then
     echo "manifest negative mutation unexpectedly passed" >&2
     exit 1
 fi
-jq '.flows[1].actions[2] = "skip confirmation"' "$tmp/manifest.json" > "$tmp/mutated-actions.json"
+jq '.flows[1].actions[5] = "skip confirmation"' "$tmp/manifest.json" > "$tmp/mutated-actions.json"
 if python3 "$validator" "$tmp/mutated-actions.json" "$tmp/flows" >/dev/null 2>&1; then
     echo "manifest action mutation unexpectedly passed" >&2
+    exit 1
+fi
+cp -R "$root/.maestro/sprint-02" "$tmp/lifecycle-flows"
+perl -0pi -e 's/- tapOn:\n    id: lifecycle-start\n//' "$tmp/lifecycle-flows/send-checktx-accepted.yaml"
+if python3 "$validator" "$tmp/manifest.json" "$tmp/lifecycle-flows" >/dev/null 2>&1; then
+    echo "lifecycle-start removal mutation unexpectedly passed" >&2
     exit 1
 fi
 perl -0pi -e 's/^.*send\.result\.local-hash.*\n//mg' "$tmp/flows/send-checktx-accepted.yaml"
@@ -25,7 +31,7 @@ if python3 "$validator" "$tmp/manifest.json" "$tmp/flows" >/dev/null 2>&1; then
     exit 1
 fi
 cp -R "$root/.maestro/sprint-02" "$tmp/confirm-flows"
-perl -0pi -e 's/id: send\.confirm\.button/id: send.confirm.missing/' "$tmp/confirm-flows/send-checktx-accepted.yaml"
+perl -0pi -e 's/(- tapOn:\n    id:) send\.confirm\.button/$1 send.confirm.missing/' "$tmp/confirm-flows/send-checktx-accepted.yaml"
 if python3 "$validator" "$tmp/manifest.json" "$tmp/confirm-flows" >/dev/null 2>&1; then
     echo "Confirm-action negative mutation unexpectedly passed" >&2
     exit 1
@@ -80,6 +86,57 @@ except AssertionError:
     print("signed-byte negative mutation rejected")
 else:
     raise SystemExit("signed-byte negative mutation unexpectedly passed")
+PY
+python3 - "$root/iOS Example/Sources/Signing/FixtureTransport.swift" <<'PY'
+import base64
+import json
+import re
+import sys
+from pathlib import Path
+
+source = Path(sys.argv[1]).read_text()
+values = dict(re.findall(
+    r'private static let (\w+Response) = Data\(base64Encoded: "([^"]+)"\)!',
+    source,
+))
+expected_names = {"senderAccountResponse", "recipientAccountResponse", "networkResponse"}
+if set(values) != expected_names:
+    raise SystemExit("fixture response matrix is incomplete")
+
+def validate(value: str) -> None:
+    if "guard query.count == 3" not in value:
+        raise AssertionError("ABCI query cardinality guard is missing")
+    if "private func cometEnvelope(_ value: Data) -> Data" not in value:
+        raise AssertionError("Comet envelope helper is missing")
+    match = re.search(r'return Data\(#"(?P<wire>.*?)"#\.utf8\)', value)
+    if match is None:
+        raise AssertionError("Comet envelope wire template is missing")
+    template = match.group("wire")
+    for name, encoded in values.items():
+        if f"cometEnvelope(Self.{name})" not in value:
+            raise AssertionError(f"{name} is not enveloped")
+        envelope = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {"response": {"code": 0, "height": "12345678", "value": encoded}},
+        }
+        wire = template.replace(r'\#(encoded)', encoded)
+        if json.loads(wire) != envelope:
+            raise AssertionError("invalid Comet envelope contract")
+        base64.b64decode(encoded, validate=True)
+
+validate(source)
+mutant = source.replace(
+    'cometEnvelope(Self.networkResponse)',
+    'Self.networkResponse',
+    1,
+)
+try:
+    validate(mutant)
+except AssertionError:
+    print("fixture behavioral envelope negative mutation rejected")
+else:
+    raise SystemExit("fixture raw-envelope mutation unexpectedly passed")
 PY
 rg -q 'isQuoteExpired' "$root/iOS Example/Sources/Send/SendViewModel.swift"
 rg -q 'value: model\.dataSource' "$root/iOS Example/Sources/Views/DiagnosticsView.swift"
