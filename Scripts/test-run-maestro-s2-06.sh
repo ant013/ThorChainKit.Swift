@@ -14,9 +14,20 @@ if python3 "$validator" "$tmp/mutated.json" "$tmp/flows" >/dev/null 2>&1; then
     echo "manifest negative mutation unexpectedly passed" >&2
     exit 1
 fi
+jq '.flows[1].actions[2] = "skip confirmation"' "$tmp/manifest.json" > "$tmp/mutated-actions.json"
+if python3 "$validator" "$tmp/mutated-actions.json" "$tmp/flows" >/dev/null 2>&1; then
+    echo "manifest action mutation unexpectedly passed" >&2
+    exit 1
+fi
 perl -0pi -e 's/^.*send\.result\.local-hash.*\n//mg' "$tmp/flows/send-checktx-accepted.yaml"
 if python3 "$validator" "$tmp/manifest.json" "$tmp/flows" >/dev/null 2>&1; then
     echo "YAML negative mutation unexpectedly passed" >&2
+    exit 1
+fi
+cp -R "$root/.maestro/sprint-02" "$tmp/confirm-flows"
+perl -0pi -e 's/id: send\.confirm\.button/id: send.confirm.missing/' "$tmp/confirm-flows/send-checktx-accepted.yaml"
+if python3 "$validator" "$tmp/manifest.json" "$tmp/confirm-flows" >/dev/null 2>&1; then
+    echo "Confirm-action negative mutation unexpectedly passed" >&2
     exit 1
 fi
 cp -R "$root/.maestro/sprint-02" "$tmp/scenario-flows"

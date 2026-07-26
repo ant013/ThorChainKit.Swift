@@ -11,8 +11,9 @@ head=$(git rev-parse HEAD)
 out="$root/artifacts/s2-06/$head/$udid"
 derived="$root/.build/s2-06"
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$out"
+tracked_list="$out/tracked-list"
+trap 'rm -rf "$tmp"; rm -f "$tracked_list"' EXIT
 xcodebuild -workspace "$root/iOS Example/iOS Example.xcworkspace" -scheme ThorChainExampleFixture -configuration Debug -destination "$destination" -derivedDataPath "$derived" build
 xcrun simctl boot "$udid" >/dev/null 2>&1 || true
 app="$derived/Build/Products/Debug-iphonesimulator/ThorChainExampleFixture.app"
@@ -52,8 +53,9 @@ swift_flags=(
     -Xcc -iframework -Xcc "$sdk/System/Library/Frameworks"
 )
 xcrun swift "${swift_flags[@]}" "$root/Scripts/scan-s2-06-ocr.swift" "$out/screenshots" "$out/screenshots/ocr-self-test.json"
-git -C "$root" ls-files -- iOS\ Example .maestro Scripts | grep -vE '\.(sqlite|env)$' > "$tmp/tracked-list"
-xcrun swift "${swift_flags[@]}" "$root/Scripts/scan-s1-01-artifacts.swift" "$root" "$out" "$tmp/tracked-list"
+git -C "$root" ls-files -- iOS\ Example .maestro Scripts | grep -vE '\.(sqlite|env)$' > "$tracked_list"
+xcrun swift "${swift_flags[@]}" "$root/Scripts/scan-s1-01-artifacts.swift" "$root" "$out" "$tracked_list"
+rm -f "$tracked_list"
 python3 - "$out/junit.xml" <<'PY'
 import sys
 import xml.etree.ElementTree as ET

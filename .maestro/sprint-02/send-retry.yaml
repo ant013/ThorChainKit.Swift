@@ -20,6 +20,7 @@ name: send-retry
     id: send.retry.current-fee
 - assertVisible:
     id: send.retry.response
+    text: "sdk/19"
 - assertVisible:
     id: send.fixture.signer-call-count
     text: "1"
