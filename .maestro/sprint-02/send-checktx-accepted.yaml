@@ -11,7 +11,7 @@ name: send-checktx-accepted
     visible: "synced"
     timeout: 10000
 - tapOn:
-    id: BackButton
+    text: THORChainKit
 - tapOn:
     id: send-open
 - tapOn:
