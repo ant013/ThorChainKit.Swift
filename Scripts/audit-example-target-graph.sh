@@ -32,10 +32,13 @@ test "$(rg -c 'LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks"; PRODUCT_
 grep -q 'B60000000000000000000006 = {isa = PBXCopyFilesBuildPhase;.*dstSubfolderSpec = 10; files = (B20000000000000000000025); name = Frameworks;' "$project"
 grep -q 'B20000000000000000000025 .*CodeSignOnCopy.*RemoveHeadersOnCopy' "$project"
 grep -q 'B10000000000000000000002 = .*B60000000000000000000006.*name = ThorChainExampleFixture;' "$project"
-if rg -n 'name = ThorChainExampleLive;.*B60000000000000000000006|name = ThorChainExampleLiveSupport;.*B60000000000000000000006|name = LiveSupport;.*B60000000000000000000006' "$project"; then
-  echo "FixtureSupport embedding must remain absent from Live targets" >&2
-  exit 1
-fi
+for target in B10000000000000000000001 B10000000000000000000003; do
+  target_line=$(rg "^[[:space:]]*$target = " "$project")
+  if [[ "$target_line" == *B60000000000000000000006* ]]; then
+    echo "FixtureSupport embedding must remain absent from Live targets" >&2
+    exit 1
+  fi
+done
 grep -q 'name = ThorChainExampleLive; packageProductDependencies = (B90000000000000000000001, B90000000000000000000004, B90000000000000000000005, B90000000000000000000006);' "$project"
 grep -q 'name = ThorChainExampleFixture; packageProductDependencies = (B90000000000000000000001);' "$project"
 grep -q 'name = ThorChainExampleFixtureSupport;' "$project"
