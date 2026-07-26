@@ -1,10 +1,10 @@
 # THR-160 — S2-07 Unstoppable Native RUNE Send Integration Plan
 
-Design revision 4 for
+Design revision 5 for
 `docs/specs/sprint-02-native-send/S2-07-unstoppable-integration.md`, based on
 architecture revision 10 at commit
 `518835315a65996b9321665213adb0516503df65`. Discovery is bounded at 2/2;
-closure is 1/5; revisions 1–3 were returned `REVISE` and implementation
+closure is 2/5; revisions 1–4 were returned `REVISE` and implementation
 remains approval-gated.
 
 ## Goal
@@ -60,14 +60,18 @@ with the local transaction hash.
 
 - [ ] 3. SendNew quote, expiry, and outcome UX
   - Owner: ThorChainSwiftEngineer
-  - Acceptance: pre-send conversion is exact and fail-closed; the separate
-    MainActor `SendViewModel.sendOutcome() async` entry reads/captures
-    non-Sendable `ISendData` only on MainActor and never passes it across an
-    actor; review renders
+  - Acceptance: pre-send conversion is exact and fail-closed; the one
+    unconditional MainActor `SendViewModel.sendOutcome() async` entry branches
+    before reading `ISendData`: outcome-aware handlers read/capture it only on
+    MainActor and never pass it across an actor, while legacy handlers call the
+    existing no-argument `send()` route, which alone invokes the nonisolated
+    `ISendHandler.send(data:)` boundary; a successful legacy dispatch records
+    `.sent`; review renders
     the stored handle quote, fee, total, memo, and height; immutable complete
     quote binding rejects same-client swaps; absolute expiry blocks
     send; accepted/unknown outcomes retain the full local hash and bypass the
-    generic sent banner; legacy handlers still produce `.sent`; no quote is
+    generic sent banner; legacy-only and THOR fake handlers prove `.sent`,
+    accepted, and unknown through focused tests; no quote is
     recreated during send and no automatic retry is added.
   - Paths: new `ThorChainPreSendHandler.swift`, `ThorChainSendHandler.swift`,
     `ThorChainSendHelper.swift`, `ThorChainSubmissionView.swift`,

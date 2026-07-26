@@ -4,11 +4,11 @@ Date: 2026-07-27
 
 Gimle trust: RED.
 
-This report covers formalization revision 4 after discovery 2/2 and closure
-1/5 `REVISE`. The current-tree fallback remains the authority for the revised
-design; no host implementation was performed. Revision 4 resolves the
-package-state blocker without changing the selected analog family; the prior
-allowlisted findings remain unchanged.
+This report covers formalization revision 5 after discovery 2/2 and closure
+2/5 `REVISE`. The current-tree fallback remains the authority for the revised
+design; no host implementation was performed. Revision 5 resolves the
+legacy/outcome dispatch blocker without changing the selected analog family;
+the prior allowlisted findings remain unchanged.
 
 The prerequisite gate was rechecked after S2-06 merged: `origin/main` is
 `65c8e370db983c6bd500448266a4f8f51561ca5f`, and its canonical roadmap row is
@@ -51,6 +51,34 @@ No implementation, host checkout, build, AppTests, simulator, or mainnet
 acceptance was run. Gimle trust remains RED because the previously recorded
 runtime/project mapping and Serena availability remain unresolved; this
 revision relies on the independently verified Git fallback above.
+
+## Revision 5 legacy/outcome dispatch correction evidence
+
+The current Unstoppable analog keeps `SendViewModel.send()` as the existing
+transport entry that reads `ISendData` and calls `ISendHandler.send(data:)` from
+the legacy nonisolated path
+(`packages/WalletCore/Sources/WalletCore/Modules/SendNew/SendViewModel.swift:204-229`).
+`RegularSendView` owns the MainActor UI action seam
+(`packages/WalletCore/Sources/WalletCore/Modules/SendNew/RegularSendView.swift:23-41`).
+Revision 5 preserves that boundary and defines one unconditional MainActor
+`sendOutcome()` entry with an early type branch: outcome-aware handlers
+read/capture `ISendData` and invoke their MainActor action there; legacy
+handlers pass no `ISendData` through MainActor, call the existing no-argument
+`send()` route, and map a successful return to `.sent`.
+
+The required implementation probe must contain one legacy-only fake and one
+outcome-aware fake. It must verify exactly one legacy `send(data:)` call and a
+stored `.sent` result, plus THOR `.checkTxAccepted` and `.unknown` results with
+generic completion denied. It must compile with Swift 5 complete concurrency,
+including `sync()`'s MainActor task, without `@preconcurrency`, `@unchecked
+Sendable`, or warning suppression. The probe must fail if any MainActor branch,
+closure, or task accepts the legacy `ISendData`, or if legacy dispatch is
+implemented as an outcome-protocol cast that throws `noHandler`.
+
+No host implementation, build, AppTests, simulator, or controlled mainnet
+acceptance was run for this revision. Gimle trust remains RED for the same
+runtime/project mapping and Serena limitations; the current-tree analog facts
+and dispatch correction are based on the independent Git/rg evidence above.
 
 ## Accepted current-tree evidence
 

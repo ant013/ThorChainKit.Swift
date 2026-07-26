@@ -1,7 +1,7 @@
 # S2-07 — Unstoppable Native RUNE Send Integration
 
-**Formalization revision:** 4 — discovery 2/2; closure 1/5; supersedes
-revision 3 after closure `REVISE`.
+**Formalization revision:** 5 — discovery 2/2; closure 2/5; supersedes
+revision 4 after closure `REVISE`.
 
 This document is the implementation contract for THR-160. The design is
 approval-gated: no Unstoppable source, test, project, script, or acceptance
@@ -330,8 +330,9 @@ protocol IOutcomeSendHandler: AnyObject {
 }
 ```
 
-`SendViewModel.send()` remains nonisolated and is unchanged for legacy handlers;
-it never branches into the outcome protocol. The new entry is exactly:
+`SendViewModel.send()` remains the nonisolated legacy transport boundary and is
+unchanged for legacy handlers; it never receives an outcome handler or passes
+`ISendData` to the MainActor outcome path. The new entry is exactly:
 
 ```swift
 @MainActor
@@ -339,30 +340,40 @@ func sendOutcome() async throws -> SendOutcome {
     guard let handler else {
         throw SendError.noHandler
     }
-    guard let data = sendData else { throw SendError.noSendData }
-    guard let outcomeHandler = handler as? any IOutcomeSendHandler else {
-        throw SendError.noHandler
+    if let outcomeHandler = handler as? any IOutcomeSendHandler {
+        guard let data = sendData else { throw SendError.noSendData }
+        let action = outcomeHandler.outcomeAction(for: data)
+        let outcome = try await action()
+        record(outcome: outcome)
+        return outcome
     }
-    let action = outcomeHandler.outcomeAction(for: data)
-    let outcome = try await action()
+
+    // This branch never reads or passes ISendData on MainActor. `send()` keeps
+    // the existing nonisolated handler.send(data:) call boundary.
+    try await send()
+    let outcome = SendOutcome.sent
     record(outcome: outcome)
     return outcome
 }
 ```
 
-`RegularSendView` calls `try await viewModel.sendOutcome()` from its existing
-MainActor action closure. `sendData`, `handler`, the
-non-Sendable `ISendData`, and the returned outcome closure are accessed and
-invoked only within this MainActor declaration; no `Task` created by a
-non-MainActor caller captures them. `consumeGenericCompletionPermission()` is
-also MainActor-isolated. Legacy handlers keep the unchanged
-`ISendHandler.send(data:)` path and record `.sent`. The Swift 5
-complete-concurrency probe must compile this exact declaration and call
-sequence with no suppression, including the `Task` created by `sync()`. The
-ViewModel stores the result and saves the recent address for every submitted
-outcome, and resets any prior result before a new attempt. Background/lock
-cancellation invalidates the submission task and prevents a resumed task from
-reaching signer creation.
+`RegularSendView` calls `try await viewModel.sendOutcome()` unconditionally from
+its existing MainActor action closure. In the outcome-aware branch,
+`sendData`, `handler`, the non-Sendable `ISendData`, and the returned outcome
+closure are accessed and invoked only within this MainActor declaration; no
+`Task` created by a non-MainActor caller captures them. In the legacy branch,
+the MainActor method passes no `ISendData` and calls the existing no-argument
+`send()` route; that route alone reads the stored data and invokes the
+nonisolated `ISendHandler.send(data:)` boundary. A successful legacy return is
+then recorded as `.sent`; a thrown legacy error records no outcome and follows
+the existing error path. `consumeGenericCompletionPermission()` is also
+MainActor-isolated. The Swift 5 complete-concurrency probe must compile this
+exact two-branch declaration and call sequence with no suppression, including
+the `Task` created by `sync()`, and must include one legacy-only handler and one
+outcome-aware handler. The ViewModel stores the result and saves the recent
+address for every submitted outcome, and resets any prior result before a new
+attempt. Background/lock cancellation invalidates the submission task and
+prevents a resumed task from reaching signer creation.
 
 The `Task` created by `SendViewModel.sync()` is written as `Task { @MainActor ... }`; it awaits existing async services but assigns `ISendData`, state, rates, and outcome only on MainActor and removes the current `MainActor.run` transfer. `SendHandlerFactory` retains its existing synchronous surface so `OpenCryptoPayManager` and `OpenCryptoPaySendHandlerFactory` are not pulled into an unrelated global-actor migration. The strict baseline-delta build-for-testing must prove this smaller change introduces no new actor diagnostics anywhere in repository-owned Swift, including unchanged transitive callers.
 
@@ -457,7 +468,7 @@ The current SendNew screen has no honest retry/action-state seam. Sprint 2 there
 - public-only external signer compiles against the exact `SigningRequest` accessors and cannot construct or mutate it;
 - production client accepts its own live handle but rejects fake and another production client's same-type live handle during pre-signer validation and again at send; rejected cases make zero signer/kit calls;
 - concurrent client use versus adapter stop proves the lease's atomic revoke/acquire ordering, drains active-use permits before wrapper release, and leaves stale retained SendData fail-closed;
-- default handlers still produce `.sent`; drag and accessibility SlideButton entry closures each call the sole `performAction()` and complete exactly once for generic success; THOR accepted/unknown make the scheduled generic completion a no-op, show their dedicated full-hash result, and dismiss through the direct-navigation or wrapper outcome closure without `onSuccess`/`HudHelper.banner(.sent)`; rejection remains on the typed error path and never completes;
+- a legacy-only handler invoked through the unconditional MainActor `sendOutcome()` path calls its existing nonisolated `send(data:)` boundary exactly once, returns `.sent`, stores that outcome, and grants generic completion exactly once; the exact strict-concurrency probe proves no MainActor declaration, closure, or task receives the legacy `ISendData`; drag and accessibility SlideButton entry closures each call the sole `performAction()` and complete exactly once for generic success; THOR accepted/unknown make the scheduled generic completion a no-op, show their dedicated full-hash result, and dismiss through the direct-navigation or wrapper outcome closure without `onSuccess`/`HudHelper.banner(.sent)`; rejection remains on the typed error path and never completes;
 - changing/malicious public-key reads cannot affect the sign request because `nonisolated let` is immutable and kit snapshots it once;
 - adapter/manager reconstruction preserves journal namespace and pending hash;
 - localization keys, precision caution, and secret/log canaries; cleanup assertions are limited to owned buffers and never claim erasure of third-party copies;
@@ -638,14 +649,14 @@ production keychain is used.
 
 Vultisig is not a host architecture analog here. No KeysignPayload, TSS response, WalletCore transaction compiler, or global THOR service is imported into Unstoppable or ThorChainKit.
 
-## Revision 4 Blocker Resolution Map
+## Revision 5 Blocker Resolution Map
 
 The following stable findings from discovery 2/2 are resolved by this revision;
 they remain allowlisted for closure-only review:
 
 | ID | Resolution in this revision |
 |---|---|
-| `THR160-ARCH-001` | Keep legacy `send()` nonisolated and add the exact `@MainActor sendOutcome() async` declaration. It reads/captures `ISendData` and invokes `IOutcomeSendHandler` entirely on MainActor; no non-MainActor task captures either value. The exact Swift 5 complete probe is mandatory. |
+| `THR160-ARCH-001` | Make `RegularSendView` call one unconditional `@MainActor sendOutcome() async` entry. It branches before reading `ISendData`: outcome-aware handlers read/capture it and invoke their MainActor action entirely on MainActor; legacy handlers call the existing no-argument `send()` route, which alone reads `ISendData` and invokes nonisolated `ISendHandler.send(data:)`. Successful legacy dispatch records `.sent`; the exact Swift 5 complete probe covers both branches and forbids suppression or a MainActor-to-legacy `ISendData` transfer. |
 | `THR160-ARCH-002` | Replace synchronous client lookup with `@MainActor makeThorChainSendClient()`; background adapter construction never creates the client, and the valid non-MainActor probe must compile. |
 | `THR160-ARCH-003` | Define the lease as synchronized monotonic generation/revocation plus active-use count. Client use atomically acquires and holds a permit through wrapper/kit use; stop atomically revokes before waiting for permits and releasing the wrapper. Reconstruction creates a fresh client/namespace. |
 | `THR160-ARCH-004` | Add `thorChainReceiveAddress` as the adapter's exact S1 `IDepositAdapter.receiveAddress` projection and require the pre-handler's deposit-adapter boundary. |
