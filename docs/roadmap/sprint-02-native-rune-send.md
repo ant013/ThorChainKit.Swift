@@ -18,7 +18,7 @@ The outcome is demonstrated in both products:
 | S2-03 | local direct-sign codec | official and independent fixtures produce exact SignDoc, TxRaw, and transaction hashes | ✅ Implemented — PR #13 — 2026-07-24 |
 | S2-04 | external signer + per-account coordinator | a host signer authorizes one request; wrong key, bad signature, stale quote, and concurrent send fail closed | ✅ Implemented — PR #14 — 2026-07-24 |
 | S2-05 | durable broadcast + pending lifecycle | exact signed bytes survive timeout/restart and can be rebroadcast idempotently | ✅ Implemented — PR #15 — 2026-07-25 |
-| S2-06 | Example acceptance | Maestro proves review, CheckTx acceptance, ambiguous result, retry, and restart/pending projections in an isolated fixture target | Pending |
+| S2-06 | Example acceptance | Maestro proves review, CheckTx acceptance, ambiguous result, retry, and restart/pending projections in an isolated fixture target | ✅ Implemented — PR #17 — 2026-07-27 |
 | S2-07 | Unstoppable integration | the real `SendNew` flow sends a controlled mainnet transfer and records the local hash and node result | Pending |
 
 The status cell is the canonical repository marker. A completed row contains `✅ Implemented — PR #<real> — <YYYY-MM-DD>` and no commit SHA. Exact reviewed `headRefOid` and post-merge `mergeCommit.oid` remain external review/merge evidence.
