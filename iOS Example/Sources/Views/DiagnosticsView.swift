@@ -40,26 +40,30 @@ struct DiagnosticsView: View {
         }
         .navigationTitle("THORChainKit")
         .toolbar {
-            HStack {
+            ToolbarItem(placement: .primaryAction) {
                 NavigationLink(destination: SendView(model: send)) {
                     Text("Send")
-                        .accessibilityIdentifier("send-open")
                 }
-                NavigationLink(destination: AddressView(network: model.runtime.network)) {
-                    Text("Address")
-                        .accessibilityIdentifier("address-codec-open")
-                }
-                NavigationLink(destination: EndpointsView(model: endpoints)) {
-                    Text("Endpoints")
-                        .accessibilityIdentifier("endpoint-policy-open")
-                }
-                NavigationLink(destination: AccountReadView(model: accountRead)) {
-                    Text("Account Read")
-                        .accessibilityIdentifier("account-read-open")
-                }
-                NavigationLink(destination: LifecycleView(model: lifecycle)) {
-                    Text("Lifecycle")
-                        .accessibilityIdentifier("lifecycle-open")
+                .accessibilityIdentifier("send-open")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                HStack {
+                    NavigationLink(destination: AddressView(network: model.runtime.network)) {
+                        Text("Address")
+                            .accessibilityIdentifier("address-codec-open")
+                    }
+                    NavigationLink(destination: EndpointsView(model: endpoints)) {
+                        Text("Endpoints")
+                            .accessibilityIdentifier("endpoint-policy-open")
+                    }
+                    NavigationLink(destination: AccountReadView(model: accountRead)) {
+                        Text("Account Read")
+                            .accessibilityIdentifier("account-read-open")
+                    }
+                    NavigationLink(destination: LifecycleView(model: lifecycle)) {
+                        Text("Lifecycle")
+                            .accessibilityIdentifier("lifecycle-open")
+                    }
                 }
             }
         }
