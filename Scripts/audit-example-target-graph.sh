@@ -26,9 +26,12 @@ test "$(rg -c 'IPHONEOS_DEPLOYMENT_TARGET = 14.0; LD_DYLIB_INSTALL_NAME = "@rpat
 test "$(rg -c 'PRODUCT_BUNDLE_IDENTIFIER = org.horizontalsystems.thorchainkit.example.fixture.support; PRODUCT_MODULE_NAME = FixtureSupport;' "$project")" -eq 2
 test "$(rg -c 'LD_DYLIB_INSTALL_NAME = "@rpath/\$\(EXECUTABLE_PATH\)"; PRODUCT_BUNDLE_IDENTIFIER = org\.horizontalsystems\.thorchainkit\.example\.fixture\.support;' "$project")" -eq 2
 test "$(rg -c 'PRODUCT_MODULE_NAME = LiveSupport; PRODUCT_NAME = LiveSupport;' "$project")" -eq 2
-test "$(rg -c 'IPHONEOS_DEPLOYMENT_TARGET = 14.0; PRODUCT_MODULE_NAME = LiveSupport; PRODUCT_NAME = LiveSupport;' "$project")" -eq 2
+test "$(rg -c 'LD_DYLIB_INSTALL_NAME = "@rpath/\$\(EXECUTABLE_PATH\)"; PRODUCT_BUNDLE_IDENTIFIER = org\.horizontalsystems\.thorchainkit\.example\.live\.support; PRODUCT_MODULE_NAME = LiveSupport; PRODUCT_NAME = LiveSupport;' "$project")" -eq 2
 test "$(rg -c '"EXCLUDED_ARCHS\[sdk=iphonesimulator\*\]" = x86_64;' "$project")" -eq 10
-test "$(rg -c 'LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks"; PRODUCT_BUNDLE_IDENTIFIER = org\.horizontalsystems\.thorchainkit\.example\.fixture;' "$project")" -eq 2
+test "$(rg -c 'LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks"; PRODUCT_BUNDLE_IDENTIFIER = org\.horizontalsystems\.thorchainkit\.example\.(fixture|live);' "$project")" -eq 4
+grep -q 'B60000000000000000000007 = {isa = PBXCopyFilesBuildPhase;.*dstSubfolderSpec = 10; files = (B20000000000000000000027); name = Frameworks;' "$project"
+grep -q 'B20000000000000000000027 .*CodeSignOnCopy.*RemoveHeadersOnCopy' "$project"
+grep -q 'B10000000000000000000001 = .*B60000000000000000000007.*name = ThorChainExampleLive;' "$project"
 grep -q 'B60000000000000000000006 = {isa = PBXCopyFilesBuildPhase;.*dstSubfolderSpec = 10; files = (B20000000000000000000025); name = Frameworks;' "$project"
 grep -q 'B20000000000000000000025 .*CodeSignOnCopy.*RemoveHeadersOnCopy' "$project"
 grep -q 'B10000000000000000000002 = .*B60000000000000000000006.*name = ThorChainExampleFixture;' "$project"
