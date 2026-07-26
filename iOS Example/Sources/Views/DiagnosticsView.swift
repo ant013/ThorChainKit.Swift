@@ -41,6 +41,10 @@ struct DiagnosticsView: View {
         .navigationTitle("THORChainKit")
         .toolbar {
             HStack {
+                NavigationLink(destination: SendView(model: send)) {
+                    Text("Send")
+                        .accessibilityIdentifier("send-open")
+                }
                 NavigationLink(destination: AddressView(network: model.runtime.network)) {
                     Text("Address")
                         .accessibilityIdentifier("address-codec-open")
@@ -56,10 +60,6 @@ struct DiagnosticsView: View {
                 NavigationLink(destination: LifecycleView(model: lifecycle)) {
                     Text("Lifecycle")
                         .accessibilityIdentifier("lifecycle-open")
-                }
-                NavigationLink(destination: SendView(model: send)) {
-                    Text("Send")
-                        .accessibilityIdentifier("send-open")
                 }
             }
         }
