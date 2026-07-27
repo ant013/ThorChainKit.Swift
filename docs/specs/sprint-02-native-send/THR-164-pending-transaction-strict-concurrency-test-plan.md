@@ -65,14 +65,16 @@
      fi
 
      set +e
-     xcodebuild -scheme ThorChainKit \
-       -destination 'platform=iOS Simulator,id=0A88BC07-1DF9-490A-BCAF-6FA2165F6B17' \
-       -derivedDataPath "$derived_data" \
-       SWIFT_VERSION=5 SWIFT_STRICT_CONCURRENCY=complete \
-       SWIFT_TREAT_WARNINGS_AS_ERRORS=YES SWIFT_SUPPRESS_WARNINGS=NO \
-       CODE_SIGNING_ALLOWED=NO \
-       OTHER_SWIFT_FLAGS='$(inherited) -warn-concurrency' build-for-testing \
-       2>&1 | tee "$compile_log"
+     (
+       cd "$kit_root"
+       xcodebuild -scheme ThorChainKit \
+         -destination 'platform=iOS Simulator,id=0A88BC07-1DF9-490A-BCAF-6FA2165F6B17' \
+         -derivedDataPath "$derived_data" \
+         SWIFT_VERSION=5 SWIFT_STRICT_CONCURRENCY=complete \
+         SWIFT_TREAT_WARNINGS_AS_ERRORS=YES SWIFT_SUPPRESS_WARNINGS=NO \
+         CODE_SIGNING_ALLOWED=NO \
+         OTHER_SWIFT_FLAGS='$(inherited) -warn-concurrency' build-for-testing
+     ) 2>&1 | tee "$compile_log"
      xcodebuild_status="${PIPESTATUS[0]}"
      set -e
      printf '%s\n' "$xcodebuild_status" > "$run_dir/xcodebuild.exit"

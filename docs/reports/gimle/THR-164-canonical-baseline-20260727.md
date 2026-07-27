@@ -24,18 +24,19 @@ lists `PendingTransactionRepository.swift`, followed by the two expected
 complete-concurrency diagnostics at `PendingTransactionRepository.swift:77`
 and `:92`. The build terminates with `** TEST BUILD FAILED **` after reaching
 that kit compile job. This is the baseline acceptance fact; the source log is
-retained at the path above on the verification host and its digest makes any
+retained as a local verification-host artifact and its digest makes any
 replacement artifact detectable.
 
 ## Required refresh after implementation
 
-The implementer/QA engineer must append or replace this manifest with the
-exact command text, four host-pin checks, resolved graph, checkout SHA,
-toolchain/Xcode versions, fresh DerivedData and SourcePackages paths, exit
-statuses, post-fix log SHA-256, and selected positive `SwiftCompile` and
-diagnostic lines. The post-fix host log must contain no diagnostic at the two
-named lines. A build that exits before the ThorChainKit compile job is not a
-passing proof.
+The implementer/QA engineer must append or replace this manifest with
+sanitized run labels, exact command text, four host-pin checks, exact resolved
+SHAs, Xcode/Swift version identifiers, graph and log hashes, exit statuses, and
+selected positive `SwiftCompile` and diagnostic lines. Absolute checkout,
+SourcePackages, DerivedData, mirror-config, and other operator paths remain
+local-only run artifacts. The post-fix host log must contain no diagnostic at
+the two named lines. A build that exits before the ThorChainKit compile job is
+not a passing proof.
 
 Gimle/Palace trust remains RED because the ThorChainKit project mapping and
 Serena navigation are unavailable; current-tree `rg`, Git, and
