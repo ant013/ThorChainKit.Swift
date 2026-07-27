@@ -1,6 +1,6 @@
 # THR-164 — PendingTransactionRepository strict-concurrency correction plan
 
-**Revision:** 1 — discovery 1/2; closure 0/5
+**Revision:** 2 — discovery 1/2; closure 0/5
 
 ## Step 1 — Formalize evidence and design
 
@@ -19,7 +19,10 @@
 - Files: Step 1 artifacts and referenced source/test paths.
 - Acceptance: architecture/boundaries, security/protocol-safety, and
   verification/operability review; one severity-tagged synthesis; discovery
-  remains `1/2`; only current-slice high/critical blockers may block.
+  remains `1/2`; only current-slice high/critical blockers may block. Recheck
+  SEC-01/VOP-01 against the queue-blocked callback test and VOP-02 against the
+  literal selectors, pin proof, positive kit compile assertion, and durable
+  evidence manifest.
 - Dependency: Step 1 spec commit pushed and handed off.
 
 ## Step 3 — Explicit approval and test-first implementation
@@ -27,9 +30,10 @@
 - Owner: ThorChainSwiftEngineer
 - Files: `Sources/ThorChainKit/Send/Storage/PendingTransactionRepository.swift`
   and the smallest focused test change, if Step 2 confirms it is required.
-- Acceptance: revision-bound approval exists; weak-deallocation test is added
-  first; compiler probe proves the smallest capture-boundary correction; only
-  the two diagnostics are addressed.
+- Acceptance: revision-bound approval exists; the queue-blocked
+  weak-deallocation test is added first; focused selectors and the exact local
+  compiler/host commands are recorded; positive kit compilation is proven;
+  only the two diagnostics are addressed.
 - Dependency: Step 2 approval and explicit user/Board approval.
 
 ## Step 4 — Exact-head mechanical review and closure

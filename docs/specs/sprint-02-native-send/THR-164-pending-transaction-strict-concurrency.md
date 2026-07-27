@@ -1,6 +1,6 @@
 # THR-164 — PendingTransactionRepository strict-concurrency correction
 
-**Revision:** 1 — discovery 1/2; closure 0/5
+**Revision:** 2 — discovery 1/2; closure 0/5
 
 ## Goal
 
@@ -12,11 +12,11 @@ host build, with the smallest behavior-preserving capture-boundary correction.
 
 - The approved base is `origin/main` at
   `922a5badac5a9b80361a02dff5c75711f00da53c`.
-- The canonical host reproduction is recorded in the issue evidence log
-  `/tmp/thr160-s207-post-6172.hAp2js/xcodebuild-canonical-board-frozen.log`.
-  It reaches ThorChainKit compilation and reports only the two named
-  `PendingTransactionRepository.installObservation()` captured-`self`
-  diagnostics for this prerequisite.
+- The canonical host reproduction is recorded in the durable evidence manifest
+  `docs/reports/gimle/THR-164-canonical-baseline-20260727.md`; its source-log
+  SHA-256 is recorded there. It reaches the ThorChainKit compile job and
+  reports only the two named `PendingTransactionRepository.installObservation()`
+  captured-`self` diagnostics for this prerequisite.
 - Current source lines 70–107 increment and compare an observation generation,
   cancel the previous observation, dispatch changes/errors to the serial
   `stateQueue`, acknowledge/fail the publication barrier, publish status, and
@@ -58,6 +58,20 @@ Out of scope:
   simulator/Maestro acceptance, and unrelated diagnostics that appear after
   these two errors are removed.
 
+## Regression boundary
+
+The weak-lifetime regression must exercise the queued capture boundary, not
+just release the repository before the outer callbacks run. `TestObservationSource`
+will retain the callbacks and the queue supplied by the repository. A
+deterministic gate enqueued on that queue must signal entry and wait on a
+release semaphore. While the repository is still alive, the test emits both
+callbacks, which creates both inner queued jobs behind the gate. It then sets
+the repository variable to `nil`, asserts the weak reference is `nil` while the
+gate remains closed, releases the gate, and drains the queue with `sync`.
+There are no sleeps or timing-based retries. A strong pre-boundary `self` bind
+keeps the repository alive until the queued jobs drain and therefore fails the
+assertion; an inner `[weak self]` capture permits deallocation and passes.
+
 ## Proposed source delta
 
 Keep the outer callbacks weak and make the dispatched closure's capture
@@ -84,11 +98,12 @@ No source edit is authorized until this revision receives explicit approval.
    concurrency change.
 3. Focused pending/lifecycle tests pass, including the existing generation,
    degraded/reinstall, publication-barrier, and committed-transition tests,
-   plus a weak-deallocation regression if required to distinguish the safe
-   capture from a strong pre-boundary bind.
+   plus the deterministic queue-blocked weak-deallocation regression described
+   above; the regression must fail for a strong pre-boundary bind.
 4. A Swift 5 complete-concurrency, warnings-as-errors probe and the canonical
-   Xcode 26.6 ThorChainKit host compilation no longer report the two named
-   lines. Any unrelated diagnostic is reported separately.
+   Xcode 26.6 ThorChainKit host compilation both prove that the ThorChainKit
+   compile job ran and no longer report the two named lines. Any unrelated
+   diagnostic is reported separately.
 5. The exact verified merge SHA is handed to THR-160 so it can update its four
    local pin locations and resume the same warmed S2-07 Development build.
 
