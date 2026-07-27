@@ -1,7 +1,7 @@
 # Gimle reliability report: THR-162-20260727-1125
 
 - Task: dae5f039-b019-4ec0-827a-f9657b8c9b82
-- Workflow/phase: analog_change / verification
+- Workflow/phase: analog_change / adversarial_review
 - Trust: **RED**
 - Repository: /Users/ant013/Data/AI/thorchain
 - Base HEAD: 162cc3165cfbf1023bcb9c7111cc1d059a2fcded
@@ -98,15 +98,18 @@ Bug statuses: {'workaround': 6, 'open': 1}
 
 ## Adversarial decisions
 
-- THR162-REV-001@2 ACCEPT: Exact A/B causality remains gated, not asserted.
-- THR162-REV-002@2 ACCEPT: THR-162 regression ownership is package-only.
-- THR162-REV-003@2 ACCEPT: THR-152 is the primary historical CompletionGate correction precedent.
+- THR162-REV-001@3 ACCEPT: Revision 3 accepts the exact full-host A/B as the causal proof for this slice.
+- THR162-REV-002@3 ACCEPT: Revision 3 preserves the package-only S2-06 regression ownership.
+- THR162-REV-003@3 ACCEPT: Revision 3 preserves THR-152 as the primary historical CompletionGate analog.
 
 ## Verification and acceptance
 
-- THR162-PROOF-EXACT acceptance/failed: Exact current source and temporary sending variant both exited 0; before-fails/after-passes criterion unmet.
+- THR162-PROOF-EXACT acceptance/passed: Board-accepted exact full-host A/B: baseline log contains EndpointOperationRunner.swift:231; after disposable sending variant contains no EndpointOperationRunner diagnostics. After log separately names PendingTransactionRepository.swift:77:31 and :92:31 as unrelated latent errors.
 - THR162-PROOF-CANARY acceptance/failed: Free-function, detached-task, and gate-class canaries all exited 0 before and after; required boundary reproduction unavailable.
 - THR162-NO-SOURCE-EDIT verification/passed: No Sources/ or Tests/ files were changed; only approved documentation/evidence commits exist.
+- THR162-FOCUSED-TESTS verification/passed: Executed 11 tests with 0 failures; cancellation, deadline, lifecycle, orphan, and completion-race coverage passed.
+- THR162-S206-REGRESSIONS verification/passed: Executed 11 tests with 0 failures: 8 BroadcastRetryTests, 1 focused fixture composition test, and 2 SendJournalRestartTests.
+- THR162-DIFF-SCOPE verification/passed: Only Sources/ThorChainKit/Network/EndpointOperationRunner.swift is changed by implementation; exact one-line sending annotation.
 
 ## Bugs and limitations
 

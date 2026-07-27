@@ -1,6 +1,6 @@
 # THR-162 — CompletionGate correction plan
 
-**Revision:** 2 — discovery 1/2; closure 0/5
+**Revision:** 3 — discovery 1/2; closure 2/5
 
 ## Step 1 — Formalize and preserve evidence
 
@@ -29,10 +29,13 @@
 - Owner: ThorChainSwiftEngineer
 - Files: `Sources/ThorChainKit/Network/EndpointOperationRunner.swift` and a
   focused test/probe file only if Step 2 and approval require it.
-- Acceptance: capture an exact A/B compiler proof or the specified reduced
-  canary before editing; implement only the compiler-proven minimal
-  transfer-boundary correction and pass focused package tests. If no proof is
-  available, do not edit source.
+- Acceptance: use the accepted exact S2-07 full-host A/B proof before editing;
+  baseline must contain `EndpointOperationRunner.swift:231`, and the
+  disposable one-line `sending` variant must contain no
+  `EndpointOperationRunner` diagnostic. Implement only the compiler-proven
+  minimal transfer-boundary correction and pass focused package tests. Keep
+  the separately named `PendingTransactionRepository.swift:77,92` errors
+  outside this slice; isolated/reduced non-reproduction remains documented.
 - Dependency: reviewer approval and explicit user/Board approval.
 
 ## Step 4 — Mechanical review and closure

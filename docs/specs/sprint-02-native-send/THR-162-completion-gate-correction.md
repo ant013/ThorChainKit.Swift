@@ -1,6 +1,6 @@
 # THR-162 — CompletionGate strict-concurrency correction
 
-**Revision:** 2 — discovery 1/2; closure 0/5
+**Revision:** 3 — discovery 1/2; closure 2/5
 
 ## Goal
 
@@ -42,6 +42,16 @@ is proven necessary, and this evidence/specification set.
   The public `T: Sendable` constraint remains unchanged. Adding a constraint to
   `CompletionGate` itself is not approved by this specification; it must not be
   used as a substitute for proving the value-transfer boundary.
+- The exact S2-07 full-host A/B proof is now available from the same
+  Development build configuration and disposable package graph. The unchanged
+  checkout reports the `EndpointOperationRunner.swift:231` CompletionGate
+  diagnostic; the disposable checkout with only the proposed `sending`
+  substitution reports no `EndpointOperationRunner` diagnostic. Its two
+  `PendingTransactionRepository.swift:77,92` errors are separately recorded
+  latent ThorChainKit failures and remain outside this slice. This host-level
+  proof is the accepted compiler gate for revision 3. The isolated `swiftc`
+  probe and reduced canaries still pass before and after; that limitation is
+  retained rather than presented as causal evidence.
 
 The source and analog evidence is persisted in
 `audit/runs/THR-162-20260727-1125/state.json` and the rendered Gimle report.
@@ -90,21 +100,23 @@ to:
 func finish(_ result: sending Result<T, Error>) -> Bool
 ```
 
-The candidate is not implementation-approved by this revision. Before source
-edit, the implementer must capture either (a) an exact repository A/B probe
-that fails before and passes after, or (b) a reduced compiler canary that uses
-the same `CompletionGate.finish(Result<T, Error>)` and
-`CheckedContinuation.resume(with:)` transfer boundary and fails before while
-the `sending` variant passes. If neither proof is reproducible, stop without
-changing source and return the spec for another revision. No behavior or
-public API change is intended.
+The candidate is not implementation-approved by this revision alone. Before
+source edit, the implementer must bind the change to the accepted full-host
+A/B proof above: the unchanged exact S2-07 host build must contain the target
+`CompletionGate` diagnostic, and the disposable checkout with only the
+`sending` substitution must contain no `EndpointOperationRunner` diagnostic.
+The separately named `PendingTransactionRepository` errors are an accepted
+baseline limitation for this targeted proof, not a reason to edit that file.
+No behavior or public API change is intended.
 
 ## Acceptance criteria
 
-1. A bounded compiler/package command is recorded. Closure requires an exact
-   before/after proof as defined above; the already observed isolated probe
-   result (exit 0 before and after) must be reported as non-reproduction rather
-   than presented as proof.
+1. A bounded full-host compiler/package command is recorded. Closure requires
+   the exact before/after proof defined above: baseline contains the target
+   diagnostic and the one-line disposable `sending` variant removes every
+   `CompletionGate` diagnostic. The isolated probe and reduced canaries that
+   exit 0 before and after remain documented as non-reproduction, not causal
+   proof.
 2. The final source diff is the smallest compiler-proven transfer-boundary
    correction; it contains no suppression, unchecked-conformance, dependency,
    or unrelated concurrency change.
@@ -127,8 +139,9 @@ public API change is intended.
   including both detached-task and watchdog callers?
 - Does the private gate remain safe across the existing lock, completion latch,
   and resume-outside-lock ordering?
-- If the exact diagnostic remains unreproducible, does the reduced canary
-  faithfully preserve the task-isolated-to-continuation transfer boundary?
+- Does the accepted full-host A/B preserve the exact S2-07 package graph and
+  destination while isolating the one-line source delta, and are the isolated
+  non-reproduction results clearly separated from that proof?
 - Does the changed type boundary alter any focused runtime assertion?
 - Are the package/dependency failures clearly separated from the THR-162
   diagnostic so verification cannot be reported as green prematurely?

@@ -1,18 +1,20 @@
 # THR-162 — Test and verification plan
 
-**Revision:** 2 — discovery 1/2; closure 0/5
+**Revision:** 3 — discovery 1/2; closure 2/5
 
 ## Test-first sequence
 
-1. Run the bounded strict Swift 5 compiler probe/package command against the
-   current source. Capture the exact diagnostic if present; otherwise record
-   the observed non-reproduction and the dependency/unrelated baseline stop.
-2. If the exact source diagnostic is absent, run a reduced canary preserving
-   `CompletionGate.finish(Result<T, Error>)` and
-   `CheckedContinuation.resume(with:)`. It must fail before and pass after the
-   `sending` annotation. If it cannot do so, stop before source edit.
-3. Apply the one-line source correction only after one of those A/B proofs is
-   captured, then re-run the same proof and require no relevant diagnostic.
+1. Run the exact S2-07 full-host strict-concurrency build against the unchanged
+   package checkout and capture the `EndpointOperationRunner.swift:231`
+   diagnostic.
+2. Run the same host build with a task-specific disposable package checkout
+   containing only the one-line `sending` substitution. Require no
+   `EndpointOperationRunner` diagnostic and record the unrelated
+   `PendingTransactionRepository.swift:77,92` errors separately.
+3. Apply the one-line source correction only after that A/B proof is captured,
+   then re-run the focused tests and owned regressions. The isolated `swiftc`
+   probe and reduced canaries are informative non-reproduction checks, not a
+   substitute for the accepted host proof.
 4. Run the focused `EndpointOperationRunnerTests` suite. Require the existing
    cancellation/deadline/lifecycle/orphan and completion-race assertions to
    remain green; add no runtime test unless the approved source delta changes
