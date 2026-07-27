@@ -1,7 +1,7 @@
 # Gimle reliability report: THR-161-grdb-compatibility-20260727
 
 - Task: 66212009-331a-4747-9abd-f7f691fd2cf6
-- Workflow/phase: analog_change / adversarial_review
+- Workflow/phase: analog_change / awaiting_approval
 - Trust: **RED**
 - Repository: /Users/ant013/Data/AI/.worktrees/thorchain/thr-161-grdb-compatibility
 - Base HEAD: 65c8e370db983c6bd500448266a4f8f51561ca5f
@@ -95,9 +95,9 @@ Bug statuses: {'workaround': 1}
 
 ## Adversarial decisions
 
-- D-161-ARCH-001@2 ACCEPT: ACCEPT: revised allowlist covers only package state and directly affected verifier assertions; host and Unstoppable source remain out of scope.
-- D-161-SEC-002@2 ACCEPT: ACCEPT: revised design requires isolated approved MarketKit host-graph resolution, structural non-GRDB lockfile preservation, temporary-copy resolution, and fail-closed behavior.
-- D-161-VERIFY-003@3 ACCEPT: ACCEPT: verification now uses an explicit correction-head placeholder, immutable base for diffs, xcrun SwiftPM deterministic test filtering, host-graph test, lockfile check, and device-floor verifier.
+- D-161-ARCH-001@3 ACCEPT: ACCEPT: final committed spec allowlist covers only package state and directly affected verifier assertions; host and Unstoppable source remain out of scope.
+- D-161-SEC-002@3 ACCEPT: ACCEPT: final committed design requires isolated approved MarketKit host-graph resolution, structural non-GRDB lockfile preservation, temporary-copy resolution, and fail-closed behavior.
+- D-161-VERIFY-003@4 ACCEPT: ACCEPT: final committed verification uses an explicit correction-head placeholder, immutable base for diffs, xcrun SwiftPM deterministic test filtering, host-graph test, lockfile check, and device-floor verifier.
 
 ## Verification and acceptance
 
