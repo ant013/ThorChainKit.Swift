@@ -1,6 +1,6 @@
 # THR-164 — PendingTransactionRepository strict-concurrency correction
 
-**Revision:** 2 — discovery 1/2; closure 0/5
+**Revision:** 3 — discovery 1/2; closure 0/5
 
 ## Goal
 
@@ -102,8 +102,11 @@ No source edit is authorized until this revision receives explicit approval.
    above; the regression must fail for a strong pre-boundary bind.
 4. A Swift 5 complete-concurrency, warnings-as-errors probe and the canonical
    Xcode 26.6 ThorChainKit host compilation both prove that the ThorChainKit
-   compile job ran and no longer report the two named lines. Any unrelated
-   diagnostic is reported separately.
+   compile job ran and no longer report the two named lines. Each baseline and
+   implementation run records its expected kit SHA, all four host pins, the
+   resolved checkout SHA, actual command exit status, toolchain/graph/
+   DerivedData paths, and log SHA-256. Any unrelated diagnostic is reported
+   separately.
 5. The exact verified merge SHA is handed to THR-160 so it can update its four
    local pin locations and resume the same warmed S2-07 Development build.
 

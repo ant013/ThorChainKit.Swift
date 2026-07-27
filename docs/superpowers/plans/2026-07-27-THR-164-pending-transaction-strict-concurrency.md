@@ -1,6 +1,6 @@
 # THR-164 — PendingTransactionRepository strict-concurrency correction plan
 
-**Revision:** 2 — discovery 1/2; closure 0/5
+**Revision:** 3 — discovery 1/2; closure 0/5
 
 ## Step 1 — Formalize evidence and design
 
@@ -21,8 +21,10 @@
   verification/operability review; one severity-tagged synthesis; discovery
   remains `1/2`; only current-slice high/critical blockers may block. Recheck
   SEC-01/VOP-01 against the queue-blocked callback test and VOP-02 against the
-  literal selectors, pin proof, positive kit compile assertion, and durable
-  evidence manifest.
+  revision-3 executable two-run harness: per-run expected SHA and paths,
+  individual four-file pin checks, resolved checkout/graph capture,
+  `PIPESTATUS[0]` exit capture under explicit Bash with `pipefail`, positive
+  kit compile assertion, and durable evidence manifest.
 - Dependency: Step 1 spec commit pushed and handed off.
 
 ## Step 3 — Explicit approval and test-first implementation
