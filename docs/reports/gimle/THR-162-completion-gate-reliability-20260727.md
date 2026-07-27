@@ -1,7 +1,7 @@
 # Gimle reliability report: THR-162-20260727-1125
 
 - Task: dae5f039-b019-4ec0-827a-f9657b8c9b82
-- Workflow/phase: analog_change / adversarial_review
+- Workflow/phase: analog_change / awaiting_approval
 - Trust: **RED**
 - Repository: /Users/ant013/Data/AI/thorchain
 - Base HEAD: 162cc3165cfbf1023bcb9c7111cc1d059a2fcded
