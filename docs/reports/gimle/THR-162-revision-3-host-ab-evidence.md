@@ -14,11 +14,17 @@ raw logs, which remain available in `/tmp` at the recorded paths.
 - Build: `Development`, `build-for-testing`, generic iOS Simulator destination
 - Language/concurrency: Swift 5, complete strict concurrency,
   `-warn-concurrency`, warnings-as-errors; warning suppression disabled
-- Resolved graph: `Package.resolved` at
-  `/tmp/thr162-after.xpsoPu/SourcePackages/checkouts/ThorChainKit.Swift/Package.resolved`,
-  2320 bytes, SHA-256
+- Load-bearing host lockfile: `Wallet.xcworkspace/xcshareddata/swiftpm/Package.resolved`,
+  21,833 bytes, SHA-256
+  `556fcb632348d1962b888feed65b25400acee71bcd9c3ce7e04901473a0f33ab`.
+  This is the resolved graph consumed by the exact `Wallet.xcworkspace`
+  `Development` build and therefore the authoritative host-build digest.
+- Nested kit lockfile: `SourcePackages/checkouts/ThorChainKit.Swift/Package.resolved`,
+  2,320 bytes, SHA-256
   `d4f311c9e43a1e20be3288564e5cc87b8d7cbc8ad8eb61d37e7a33e4bfd4730d`; it is
-  byte-identical to this repository's `Package.resolved`.
+  byte-identical to this repository's `Package.resolved`. This records the
+  checked-out kit package identity, but does not replace the host lockfile as
+  the load-bearing resolved-graph evidence.
 - Provenance comments: Board unblock `9f4a86e4-cd3a-4c7b-9733-0d446c755910`,
   Board acceptance `5e906e07-77f5-4884-8e8f-b50a9f82c22f`, reviewer recheck
   `349646d5-a103-4d3a-833f-b816ef33343e`
@@ -69,6 +75,12 @@ before and after and are retained as non-causal historical limitations.
 - Raw after log: `/tmp/thr162-after.xpsoPu/xcodebuild-after.log`, line 83552,
   18,389,412 bytes, SHA-256
   `48a9ffd818b057961a3da902776a50e8485d580299b8e104a53c0c1767380a4c`.
+- Host lockfile: `Wallet.xcworkspace/xcshareddata/swiftpm/Package.resolved`,
+  21,833 bytes, SHA-256
+  `556fcb632348d1962b888feed65b25400acee71bcd9c3ce7e04901473a0f33ab`.
+- Nested kit lockfile: `SourcePackages/checkouts/ThorChainKit.Swift/Package.resolved`,
+  2,320 bytes, SHA-256
+  `d4f311c9e43a1e20be3288564e5cc87b8d7cbc8ad8eb61d37e7a33e4bfd4730d`.
 - The durable artifact hash is recorded by `run_state.py` for this file and
-  binds the normalized result, raw-log hashes, resolved graph, provenance, and
-  command above.
+  binds the normalized result, raw-log hashes, both lockfile roles and hashes,
+  provenance, and command above.
