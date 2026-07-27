@@ -220,7 +220,7 @@ private final class CompletionGate<T>: @unchecked Sendable {
     }
 
     @discardableResult
-    func finish(_ result: Result<T, Error>) -> Bool {
+    func finish(_ result: sending Result<T, Error>) -> Bool {
         lock.lock()
         guard !completed else {
             lock.unlock()
