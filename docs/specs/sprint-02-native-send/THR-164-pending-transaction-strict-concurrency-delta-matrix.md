@@ -1,0 +1,7 @@
+# THR-164 — Delta matrix
+
+**Revision:** 1
+
+| Slice | Analog family | Invariants to preserve | Required difference | Rejected difference | Failure modes | Tests before code | Verification |
+|---|---|---|---|---|---|---|---|
+| THR164-S1 | Primary: `PendingTransactionRepository.installObservation()`; supporting: focused repository tests, `KitFactory`/`SendRuntime` composition, EvmKit explicit weak GCD capture; rejected counterexample: `AccountSyncer` strong bind inside `Task`. | Weak repository lifetime; serial `stateQueue`; observation generation guard; barrier acknowledgement/failure; degraded status; retry/reinstall; public API. | Make each inner async callback's capture boundary explicit enough for Swift complete concurrency, limited to the two diagnostics. | Strong-bind `self` before dispatch; change `@unchecked`/`@preconcurrency`; suppress warnings; alter queue, generation, barrier, API, or dependencies. | Callback source retains a strong repository; stale callback mutates current state; current error fails to reinstall; barrier is acknowledged/fails off queue; compiler still reports either line. | Add/confirm a weak-deallocation callback regression; retain tests for committed transition, barrier acknowledgement, stale callback rejection, degraded state, and replacement recovery. | Exact baseline/after host logs; strict Swift 5 warnings-as-errors probe; focused `PendingTransactionRepositoryTests`; diff audit for only the capture boundary. |
