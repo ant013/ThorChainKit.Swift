@@ -34,10 +34,11 @@ with the local transaction hash.
     `Core/Adapters/ThorChain/ThorChainAdapter.swift`, new
     `ThorChainSendClient.swift`, `ThorChainSendData.swift`, and
     `SendHandlerFactory.swift`.
-  - Depends on: S2-06 package-state head
-    `65c8e370db983c6bd500448266a4f8f51561ca5f`; this exact `main` head
-    includes the S2-06 package graph/source changes and is the reproducible
-    host dependency pin.
+  - Depends on: corrected ThorChainKit `main` merge
+    `162cc3165cfbf1023bcb9c7111cc1d059a2fcded` (parent
+    `65c8e370db983c6bd500448266a4f8f51561ca5f`); this exact merge preserves
+    the S2-06 package graph/source changes and adds the approved GRDB 6.29.3
+    compatibility correction, making it the reproducible host dependency pin.
   - Check: WalletCore/AppTests fake/live-handle contract tests and factory
     registration tests.
 

@@ -10,15 +10,27 @@ design; no host implementation was performed. Revision 7 closes the
 expiration-caller half of the legacy/outcome dispatch blocker without changing
 the selected analog family; the prior allowlisted findings remain unchanged.
 
-The prerequisite gate was rechecked after S2-06 merged: `origin/main` is
-`65c8e370db983c6bd500448266a4f8f51561ca5f`, and its canonical roadmap row is
-`✅ Implemented — PR #17 — 2026-07-27`. The package pin used by this design is
-the required S2-06 package-state head
-`65c8e370db983c6bd500448266a4f8f51561ca5f`. The S2-06 merge beneath this
-head changes `Package.swift`, `Package.resolved`, and
-`Sources/ThorChainKit/Core/KitFactory.swift`; those package graph/source
-changes are part of the prerequisite and must be present in the clean host
-resolution.
+The prerequisite gate was rechecked after the approved compatibility correction
+merged: `origin/main` is
+`162cc3165cfbf1023bcb9c7111cc1d059a2fcded` (parent
+`65c8e370db983c6bd500448266a4f8f51561ca5f`, PR #19), and the canonical S2-06
+roadmap row remains `✅ Implemented — PR #17 — 2026-07-27`. The package pin
+used by this design is the corrected `main` merge
+`162cc3165cfbf1023bcb9c7111cc1d059a2fcded`; its ThorChainKit package graph
+retains the S2-06 changes and resolves GRDB `6.29.3`. The clean host
+resolution must use this merge SHA.
+
+## Revision 8 package prerequisite update
+
+THR-161 independently accepted and merged the package-only GRDB compatibility
+correction as PR #19. Local verification recorded the exact PR head
+`b786f4207053846bd05d407bc42f7485702016b6`, merge commit
+`162cc3165cfbf1023bcb9c7111cc1d059a2fcded`, `Package.swift` exact GRDB
+`6.29.3`, resolved revision
+`2cf6c756e1e5ef6901ebae16576a7e4e4b834622`, and no hosted checks configured.
+This pin-only prerequisite update does not alter the approved host ownership,
+signing, SendNew, or acceptance design; S2-07 may now resume on its existing
+Unstoppable branch with the corrected exact SHA.
 
 The required codebase-memory project `Users-ant013-Data-AI-thorchain` was
 queried first and reported ready. The exact Unstoppable codebase-memory project
