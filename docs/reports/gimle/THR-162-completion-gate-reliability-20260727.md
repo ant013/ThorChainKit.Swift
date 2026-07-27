@@ -20,8 +20,8 @@
 - Location validity: n/a; coverage 0/0
 - Freshness coverage: n/a
 - Replacement/fallback claims: 0
-- Bugs: 5
-- Analog slices/candidates: 1/7
+- Bugs: 6
+- Analog slices/candidates: 1/9
 
 ### Calls by tool
 
@@ -32,9 +32,9 @@
 | palace.health.status | 1 | 0 | 0 | 0 |
 | palace.memory.get_project_overview | 0 | 1 | 0 | 0 |
 
-Bug classes: {'mapping_bug': 1, 'coverage_gap': 2, 'environment_drift': 2}
-Bug severities: {'high': 2, 'medium': 3}
-Bug statuses: {'workaround': 5}
+Bug classes: {'mapping_bug': 1, 'coverage_gap': 2, 'environment_drift': 3}
+Bug severities: {'high': 3, 'medium': 3}
+Bug statuses: {'workaround': 6}
 
 ## Gimle calls
 
@@ -49,8 +49,9 @@ Bug statuses: {'workaround': 5}
 
 | Slice | Risk | Required dimensions | Required roles | Waived roles | Primary | Supporting | Counterexamples |
 |---|---|---|---|---|---|---|---|
-| THR-162-completion-gate | high | boundary, dependencies, lifecycle, responsibility, state_errors, tests | composition, consumer, contract, counterexample, implementation, lifecycle_error, test | n/a | C-THR162-GATE | C-THR162-RUNNER, C-THR162-LIFECYCLE, C-THR162-POOL, C-THR162-CONSUMER, C-THR162-TEST | C-THR162-EVM-COUNTER |
-  - Conflict: EndpointPool actor ownership and EvmKit direct callback forwarding differ from CompletionGate lock ownership across detached tasks.; resolution: Keep CompletionGate as the only lifecycle/ownership spine; use EndpointPool only for result delivery and EvmKit only as a rejected simpler counterexample.
+| THR-162-completion-gate | high | boundary, dependencies, lifecycle, responsibility, state_errors, tests | composition, consumer, contract, counterexample, implementation, lifecycle_error, test | n/a | C-THR162-THR152 | C-THR162-GATE, C-THR162-RUNNER, C-THR162-LIFECYCLE, C-THR162-POOL, C-THR162-CONSUMER, C-THR162-TEST, C-THR162-THR152-TEST | C-THR162-EVM-COUNTER |
+  - Conflict: THR-152 historical gate correction verifies release-before-resume, while current THR-162 proposes only a transfer-boundary annotation.; resolution: Use THR-152 for lifecycle/race/verification precedent; require a new compiler proof for the narrower sending delta; preserve current source behavior and existing tests.
+  - Conflict: EndpointPool actor ownership and EvmKit direct forwarding differ from the lock-owned CompletionGate.; resolution: Keep EndpointOperationRunner/CompletionGate ownership as the spine; use EndpointPool only for delivery boundary support and reject EvmKit as the counterexample.
 
 ### Analog candidates
 
@@ -63,6 +64,8 @@ Bug statuses: {'workaround': 5}
 | C-THR162-CONSUMER | THR-162-completion-gate | supporting | F-THR162-RUNNER | consumer | state_errors | known_current | Sources/ThorChainKit/Send/Preflight/SendPreflightCoordinator.swift |
 | C-THR162-TEST | THR-162-completion-gate | supporting | F-THR162-TESTS | test | tests | known_current | Tests/ThorChainKitTests/Send/Preflight/EndpointOperationRunnerTests.swift |
 | C-THR162-EVM-COUNTER | THR-162-completion-gate | rejected | F-THR162-EVM | counterexample | trust | known_current | /Users/ant013/Ios/HorizontalSystems/EvmKit.Swift/Sources/EvmKit/Api/Core/WebSocketRpcSyncer.swift |
+| C-THR162-THR152 | THR-162-completion-gate | kept | F-THR162-THR152 | implementation | lifecycle | known_current | docs/reports/gimle/THR-152-s2-02-concurrency-correction-20260724.md |
+| C-THR162-THR152-TEST | THR-162-completion-gate | supporting | F-THR162-THR152 | test | tests | known_current | docs/reports/gimle/THR-152-s2-02-concurrency-correction-20260724.md |
 
 ## Evidence claims
 
@@ -88,9 +91,16 @@ Bug statuses: {'workaround': 5}
   - Serena: Serena unavailable in active ThorChainKit workspace; codebase-memory resolved WebSocketRpcSyncer class but omitted the continuation body.
   - rg: rg and sed verify EvmKit WebSocketRpcSyncer.swift lines 185-196 use direct continuation.resume(returning:) and resume(throwing:) without a gate or orphan accounting.
   - Anchors: /Users/ant013/Ios/HorizontalSystems/EvmKit.Swift/Sources/EvmKit/Api/Core/WebSocketRpcSyncer.swift:185-196
+| F-THR162-THR152 | 2 | yes | MATCH | yes | rg | n/a | valid | known_current | THR-152 is the closest in-repository historical CompletionGate correction and verification precedent: it introduced the same gate, corrected release-before-resume ordering, adde... |
+  - Serena: n/a
+  - rg: sed -n 1,23p docs/reports/gimle/THR-152-s2-02-concurrency-correction-20260724.md; git show 754fcc8 -- Sources/ThorChainKit/Network/EndpointOperationRunner.swift Tests/ThorChainKitTests/Send/Preflight/EndpointOperationRunnerTests.swift
+  - Anchors: docs/reports/gimle/THR-152-s2-02-concurrency-correction-20260724.md:1-23; git commit 754fcc8
 
 ## Adversarial decisions
 
+- THR162-REV-001@1 REVISE: Exact A/B compiler causality is not reproducible at current head.
+- THR162-REV-002@1 REVISE: S2-06 simulator/Maestro scope conflicts with this prerequisite slice.
+- THR162-REV-003@1 REVISE: THR-152 is the closest historical CompletionGate correction precedent.
 
 ## Verification and acceptance
 
@@ -151,6 +161,17 @@ Bug statuses: {'workaround': 5}
 - Impact: The exact package-level acceptance command and independent diagnostic reproduction are not yet closed; claiming a green strict gate would be false.
 - Workaround: Use the issue-provided S2-07 diagnostic as the reproduction premise and require a narrow compiler probe or isolated ThorChainKit compilation before implementation; report package-baseline failures separately.
 - Anchors: n/a
+
+### G-006: Exact CompletionGate diagnostic is not reproducible in the isolated Swift 5 probe
+
+- Class/severity/confidence/status: environment_drift / high / confirmed / workaround
+- Tool/events/claims: xcrun.swiftc / n/a / n/a
+- Reproduction: Run xcrun --sdk iphoneos swiftc -typecheck -parse-as-library -target arm64-apple-ios13.0 -swift-version 5 -strict-concurrency=complete -warn-concurrency -warnings-as-errors on the current EndpointOperationRunner.swift, then repeat after a temporary one-line sending Result<T, Error> substitution.
+- Expected: The unchanged source fails at EndpointOperationRunner.swift:231 and the sending variant passes.
+- Actual: Both unchanged and sending variants exit 0 with no diagnostic; the package gate instead stops in dependencies or at unrelated PendingTransactionRepository captured-self diagnostics.
+- Impact: The proposed one-line delta cannot yet be called compiler-proven; implementation must remain gated by exact A/B evidence or the reduced canary defined in revision 2.
+- Workaround: Record the non-reproduction explicitly and require a bounded exact or reduced A/B compiler proof before any source edit.
+- Anchors: Xcode 26.6; Apple Swift 6.3.3; current head 430415e
 
 ## Interpretation
 
