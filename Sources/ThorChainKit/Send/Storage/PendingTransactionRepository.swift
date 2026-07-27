@@ -73,7 +73,7 @@ final class PendingTransactionRepository: @unchecked Sendable {
         observation?.cancel()
         let cancellable = observationStarter(
             { [weak self] records in
-                self?.stateQueue.async {
+                self?.stateQueue.async { [weak self] in
                     guard let self, self.observationGeneration == generation else { return }
                     self.lastRecords = records
                     records.filter { $0.state == .broadcasting }.forEach {
@@ -88,7 +88,7 @@ final class PendingTransactionRepository: @unchecked Sendable {
                 }
             },
             { [weak self] in
-                self?.stateQueue.async {
+                self?.stateQueue.async { [weak self] in
                     guard let self, self.observationGeneration == generation else { return }
                     self.observation = nil
                     self.lastRecords.filter { $0.state == .broadcasting }.forEach {

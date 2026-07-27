@@ -123,6 +123,30 @@ final class PendingTransactionRepositoryTests: XCTestCase {
         cancellable?.cancel()
     }
 
+    func testObservationCallbacksDoNotRetainRepositoryAcrossQueueBoundary() throws {
+        let fixture = try makeJournal()
+        let source = TestObservationSource()
+        var repository: PendingTransactionRepository? = PendingTransactionRepository(
+            journal: fixture.journal,
+            observationStarter: source.start
+        )
+        weak var weakRepository = repository
+        let entered = DispatchSemaphore(value: 0)
+        let release = DispatchSemaphore(value: 0)
+
+        source.enqueueGate(entered: entered, release: release)
+        XCTAssertEqual(entered.wait(timeout: .now() + 1), .success)
+        let records = [try XCTUnwrap(fixture.journal.record(for: fixture.transaction.transactionID))]
+        source.emitChange(records)
+        source.emitError()
+
+        repository = nil
+        XCTAssertNil(weakRepository)
+
+        release.signal()
+        source.drain()
+    }
+
     private func makeJournal() throws -> RepositoryFixture {
         let path = FileManager.default.temporaryDirectory.appendingPathComponent("pending-\(UUID().uuidString).sqlite")
         let database = try DatabaseRuntime.open(path: path.path)
@@ -172,12 +196,25 @@ private struct RepositoryFixture {
 
 private final class TestObservationSource {
     private var callbacks: [(([SendJournalRecord]) -> Void, () -> Void)] = []
+    private var queue: DispatchQueue?
 
     var start: PendingObservationStarter {
-        { [weak self] onChange, onError, _ in
+        { [weak self] onChange, onError, queue in
+            self?.queue = queue
             self?.callbacks.append((onChange, onError))
             return AnyCancellable {}
         }
+    }
+
+    func enqueueGate(entered: DispatchSemaphore, release: DispatchSemaphore) {
+        queue?.async {
+            entered.signal()
+            release.wait()
+        }
+    }
+
+    func drain() {
+        queue?.sync {}
     }
 
     func emitChange(_ records: [SendJournalRecord], callback: Int? = nil) {
