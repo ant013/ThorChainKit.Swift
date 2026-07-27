@@ -167,8 +167,8 @@ for identity, (location, version, revision) in revisions.items():
 if 'grdb.swift' in pins:
     assert pins['grdb.swift']['location'] == 'https://github.com/groue/GRDB.swift.git'
     assert pins['grdb.swift']['state'] == {
-        'revision': 'dd6b98ce04eda39aa22f066cd421c24d7236ea8a',
-        'version': '6.29.1',
+        'revision': '2cf6c756e1e5ef6901ebae16576a7e4e4b834622',
+        'version': '6.29.3',
     }
 
 tests = (root / 'Tests/ThorChainKitTests/AddressCodecTests.swift').read_text()
