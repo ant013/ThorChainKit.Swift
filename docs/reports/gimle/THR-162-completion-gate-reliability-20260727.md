@@ -1,7 +1,7 @@
 # Gimle reliability report: THR-162-20260727-1125
 
 - Task: dae5f039-b019-4ec0-827a-f9657b8c9b82
-- Workflow/phase: analog_change / design
+- Workflow/phase: analog_change / awaiting_approval
 - Trust: **RED**
 - Repository: /Users/ant013/Data/AI/thorchain
 - Base HEAD: 162cc3165cfbf1023bcb9c7111cc1d059a2fcded
@@ -98,9 +98,9 @@ Bug statuses: {'workaround': 6}
 
 ## Adversarial decisions
 
-- THR162-REV-001@1 REVISE: Exact A/B compiler causality is not reproducible at current head.
-- THR162-REV-002@1 REVISE: S2-06 simulator/Maestro scope conflicts with this prerequisite slice.
-- THR162-REV-003@1 REVISE: THR-152 is the closest historical CompletionGate correction precedent.
+- THR162-REV-001@2 ACCEPT: Exact A/B causality remains gated, not asserted.
+- THR162-REV-002@2 ACCEPT: THR-162 regression ownership is package-only.
+- THR162-REV-003@2 ACCEPT: THR-152 is the primary historical CompletionGate correction precedent.
 
 ## Verification and acceptance
 
