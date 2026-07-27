@@ -65,8 +65,8 @@ expected["bigint"] = (
 )
 expected["grdb.swift"] = (
     "https://github.com/groue/GRDB.swift.git",
-    "6.29.1",
-    "dd6b98ce04eda39aa22f066cd421c24d7236ea8a",
+    "6.29.3",
+    "2cf6c756e1e5ef6901ebae16576a7e4e4b834622",
 )
 
 pins = {pin["identity"]: pin for pin in lock["pins"]}

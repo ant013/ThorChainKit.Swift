@@ -15,9 +15,9 @@ rsync -a Sources/ThorChainKit/ "$copy/Sources/ThorChainKit/" >/dev/null
 rsync -a Tests/ThorChainKitTests/ "$copy/Tests/ThorChainKitTests/" >/dev/null
 rsync -a Tests/ThorChainKitLiveTests/ "$copy/Tests/ThorChainKitLiveTests/" >/dev/null
 
-grep -F 'exact: "6.29.1"' "$copy/Package.swift" >/dev/null
-grep -F '6.29.1' "$copy/Package.resolved" >/dev/null
-grep -F 'dd6b98ce04eda39aa22f066cd421c24d7236ea8a' "$copy/Package.resolved" >/dev/null
+grep -F 'exact: "6.29.3"' "$copy/Package.swift" >/dev/null
+grep -F '6.29.3' "$copy/Package.resolved" >/dev/null
+grep -F '2cf6c756e1e5ef6901ebae16576a7e4e4b834622' "$copy/Package.resolved" >/dev/null
 
 lock_before=$(shasum -a 256 "$copy/Package.resolved" | awk '{print $1}')
 (cd "$copy" && xcodebuild build \
