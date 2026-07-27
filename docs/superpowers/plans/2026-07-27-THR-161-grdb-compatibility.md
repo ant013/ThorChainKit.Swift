@@ -1,6 +1,6 @@
 # THR-161 — GRDB Compatibility Correction Plan
 
-Base: `origin/main` at `65c8e370db983c6bd500448266a4f8f51561ca5f`  
+Base: `origin/main` at `65c8e370db983c6bd500448266a4f8f51561ca5f`
 Spec: `docs/specs/sprint-02-native-send/THR-161-grdb-compatibility.md`
 
 ## Step 1 — Freeze evidence and approve design

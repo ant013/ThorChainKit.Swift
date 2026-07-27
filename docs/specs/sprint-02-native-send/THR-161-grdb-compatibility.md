@@ -1,7 +1,7 @@
 # THR-161 — ThorChainKit GRDB 6.29.3 Compatibility Correction
 
 Status: revised draft for bounded adversarial review
-Base: `origin/main` at `65c8e370db983c6bd500448266a4f8f51561ca5f`  
+Base: `origin/main` at `65c8e370db983c6bd500448266a4f8f51561ca5f`
 Parent: THR-160 S2-07 Unstoppable Native RUNE Send Integration
 
 ## Goal
