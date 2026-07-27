@@ -1,7 +1,7 @@
 # Gimle reliability report: THR-162-20260727-1125
 
 - Task: dae5f039-b019-4ec0-827a-f9657b8c9b82
-- Workflow/phase: analog_change / awaiting_approval
+- Workflow/phase: analog_change / verification
 - Trust: **RED**
 - Repository: /Users/ant013/Data/AI/thorchain
 - Base HEAD: 162cc3165cfbf1023bcb9c7111cc1d059a2fcded
@@ -20,7 +20,7 @@
 - Location validity: n/a; coverage 0/0
 - Freshness coverage: n/a
 - Replacement/fallback claims: 0
-- Bugs: 6
+- Bugs: 7
 - Analog slices/candidates: 1/9
 
 ### Calls by tool
@@ -32,9 +32,9 @@
 | palace.health.status | 1 | 0 | 0 | 0 |
 | palace.memory.get_project_overview | 0 | 1 | 0 | 0 |
 
-Bug classes: {'mapping_bug': 1, 'coverage_gap': 2, 'environment_drift': 3}
-Bug severities: {'high': 3, 'medium': 3}
-Bug statuses: {'workaround': 6}
+Bug classes: {'mapping_bug': 1, 'coverage_gap': 2, 'environment_drift': 4}
+Bug severities: {'high': 4, 'medium': 3}
+Bug statuses: {'workaround': 6, 'open': 1}
 
 ## Gimle calls
 
@@ -104,6 +104,9 @@ Bug statuses: {'workaround': 6}
 
 ## Verification and acceptance
 
+- THR162-PROOF-EXACT acceptance/failed: Exact current source and temporary sending variant both exited 0; before-fails/after-passes criterion unmet.
+- THR162-PROOF-CANARY acceptance/failed: Free-function, detached-task, and gate-class canaries all exited 0 before and after; required boundary reproduction unavailable.
+- THR162-NO-SOURCE-EDIT verification/passed: No Sources/ or Tests/ files were changed; only approved documentation/evidence commits exist.
 
 ## Bugs and limitations
 
@@ -172,6 +175,17 @@ Bug statuses: {'workaround': 6}
 - Impact: The proposed one-line delta cannot yet be called compiler-proven; implementation must remain gated by exact A/B evidence or the reduced canary defined in revision 2.
 - Workaround: Record the non-reproduction explicitly and require a bounded exact or reduced A/B compiler proof before any source edit.
 - Anchors: Xcode 26.6; Apple Swift 6.3.3; current head 430415e
+
+### G-007: Reduced CompletionGate transfer canaries do not reproduce the reported diagnostic
+
+- Class/severity/confidence/status: environment_drift / high / confirmed / open
+- Tool/events/claims: xcrun.swiftc / n/a / n/a
+- Reproduction: Compile exact-source A/B and reduced generic canaries under Xcode 26.6 Apple Swift 6.3.3: -strict-concurrency=complete -warn-concurrency -warnings-as-errors, with Swift 5 and Swift 6 language modes where applicable.
+- Expected: The unconstrained Result<T, Error> transfer into CheckedContinuation.resume(with:) fails before and passes after sending Result<T, Error>.
+- Actual: Exact source before=0 after=0; reduced free-function, detached-task, and @unchecked-Sendable gate canaries each before=0 after=0. No diagnostic or source line is produced.
+- Impact: The approved sending delta cannot be compiler-proven in this environment. Implementing it would violate the explicit plan gate and could be an unverified change.
+- Workaround: Stop without editing product source. Board/CTO must provide the exact failing S2-07 compiler invocation or authorize a new spec revision with a different evidence basis.
+- Anchors: Xcode 26.6 / Build 17F113; Apple Swift 6.3.3; current HEAD 6bdc07c
 
 ## Interpretation
 
