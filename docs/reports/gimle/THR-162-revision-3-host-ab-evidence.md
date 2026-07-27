@@ -18,13 +18,23 @@ raw logs, which remain available in `/tmp` at the recorded paths.
   21,833 bytes, SHA-256
   `556fcb632348d1962b888feed65b25400acee71bcd9c3ce7e04901473a0f33ab`.
   This is the resolved graph consumed by the exact `Wallet.xcworkspace`
-  `Development` build and therefore the authoritative host-build digest.
+  `Development` build and therefore the authoritative host-build digest. It is
+  generated/ignored in the exact host checkout; this evidence does not claim
+  that it was committed at `bdaac198`.
 - Nested kit lockfile: `SourcePackages/checkouts/ThorChainKit.Swift/Package.resolved`,
   2,320 bytes, SHA-256
   `d4f311c9e43a1e20be3288564e5cc87b8d7cbc8ad8eb61d37e7a33e4bfd4730d`; it is
   byte-identical to this repository's `Package.resolved`. This records the
   checked-out kit package identity, but does not replace the host lockfile as
   the load-bearing resolved-graph evidence.
+- Normalized resolved-graph proof: extracting the first `Resolved source
+  packages` block from each retained raw log, sorting with `LC_ALL=C`, produces
+  exactly 79 lines on both sides. The baseline and after blocks have the
+  identical SHA-256
+  `dcf011b12be89c36b16c962a644e02cb2850e963d3045600f0fa344d8518cde3`, and the
+  normalized diff is empty. This log-derived digest is the load-bearing A/B
+  graph identity; the two lockfile identities above are supporting evidence
+  with their stated generated/ignored and checked-out-package roles.
 - Provenance comments: Board unblock `9f4a86e4-cd3a-4c7b-9733-0d446c755910`,
   Board acceptance `5e906e07-77f5-4884-8e8f-b50a9f82c22f`, reviewer recheck
   `349646d5-a103-4d3a-833f-b816ef33343e`
