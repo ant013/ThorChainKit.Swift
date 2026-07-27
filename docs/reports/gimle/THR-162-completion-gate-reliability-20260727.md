@@ -34,7 +34,7 @@
 
 Bug classes: {'mapping_bug': 1, 'coverage_gap': 2, 'environment_drift': 4}
 Bug severities: {'high': 4, 'medium': 3}
-Bug statuses: {'workaround': 6, 'open': 1}
+Bug statuses: {'workaround': 7}
 
 ## Gimle calls
 
@@ -104,12 +104,13 @@ Bug statuses: {'workaround': 6, 'open': 1}
 
 ## Verification and acceptance
 
-- THR162-PROOF-EXACT acceptance/passed: Board-accepted exact full-host A/B: baseline log contains EndpointOperationRunner.swift:231; after disposable sending variant contains no EndpointOperationRunner diagnostics. After log separately names PendingTransactionRepository.swift:77:31 and :92:31 as unrelated latent errors.
-- THR162-PROOF-CANARY acceptance/failed: Free-function, detached-task, and gate-class canaries all exited 0 before and after; required boundary reproduction unavailable.
-- THR162-NO-SOURCE-EDIT verification/passed: No Sources/ or Tests/ files were changed; only approved documentation/evidence commits exist.
-- THR162-FOCUSED-TESTS verification/passed: Executed 11 tests with 0 failures; cancellation, deadline, lifecycle, orphan, and completion-race coverage passed.
-- THR162-S206-REGRESSIONS verification/passed: Executed 11 tests with 0 failures: 8 BroadcastRetryTests, 1 focused fixture composition test, and 2 SendJournalRestartTests.
-- THR162-DIFF-SCOPE verification/passed: Only Sources/ThorChainKit/Network/EndpointOperationRunner.swift is changed by implementation; exact one-line sending annotation.
+- THR162-PROOF-EXACT acceptance/passed: Revision-3 durable bundle THR-162-revision-3-host-ab-evidence.md records the same graph, destination, and settings: baseline exit 65 contains EndpointOperationRunner.swift:231; disposable one-line sending variant exit 65 contains no EndpointOperationRunner diagnostic and names only PendingTransactionRepository.swift:77:31 and :92:31.
+- THR162-PROOF-CANARY acceptance/accepted_risk: Historical non-causal limitation: isolated source and reduced canaries exit 0 before and after. The durable exact-host A/B bundle is the accepted causal proof; this check is not implementation evidence.
+- THR162-NO-SOURCE-EDIT verification/passed: Current revision-3 head contains no Sources/ or Tests/ changes; only documentation/evidence changes are in the approved slice.
+- THR162-FOCUSED-TESTS residual_risk/accepted_risk: Historical verification at reverted implementation head 7451150: 11 tests, 0 failures. Not revision-3 exact-head implementation verification; rerun after authorized implementation.
+- THR162-S206-REGRESSIONS residual_risk/accepted_risk: Historical verification at reverted implementation head 7451150: 11 tests, 0 failures. Not revision-3 exact-head implementation verification; rerun after authorized implementation.
+- THR162-DIFF-SCOPE verification/passed: Current revision-3 head is docs/evidence-only. The one-line source delta at 7451150 was reverted by 5e1ed87 and is historical, not current-head verification.
+- THR162-HOST-AB-BUNDLE verification/passed: Verified raw baseline log is 20249234 bytes with SHA-256 1f631d275963f822b3551b3be195d722bb9b2bfbd91feac4b45789127c148b14; raw after log is 18389412 bytes with SHA-256 48a9ffd818b057961a3da902776a50e8485d580299b8e104a53c0c1767380a4c; exact-host ThorChainKit.Swift/Package.resolved is 2320 bytes with SHA-256 d4f311c9e43a1e20be3288564e5cc87b8d7cbc8ad8eb61d37e7a33e4bfd4730d and is byte-identical to repository Package.resolved; durable bundle SHA-256 is ebe81c6eae624ada931a29e5358f657ba0fb298e0cf5...
 
 ## Bugs and limitations
 
@@ -157,38 +158,38 @@ Bug statuses: {'workaround': 6, 'open': 1}
 - Workaround: Use codebase-memory and exact local rg/Git verification; do not treat unrelated artifact matches as analogs.
 - Anchors: n/a
 
-### G-005: Strict package gate is blocked by dependency flags and an unrelated baseline concurrency error
+### G-005: Generic package strict gate remains a residual limitation
 
 - Class/severity/confidence/status: environment_drift / high / confirmed / workaround
 - Tool/events/claims: xcodebuild / n/a / n/a
-- Reproduction: xcodebuild -scheme ThorChainKit -destination generic/platform=iOS -derivedDataPath /tmp/thr162-strict2-dd -skipPackageUpdates SWIFT_VERSION=5 SWIFT_STRICT_CONCURRENCY=complete SWIFT_SUPPRESS_WARNINGS=NO SWIFT_TREAT_WARNINGS_AS_ERRORS=NO CODE_SIGNING_ALLOWED=NO build
-- Expected: ThorChainKit strict-concurrency compilation reaches the CompletionGate diagnostic or completes
-- Actual: The warnings-as-errors invocation stops in dependencies on conflicting -warnings-as-errors and -suppress-warnings flags; the no-suppress fallback reaches ThorChainKit and stops at PendingTransactionRepository.swift:77,92 for captured self. No CompletionGate diagnostic appears in the fallback log.
-- Impact: The exact package-level acceptance command and independent diagnostic reproduction are not yet closed; claiming a green strict gate would be false.
-- Workaround: Use the issue-provided S2-07 diagnostic as the reproduction premise and require a narrow compiler probe or isolated ThorChainKit compilation before implementation; report package-baseline failures separately.
+- Reproduction: Run the generic ThorChainKit strict package build with dependency warnings-as-errors and suppression disabled.
+- Expected: The generic package route reaches ThorChainKit and exposes the target diagnostic or completes.
+- Actual: The generic route remains affected by dependency flag conflicts and unrelated PendingTransactionRepository captured-self diagnostics; the accepted exact-host A/B is a separate proof path.
+- Impact: The generic package command is not a standalone green gate, but it does not block the accepted revision-3 host A/B criterion.
+- Workaround: Use the exact-host A/B bundle at docs/reports/gimle/THR-162-revision-3-host-ab-evidence.md and name generic-package residual failures separately.
 - Anchors: n/a
 
-### G-006: Exact CompletionGate diagnostic is not reproducible in the isolated Swift 5 probe
+### G-006: Isolated swiftc probe remains a non-causal limitation
 
 - Class/severity/confidence/status: environment_drift / high / confirmed / workaround
 - Tool/events/claims: xcrun.swiftc / n/a / n/a
-- Reproduction: Run xcrun --sdk iphoneos swiftc -typecheck -parse-as-library -target arm64-apple-ios13.0 -swift-version 5 -strict-concurrency=complete -warn-concurrency -warnings-as-errors on the current EndpointOperationRunner.swift, then repeat after a temporary one-line sending Result<T, Error> substitution.
-- Expected: The unchanged source fails at EndpointOperationRunner.swift:231 and the sending variant passes.
-- Actual: Both unchanged and sending variants exit 0 with no diagnostic; the package gate instead stops in dependencies or at unrelated PendingTransactionRepository captured-self diagnostics.
-- Impact: The proposed one-line delta cannot yet be called compiler-proven; implementation must remain gated by exact A/B evidence or the reduced canary defined in revision 2.
-- Workaround: Record the non-reproduction explicitly and require a bounded exact or reduced A/B compiler proof before any source edit.
-- Anchors: Xcode 26.6; Apple Swift 6.3.3; current head 430415e
+- Reproduction: Compile unchanged and temporary sending EndpointOperationRunner variants with the recorded Swift 5 strict-concurrency swiftc probe.
+- Expected: The isolated probe reproduces the host diagnostic before and removes it after.
+- Actual: Both isolated variants exit 0; the exact host A/B, not this probe, supplies the accepted causal result.
+- Impact: The isolated probe cannot independently establish causality, but it no longer blocks the accepted full-host proof.
+- Workaround: Retain the result as historical non-reproduction and use the durable exact-host A/B bundle.
+- Anchors: n/a
 
-### G-007: Reduced CompletionGate transfer canaries do not reproduce the reported diagnostic
+### G-007: Reduced CompletionGate canaries remain non-causal limitations
 
-- Class/severity/confidence/status: environment_drift / high / confirmed / open
+- Class/severity/confidence/status: environment_drift / high / confirmed / workaround
 - Tool/events/claims: xcrun.swiftc / n/a / n/a
-- Reproduction: Compile exact-source A/B and reduced generic canaries under Xcode 26.6 Apple Swift 6.3.3: -strict-concurrency=complete -warn-concurrency -warnings-as-errors, with Swift 5 and Swift 6 language modes where applicable.
-- Expected: The unconstrained Result<T, Error> transfer into CheckedContinuation.resume(with:) fails before and passes after sending Result<T, Error>.
-- Actual: Exact source before=0 after=0; reduced free-function, detached-task, and @unchecked-Sendable gate canaries each before=0 after=0. No diagnostic or source line is produced.
-- Impact: The approved sending delta cannot be compiler-proven in this environment. Implementing it would violate the explicit plan gate and could be an unverified change.
-- Workaround: Stop without editing product source. Board/CTO must provide the exact failing S2-07 compiler invocation or authorize a new spec revision with a different evidence basis.
-- Anchors: Xcode 26.6 / Build 17F113; Apple Swift 6.3.3; current HEAD 6bdc07c
+- Reproduction: Compile the reduced free-function, detached-task, and gate-class transfer canaries under the recorded strict-concurrency settings.
+- Expected: The unconstrained transfer fails before and the sending transfer passes after.
+- Actual: All reduced canaries exit 0 before and after; the exact host A/B is the accepted proof.
+- Impact: Reduced canaries do not prove the source delta, but their non-reproduction is superseded as a closure blocker by the accepted host evidence.
+- Workaround: Label these checks historical/non-causal and do not use them as implementation evidence.
+- Anchors: n/a
 
 ## Interpretation
 
