@@ -1,7 +1,7 @@
 # S2-07 — Unstoppable Native RUNE Send Integration
 
-**Formalization revision:** 5 — discovery 2/2; closure 2/5; supersedes
-revision 4 after closure `REVISE`.
+**Formalization revision:** 7 — discovery 2/2; closure 4/5; supersedes
+revision 6 after closure `REVISE`.
 
 This document is the implementation contract for THR-160. The design is
 approval-gated: no Unstoppable source, test, project, script, or acceptance
@@ -69,8 +69,13 @@ Modify:
 
 `Core/Core.swift` requires no edit or THOR-specific branch: its existing
 registration loops consume the updated handler arrays. `SendHandlerFactory`,
-`ISendHandler`, `ISendData`, and the existing `SendViewModel.send()` remain
-nonisolated legacy contracts. The new outcome path is a separate declaration,
+`ISendData`, and the existing `SendViewModel.send()` remain nonisolated legacy
+contracts. `ISendHandler` is split only at its existing async quote boundary:
+`sendData(transactionSettings:)` becomes an `@MainActor` requirement, while
+`send(data:)` remains nonisolated. Existing handler implementations keep their
+source declarations and are not migrated as a family; only typed callers of
+`sendData` use the MainActor requirement. `SendViewModel.init` and `sync()` are
+also `@MainActor` entry points. The new outcome path is a separate declaration,
 `@MainActor func sendOutcome() async`, called only by the MainActor-owned
 SendNew UI action. It reads the current `ISendData` and outcome handler inside
 that MainActor method, creates the outcome closure, and invokes it there;
@@ -375,7 +380,39 @@ address for every submitted outcome, and resets any prior result before a new
 attempt. Background/lock cancellation invalidates the submission task and
 prevents a resumed task from reaching signer creation.
 
-The `Task` created by `SendViewModel.sync()` is written as `Task { @MainActor ... }`; it awaits existing async services but assigns `ISendData`, state, rates, and outcome only on MainActor and removes the current `MainActor.run` transfer. `SendHandlerFactory` retains its existing synchronous surface so `OpenCryptoPayManager` and `OpenCryptoPaySendHandlerFactory` are not pulled into an unrelated global-actor migration. The strict baseline-delta build-for-testing must prove this smaller change introduces no new actor diagnostics anywhere in repository-owned Swift, including unchanged transitive callers.
+`SendViewModel.init`, `sync()`, `autoQuoteIfRequired()`, and `onExpiration()`
+are `@MainActor`; the task created by
+`sync()` remains `Task { @MainActor ... }`. Because the protocol's
+`sendData(transactionSettings:)` requirement is also MainActor-isolated, the
+legacy `ISendData` result is produced, assigned, and retained on MainActor; it
+never crosses from a nonisolated handler call into the view model. The current
+`MainActor.run` transfer is removed. `SendHandlerFactory` retains its existing
+synchronous surface so `OpenCryptoPayManager` and
+`OpenCryptoPaySendHandlerFactory` are not pulled into an unrelated
+global-actor migration. Existing timer and foreground-publisher callbacks are
+nonisolated entry points, so they do not call `sync()` or read ViewModel state
+directly. The MainActor initializer stores a nonisolated
+`@MainActor @Sendable` auto-quote action. Each callback copies that Sendable
+action and schedules `Task { @MainActor in action() }`; the action alone calls
+`autoQuoteIfRequired()`, which may call `onExpiration()` and `sync()` on the
+MainActor. The timer closures and foreground callback use this boundary;
+MainActor SwiftUI refresh callers continue to call `sync()` directly. No
+nonisolated task captures `SendViewModel` or `ISendData`. The strict
+baseline-delta build-for-testing must prove this smaller change introduces no
+new actor diagnostics anywhere in repository-owned Swift, including unchanged
+transitive callers.
+
+The valid Swift 5 complete-concurrency probe declares the split protocol
+literally: `@MainActor func sendData(...) async throws -> ISendData` and
+nonisolated `func send(data: ISendData) async throws`. It compiles an
+`@MainActor sync()` task, the MainActor `autoQuoteIfRequired()`/
+`onExpiration()` path, nonisolated timer and foreground callbacks that schedule
+the stored MainActor action, the unconditional `sendOutcome()` two-branch
+path, one legacy-only handler, and one outcome-aware handler. The probe fails
+if any callback directly calls a MainActor method, if a MainActor task receives
+legacy `ISendData` from a nonisolated call, or if the legacy branch bypasses the
+no-argument `send()` bridge. No `@preconcurrency`, `@unchecked Sendable`, or
+warning suppression is permitted.
 
 `ThorChainSendHandler: SendHandler, ISendHandler, IOutcomeSendHandler`:
 
@@ -649,14 +686,14 @@ production keychain is used.
 
 Vultisig is not a host architecture analog here. No KeysignPayload, TSS response, WalletCore transaction compiler, or global THOR service is imported into Unstoppable or ThorChainKit.
 
-## Revision 5 Blocker Resolution Map
+## Revision 7 Blocker Resolution Map
 
 The following stable findings from discovery 2/2 are resolved by this revision;
 they remain allowlisted for closure-only review:
 
 | ID | Resolution in this revision |
 |---|---|
-| `THR160-ARCH-001` | Make `RegularSendView` call one unconditional `@MainActor sendOutcome() async` entry. It branches before reading `ISendData`: outcome-aware handlers read/capture it and invoke their MainActor action entirely on MainActor; legacy handlers call the existing no-argument `send()` route, which alone reads `ISendData` and invokes nonisolated `ISendHandler.send(data:)`. Successful legacy dispatch records `.sent`; the exact Swift 5 complete probe covers both branches and forbids suppression or a MainActor-to-legacy `ISendData` transfer. |
+| `THR160-ARCH-001` | Make `ISendHandler.sendData(transactionSettings:)`, `SendViewModel.init`, `sync()`, `autoQuoteIfRequired()`, and `onExpiration()` MainActor-isolated while preserving nonisolated `ISendHandler.send(data:)` and the no-argument `send()` bridge. Nonisolated timer/foreground callbacks schedule a stored `@MainActor @Sendable` action and never call `sync()` directly. `sync()` therefore keeps the non-Sendable legacy result on MainActor; `RegularSendView` still calls one unconditional `@MainActor sendOutcome() async` entry. It branches before reading `ISendData`: outcome-aware handlers read/capture it and invoke their MainActor action entirely on MainActor; legacy handlers call `send()`, which alone invokes nonisolated `send(data:)`. The exact Swift 5 complete probe covers callbacks, both branches, and the sync task, and forbids suppression or an actor-crossing legacy result. |
 | `THR160-ARCH-002` | Replace synchronous client lookup with `@MainActor makeThorChainSendClient()`; background adapter construction never creates the client, and the valid non-MainActor probe must compile. |
 | `THR160-ARCH-003` | Define the lease as synchronized monotonic generation/revocation plus active-use count. Client use atomically acquires and holds a permit through wrapper/kit use; stop atomically revokes before waiting for permits and releasing the wrapper. Reconstruction creates a fresh client/namespace. |
 | `THR160-ARCH-004` | Add `thorChainReceiveAddress` as the adapter's exact S1 `IDepositAdapter.receiveAddress` projection and require the pre-handler's deposit-adapter boundary. |
@@ -677,10 +714,12 @@ revision.
 ## Formalization Evidence and Delta Boundary
 
 The current Unstoppable checkout used for analog verification is
-`/Users/ant013/Ios/HorizontalSystems/unstoppable-wallet-ios` at HEAD
-`520fb7400311b3266cfb6b0db81c3e919e080019`. It is on the unrelated dirty
-branch `core/uswap-provider-layering`; its changes are preserved and are not an
-implementation base. The load-bearing analogs are the HEAD versions of
+`/Users/ant013/Ios/HorizontalSystems/unstoppable-wallet-ios` at active HEAD
+`ad125479984aa66e9bbc9022f5a8cb2e52ef6b6`; the pinned load-bearing analog
+object remains `520fb7400311b3266cfb6b0db81c3e919e080019`. It is on the
+unrelated dirty branch `core/uswap-provider-layering`; its changes are
+preserved and are not an implementation base. The load-bearing analogs are the
+HEAD versions of
 `ISendTronAdapter`, `TronPreSendHandler`, `TronSendHandler`,
 `SendHandlerFactory`, `SendViewModel`, `AccountManager`, and the serialized
 `Unstoppable/Tests` suites. Gimle project mapping and Serena were unavailable,

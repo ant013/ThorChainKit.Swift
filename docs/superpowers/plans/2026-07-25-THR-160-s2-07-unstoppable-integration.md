@@ -1,10 +1,10 @@
 # THR-160 — S2-07 Unstoppable Native RUNE Send Integration Plan
 
-Design revision 5 for
+Design revision 7 for
 `docs/specs/sprint-02-native-send/S2-07-unstoppable-integration.md`, based on
 architecture revision 10 at commit
 `518835315a65996b9321665213adb0516503df65`. Discovery is bounded at 2/2;
-closure is 2/5; revisions 1–4 were returned `REVISE` and implementation
+closure is 4/5; revisions 1–6 were returned `REVISE` and implementation
 remains approval-gated.
 
 ## Goal
@@ -70,7 +70,12 @@ with the local transaction hash.
     the stored handle quote, fee, total, memo, and height; immutable complete
     quote binding rejects same-client swaps; absolute expiry blocks
     send; accepted/unknown outcomes retain the full local hash and bypass the
-    generic sent banner; legacy-only and THOR fake handlers prove `.sent`,
+    generic sent banner; `ISendHandler.sendData(transactionSettings:)`,
+    `SendViewModel.init`, `sync()`, `autoQuoteIfRequired()`, and
+    `onExpiration()` are MainActor-isolated so non-Sendable legacy `ISendData`
+    stays on MainActor during sync; nonisolated timer/foreground callbacks
+    schedule a stored MainActor action; legacy-only
+    and THOR fake handlers prove `.sent`,
     accepted, and unknown through focused tests; no quote is
     recreated during send and no automatic retry is added.
   - Paths: new `ThorChainPreSendHandler.swift`, `ThorChainSendHandler.swift`,
@@ -91,7 +96,10 @@ with the local transaction hash.
     an invalid actor-boundary canary, compares raw diagnostics without
     replacement false-passes, verifies the exact package/config/toolchain
     inputs, and proves both SlideButton entry paths call one action seam
-    exactly once.
+    exactly once. Its literal Swift 5 probe compiles the MainActor
+    `ISendHandler.sendData` requirement, MainActor `sync()` task, MainActor
+    expiration path, nonisolated callback schedulers, and both legacy/outcome
+    branches without an `ISendData` actor crossing.
   - Paths: `Scripts/CI/check-thorchain-send-concurrency.sh`, its non-target
     canary fixture, and `SlideButton.swift`.
   - Depends on: 2 and 3.
