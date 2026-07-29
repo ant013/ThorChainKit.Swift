@@ -17,4 +17,12 @@ final class StrictJSONEnvelopeDecoderTests: XCTestCase {
         XCTAssertEqual(response.codespace, "sdk")
         XCTAssertEqual(response.sanitizedLog, .invalidResponse)
     }
+
+    func testBroadcastEnvelopeAcceptsStandardNodeFields() throws {
+        let data = Data(#"{"tx_response":{"height":"0","txhash":"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB","codespace":"","code":0,"data":"","raw_log":"","logs":[],"info":"","gas_wanted":"0","gas_used":"0","tx":null,"timestamp":"","events":[]}}"#.utf8)
+        let response = try StrictJSONEnvelopeDecoder().decode(data)
+
+        XCTAssertEqual(response.txHash, String(repeating: "B", count: 64))
+        XCTAssertEqual(response.code, 0)
+    }
 }

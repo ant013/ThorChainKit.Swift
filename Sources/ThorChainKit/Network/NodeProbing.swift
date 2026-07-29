@@ -96,4 +96,17 @@ struct IndexedProbeOutcome: Equatable, Sendable {
 
 protocol NodeProbing: Sendable {
     func probe(index: Int, family: EndpointFamilyDescriptor) async -> [IndexedProbeOutcome]
+    func latestBlock(family: EndpointFamilyDescriptor) async -> Result<CosmosLatestBlockObservation, RoleProbeFailure>
+}
+
+extension NodeProbing {
+    func latestBlock(family: EndpointFamilyDescriptor) async -> Result<CosmosLatestBlockObservation, RoleProbeFailure> {
+        let outcomes = await probe(index: 0, family: family)
+        guard let outcome = outcomes.first(where: { $0.index.request == .cosmosLatestBlock }),
+              case let .cosmosLatestBlock(result) = outcome.result
+        else {
+            return .failure(.invalidResponse(field: .blockHeaderHeight))
+        }
+        return result
+    }
 }

@@ -72,7 +72,7 @@ final class PublicApiTests: XCTestCase {
         XCTAssertEqual(configuration.effectiveMaximumAttempts, 1)
         XCTAssertEqual(EndpointPolicy.default.maximumHeightLag, 5)
         XCTAssertEqual(EndpointPolicy.default.identityRevalidationInterval, 300)
-        XCTAssertEqual(EndpointPolicy.default.retryableStatusCodes, [408, 429, 502, 503, 504])
+        XCTAssertEqual(EndpointPolicy.default.retryableStatusCodes, [408, 429, 500, 502, 503, 504])
         XCTAssertNil(EndpointPolicy.default.maximumAttempts)
         XCTAssertEqual(EndpointPolicy.default.maximumBalancePageCount, 100)
     }
@@ -140,7 +140,7 @@ final class PublicApiTests: XCTestCase {
             }
         }
         assertEndpointError(.invalidPolicyField("retryableStatusCodes")) {
-            try EndpointPolicy(retryableStatusCodes: [408, 500])
+            try EndpointPolicy(retryableStatusCodes: [408, 501])
         }
         for pageCount in [0, 1001] {
             assertEndpointError(.invalidPolicyField("maximumBalancePageCount")) {

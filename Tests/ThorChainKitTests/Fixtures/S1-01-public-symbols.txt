@@ -42,7 +42,7 @@ swift.init	Address.init(_:network:)	init(_ raw: String, network: Network) throws
 swift.init	Denom.init(rawValue:)	init(rawValue: String) throws
 swift.init	EndpointConfiguration.init(families:clientId:requestTimeout:policy:)	init(families: [EndpointFamilyDescriptor], clientId: String? = nil, requestTimeout: TimeInterval = 15, policy: EndpointPolicy = .default) throws
 swift.init	EndpointFamilyDescriptor.init(id:cosmosRestURL:cometBftURL:)	init(id: String, cosmosRestURL: URL, cometBftURL: URL) throws
-swift.init	EndpointPolicy.init(maximumHeightLag:identityRevalidationInterval:retryableStatusCodes:maximumAttempts:maximumBalancePageCount:)	init(maximumHeightLag: Int64 = 5, identityRevalidationInterval: TimeInterval = 300, retryableStatusCodes: Set<Int> = [408, 429, 502, 503, 504], maximumAttempts: Int? = nil, maximumBalancePageCount: Int = 100) throws
+swift.init	EndpointPolicy.init(maximumHeightLag:identityRevalidationInterval:retryableStatusCodes:maximumAttempts:maximumBalancePageCount:)	init(maximumHeightLag: Int64 = 5, identityRevalidationInterval: TimeInterval = 300, retryableStatusCodes: Set<Int> = [408, 429, 500, 502, 503, 504], maximumAttempts: Int? = nil, maximumBalancePageCount: Int = 100) throws
 swift.init	Network.Environment.init(rawValue:)	init?(rawValue: String)
 swift.method	Kit.refresh()	func refresh()
 swift.method	Kit.start()	func start()

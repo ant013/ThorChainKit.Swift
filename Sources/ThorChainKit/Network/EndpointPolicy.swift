@@ -10,7 +10,7 @@ public struct EndpointPolicy: Hashable, Sendable {
     public init(
         maximumHeightLag: Int64 = 5,
         identityRevalidationInterval: TimeInterval = 300,
-        retryableStatusCodes: Set<Int> = [408, 429, 502, 503, 504],
+        retryableStatusCodes: Set<Int> = [408, 429, 500, 502, 503, 504],
         maximumAttempts: Int? = nil,
         maximumBalancePageCount: Int = 100
     ) throws {
@@ -20,7 +20,7 @@ public struct EndpointPolicy: Hashable, Sendable {
         guard identityRevalidationInterval.isFinite, identityRevalidationInterval > 0 else {
             throw EndpointConfigurationError.invalidPolicyField("identityRevalidationInterval")
         }
-        guard retryableStatusCodes.isSubset(of: [408, 429, 502, 503, 504]) else {
+        guard retryableStatusCodes.isSubset(of: [408, 429, 500, 502, 503, 504]) else {
             throw EndpointConfigurationError.invalidPolicyField("retryableStatusCodes")
         }
         guard maximumAttempts.map({ $0 >= 1 }) ?? true else {
