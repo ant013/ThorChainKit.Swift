@@ -1,6 +1,6 @@
 # ThorChainKit — поклассовая спецификация архитектурного соответствия аналогам
 
-**Статус:** draft — исследовательская спецификация, к реализации не допущена  
+**Статус:** active — реализация Sprint 3 transaction/history разрешена  
 **Базовый Kit для оценки:** `ThorChainKit.Swift@ad9c748cc7d2952fba9ed4a64c13c07f8cb15bd5`  
 **Текущий host-потребитель:** `unstoppable-wallet-ios@c0bb5a16d848be7cd6d57ad0f5587df339d168a4`, ветка `feature/THR-160-s2-07-unstoppable`  
 **Исторические аналоги:** `TronKit.Swift@aa691bcd8c79d57a554d72a4996bec4d7e1afce5`, `EvmKit.Swift@be0286317c202084784c5a695928cdc985c4ff7b`, `unstoppable-wallet-ios@44d6df8db07bd7165481e02fc61cae72ad64743a`
@@ -25,9 +25,21 @@ THORChain/Cosmos факты остаются первичными для про�
   transaction records;
 - UIKit-free SwiftUI Example при UIKit-oriented исторических Example apps.
 
-В спецификации «аналог» означает подтверждённую роль/границу, а не источник
-кода для копирования. Generated protobuf, fixture-only transports и
-test-only adapters не являются архитектурными аналогами.
+### Жёсткое правило TronKit-first
+
+Для Sprint 3 `TronKit.Swift` является **исходным default-кодом**, а не только
+аналогом роли. Новый THOR transaction/history class сначала переносит из
+соответствующего TronKit class его ответственность, API-форму, ownership,
+storage shape, publisher и control flow. Нельзя заменять этот каркас новым
+THOR-specific design только потому, что он кажется удобнее.
+
+Новая логика допускается лишь в самом узком месте, где literal перенос
+невозможен из-за подтверждённого Cosmos/THOR требования: cursor/wire format,
+height/endpoint proof, protobuf decoding, hash/status semantics или
+reconciliation с существующим sequence journal. Такая дельта обязана быть
+локальной, названа по THOR-причине и не может менять остальной Tron-shaped
+контур. Generated protobuf, fixture-only transports и test-only adapters не
+являются архитектурными аналогами.
 
 ## 2. Фактический baseline
 
@@ -237,4 +249,3 @@ multichain provider without a separate migration decision.
    is the metadata authority released?
 4. What user-visible retry/reconciliation surface should Sprint 3 add for a
    durable `.unknown` submission?
-
