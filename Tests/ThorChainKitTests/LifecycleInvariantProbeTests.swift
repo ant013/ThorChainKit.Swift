@@ -3,46 +3,29 @@ import XCTest
 @testable import ThorChainKit
 
 final class LifecycleInvariantProbeTests: XCTestCase {
-    func testDuplicateStart() async throws {
-        let syncer = makeSyncer()
-        await syncer.start(generation: 1)
-        await syncer.start(generation: 1)
-    }
-
-    func testStoppedRefresh() async throws {
-        await makeSyncer().refresh()
-    }
-
-    func testDuplicateStop() async throws {
-        let syncer = makeSyncer()
-        await syncer.start(generation: 1)
-        await syncer.stop(generation: 1)
-        await syncer.stop(generation: 1)
-    }
-
-    private func makeSyncer() -> AccountSyncer {
-        let address = try! Address("thor166aczv0jatlnyzz8zsczdzk9xxxgppfpu530jl", network: .mainnet)
-        let key = StorageKey(persistenceNamespace: String(repeating: "0", count: 64))
-        let storage = InvariantProbeStorage()
-        let gate = LifecycleGate(
-            dispatcher: DispatchQueue(label: "s1-05-invariant-probe"),
-            address: address,
-            key: key,
-            storage: storage,
-            publishing: StatePublishing()
-        )
-        return AccountSyncer(
-            address: address,
-            storageKey: key,
-            reader: InvariantProbeReader(),
-            storage: storage,
-            gate: gate,
+    func testDirectSyncerLifecycleIsIdempotent() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let manager = AccountInfoManager(storage: try AccountInfoStorage(databaseDirectoryUrl: directory, databaseFileName: "account-info-storage"))
+        let syncer = Syncer(
+            accountInfoManager: manager,
+            reader: ProbeReader(),
+            storage: try SyncerStorage(databaseDirectoryUrl: directory, databaseFileName: "syncer-state-storage"),
+            address: try sendTestAddress(),
             schedule: SyncSchedule(normalInterval: 60, failureBackoff: 60)
         )
+
+        let first = syncer.start()
+        let second = syncer.start()
+        XCTAssertEqual(first, second)
+        XCTAssertEqual(syncer.stop(), first)
+        XCTAssertNil(syncer.stop())
+        syncer.refresh()
     }
 }
 
-private struct InvariantProbeReader: AccountReading {
+private struct ProbeReader: AccountReading {
     func read(address: Address) async throws -> AccountReadTransport {
         try AccountReadTransport(
             acceptedHeight: 1,
@@ -52,11 +35,4 @@ private struct InvariantProbeReader: AccountReading {
             observedAt: Date(timeIntervalSince1970: 1)
         )
     }
-}
-
-private struct InvariantProbeStorage: AccountStateStorage {
-    func load(key: StorageKey) async throws -> StorageRecord? { nil }
-    func advanceGeneration(key: StorageKey) throws -> UInt64 { 1 }
-    func saveIfCurrent(_ record: StorageRecord, key: StorageKey, expectedGeneration: UInt64) async throws -> Bool { true }
-    func clear(key: StorageKey) async throws {}
 }

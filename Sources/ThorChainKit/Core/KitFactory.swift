@@ -18,10 +18,17 @@ public extension Kit {
             .map { String(format: "%02x", $0) }
             .joined()
 
-        let facadeDispatcher = DispatchQueue(label: "io.horizontalsystems.thorchain-kit.facade")
-        let publishing = StatePublishing()
+        let databaseDirectory = try databaseDirectory()
+        let syncerStorage = try SyncerStorage(
+            databaseDirectoryUrl: databaseDirectory,
+            databaseFileName: "syncer-state-storage-\(namespace)"
+        )
+        let accountInfoStorage = try AccountInfoStorage(
+            databaseDirectoryUrl: databaseDirectory,
+            databaseFileName: "account-info-storage-\(namespace)"
+        )
+        let accountInfoManager = AccountInfoManager(storage: accountInfoStorage)
         let databaseRuntime = try DatabaseRuntime.open(path: try databasePath(namespace: namespace))
-        let storage = GrdbAccountStateStorage(writer: databaseRuntime.pool)
         let probe = LiveNodeProbe(configuration: endpoints)
         let pool = EndpointPool(network: address.network, configuration: endpoints, probe: probe)
         let liveClient = LiveThorNodeClient(
@@ -39,14 +46,6 @@ public extension Kit {
             pool: pool,
             client: liveClient,
             configuration: endpoints
-        )
-        let key = StorageKey(persistenceNamespace: namespace)
-        let gate = LifecycleGate(
-            dispatcher: facadeDispatcher,
-            address: address,
-            key: key,
-            storage: storage,
-            publishing: publishing
         )
         let publicationBarrier = PendingPublicationBarrier()
         let pendingRepository = PendingTransactionRepository(
@@ -71,14 +70,12 @@ public extension Kit {
             },
             operationDeadline: endpoints.requestTimeout
         )
-        let syncer = AccountSyncer(
-            address: address,
-            storageKey: key,
+        let syncer = Syncer(
+            accountInfoManager: accountInfoManager,
             reader: reader,
-            storage: storage,
-            gate: gate
+            storage: syncerStorage,
+            address: address
         )
-        let bridge = LifecycleCommandBridge(syncer: syncer, gate: gate, sendRuntime: sendRuntime)
         let preflight = SendPreflightCoordinator(
             runtime: sendRuntime,
             provider: ThorNodeSendPreflightProvider(
@@ -90,15 +87,12 @@ public extension Kit {
         )
         return Kit(
             address: address,
-            dependencies: KitDependencies(
-                lifecycle: bridge,
-                sendRuntime: sendRuntime,
-                preflight: preflight,
-                pendingRepository: pendingRepository
-            ),
-            persistenceNamespace: namespace,
-            facadeDispatcher: facadeDispatcher,
-            publishing: publishing
+            syncer: syncer,
+            accountInfoManager: accountInfoManager,
+            sendRuntime: sendRuntime,
+            preflight: preflight,
+            pendingRepository: pendingRepository,
+            persistenceNamespace: namespace
         )
     }
 
@@ -121,10 +115,17 @@ public extension Kit {
         let namespace = SHA256.hash(data: namespaceInput)
             .map { String(format: "%02x", $0) }
             .joined()
-        let facadeDispatcher = DispatchQueue(label: "io.horizontalsystems.thorchain-kit.facade")
-        let publishing = StatePublishing()
+        let fixtureDatabaseDirectory = URL(fileURLWithPath: databasePath).deletingLastPathComponent()
+        let syncerStorage = try SyncerStorage(
+            databaseDirectoryUrl: fixtureDatabaseDirectory,
+            databaseFileName: "syncer-state-storage-\(namespace)"
+        )
+        let accountInfoStorage = try AccountInfoStorage(
+            databaseDirectoryUrl: fixtureDatabaseDirectory,
+            databaseFileName: "account-info-storage-\(namespace)"
+        )
+        let accountInfoManager = AccountInfoManager(storage: accountInfoStorage)
         let databaseRuntime = try DatabaseRuntime.open(path: databasePath)
-        let storage = GrdbAccountStateStorage(writer: databaseRuntime.pool)
         let adapter = FixtureHTTPTransportAdapter(transport: transport)
         let probe = LiveNodeProbe(configuration: endpoints, transport: adapter)
         let pool = EndpointPool(network: address.network, configuration: endpoints, probe: probe)
@@ -145,14 +146,6 @@ public extension Kit {
             client: liveClient,
             configuration: endpoints,
             wallClock: FixtureAccountReadWallClock(now: observedAt)
-        )
-        let key = StorageKey(persistenceNamespace: namespace)
-        let gate = LifecycleGate(
-            dispatcher: facadeDispatcher,
-            address: address,
-            key: key,
-            storage: storage,
-            publishing: publishing
         )
         let publicationBarrier = PendingPublicationBarrier()
         let pendingRepository = PendingTransactionRepository(
@@ -177,12 +170,11 @@ public extension Kit {
             },
             operationDeadline: endpoints.requestTimeout
         )
-        let syncer = AccountSyncer(
-            address: address,
-            storageKey: key,
+        let syncer = Syncer(
+            accountInfoManager: accountInfoManager,
             reader: reader,
-            storage: storage,
-            gate: gate
+            storage: syncerStorage,
+            address: address
         )
         let preflight = SendPreflightCoordinator(
             runtime: sendRuntime,
@@ -218,19 +210,22 @@ public extension Kit {
         )
         return Kit(
             address: address,
-            dependencies: KitDependencies(
-                lifecycle: LifecycleCommandBridge(syncer: syncer, gate: gate, sendRuntime: sendRuntime),
-                sendRuntime: sendRuntime,
-                preflight: preflight,
-                pendingRepository: pendingRepository
-            ),
-            persistenceNamespace: namespace,
-            facadeDispatcher: facadeDispatcher,
-            publishing: publishing
+            syncer: syncer,
+            accountInfoManager: accountInfoManager,
+            sendRuntime: sendRuntime,
+            preflight: preflight,
+            pendingRepository: pendingRepository,
+            persistenceNamespace: namespace
         )
     }
 
     private static func databasePath(namespace: String) throws -> String {
+        try databaseDirectory()
+            .appendingPathComponent("account-\(namespace).sqlite")
+            .path
+    }
+
+    private static func databaseDirectory() throws -> URL {
         let directory = try FileManager.default.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
@@ -238,7 +233,7 @@ public extension Kit {
             create: true
         ).appendingPathComponent("ThorChainKit", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory.appendingPathComponent("account-\(namespace).sqlite").path
+        return directory
     }
 }
 

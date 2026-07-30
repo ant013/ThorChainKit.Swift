@@ -1,88 +1,48 @@
-import BigInt
 import Foundation
 import XCTest
 @testable import ThorChainKit
 
-final class AccountStateStorageTests: XCTestCase {
-    func testInvalidFreshRecordIsRejectedBeforeSave() throws {
-        XCTAssertThrowsError(
-            try StorageRecord(
-                storageKey: StorageKey(persistenceNamespace: String(repeating: "a", count: 64)),
-                address: "thor1address",
-                networkChainId: "thorchain-1",
-                accountExists: true,
-                accountNumber: 1,
-                sequence: 2,
-                acceptedHeight: 100,
-                fetchedAt: Date(timeIntervalSince1970: 1),
-                providerFamilyId: "primary",
-                balances: [StoredBalance(denom: "x", amountDecimalString: "1")]
-            )
-        )
-    }
+final class AccountInfoStorageTests: XCTestCase {
+    func testRestoresOneCompleteAccountSnapshot() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storage = try AccountInfoStorage(databaseDirectoryUrl: directory, databaseFileName: "account-info-storage-test")
+        let record = try accountInfo()
 
-    func testLoadUsesOneConsistentReadSnapshot() async throws {
-        let path = FileManager.default.temporaryDirectory
-            .appendingPathComponent("thorchain-s1-05-(UUID().uuidString).sqlite")
-            .path
-        defer { try? FileManager.default.removeItem(atPath: path) }
+        try storage.save(accountInfo: record)
 
-        let storage = try GrdbAccountStateStorage(path: path)
-        let key = StorageKey(persistenceNamespace: String(repeating: "b", count: 64))
-        XCTAssertEqual(try storage.advanceGeneration(key: key), 1)
-        let record = try StorageRecord(
-            storageKey: key,
-            address: "thor1address",
-            networkChainId: "thorchain-1",
-            accountExists: true,
-            accountNumber: 1,
-            sequence: 2,
-            acceptedHeight: 100,
-            fetchedAt: Date(timeIntervalSince1970: 1),
-            providerFamilyId: "primary",
-            balances: [
-                StoredBalance(denom: "rune", amountDecimalString: "7"),
-                StoredBalance(denom: "thor", amountDecimalString: "9"),
-            ]
-        )
-
-        let saved = try await storage.saveIfCurrent(record, key: key, expectedGeneration: 1)
-        let loaded = try await storage.load(key: key)
-        XCTAssertTrue(saved)
-        XCTAssertEqual(loaded, record)
-    }
-
-    func testStorageSaveFailurePublishesStorageUnavailableWithoutSynced() throws {
-        let address = try Address("thor166aczv0jatlnyzz8zsczdzk9xxxgppfpu530jl", network: .mainnet)
-        let key = StorageKey(persistenceNamespace: String(repeating: "b", count: 64))
-        let publishing = StatePublishing()
-        let gate = LifecycleGate(
-            dispatcher: DispatchQueue(label: "s1-05-storage-failure-test"),
-            address: address,
-            key: key,
-            storage: TestStorageFailureStorage(),
-            publishing: publishing
-        )
-        let generation = try XCTUnwrap(gate.start())
-        gate.publishFailureIfCurrent(SyncFailure(
-            generation: generation,
-            address: address.raw,
-            networkChainId: address.network.expectedChainId,
-            error: .storageUnavailable
-        ))
-
-        guard case let .notSynced(error, cached: nil) = publishing.snapshot.syncState else {
-            return XCTFail("Expected storage failure without a synced snapshot")
-        }
-        XCTAssertEqual(error, .storageUnavailable)
+        XCTAssertEqual(try storage.accountInfo(), record)
     }
 }
 
-private struct TestStorageFailureStorage: AccountStateStorage {
-    func load(key: StorageKey) async throws -> StorageRecord? { nil }
-    func advanceGeneration(key: StorageKey) throws -> UInt64 { 1 }
-    func saveIfCurrent(_ record: StorageRecord, key: StorageKey, expectedGeneration: UInt64) async throws -> Bool {
-        throw StorageRecordError.invalid
+final class SyncerStorageTests: XCTestCase {
+    func testPersistsLastBlockHeightOnly() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storage = try SyncerStorage(databaseDirectoryUrl: directory, databaseFileName: "syncer-state-storage-test")
+
+        try storage.save(lastBlockHeight: 123)
+
+        XCTAssertEqual(storage.lastBlockHeight, 123)
     }
-    func clear(key: StorageKey) async throws {}
+}
+
+private func temporaryDirectory() throws -> URL {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    return directory
+}
+
+private func accountInfo() throws -> AccountInfoRecord {
+    try AccountInfoRecord(
+        address: "thor166aczv0jatlnyzz8zsczdzk9xxxgppfpu530jl",
+        networkChainId: "thorchain-1",
+        accountExists: true,
+        accountNumber: 1,
+        sequence: 2,
+        acceptedHeight: 123,
+        fetchedAt: Date(timeIntervalSince1970: 1),
+        providerFamilyId: "primary",
+        balances: [StoredBalance(denom: "rune", amountDecimalString: "7")]
+    )
 }

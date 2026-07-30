@@ -8,18 +8,13 @@ final class KitCompositionTests: XCTestCase {
     func testKitCompositionRetainsOneSendRuntimeAndPendingFacade() throws {
         let address = try sendTestAddress()
         let runtime = SendRuntime(address: address)
-        let kit = Kit(
-            address: address,
-            dependencies: KitDependencies(lifecycle: NoOpLifecycle(), sendRuntime: runtime),
-            persistenceNamespace: "composition",
-            facadeDispatcher: DispatchQueue(label: "composition")
-        )
+        let kit = makeTestKit(address: address, sendRuntime: runtime, persistenceNamespace: "composition")
 
         XCTAssertTrue(kit.pendingTransactions.isEmpty)
         if case .degraded = kit.pendingTransactionsStatus {} else {
             XCTFail("S2-01 pending state must be explicitly degraded")
         }
-        XCTAssertNotNil(kit.dependencies.sendRuntime)
+        XCTAssertNotNil(kit.sendRuntime)
     }
 
     func testProductionFactoryBridgeIsSynchronousSafe() async throws {
@@ -35,8 +30,8 @@ final class KitCompositionTests: XCTestCase {
         let first = try Kit.instance(address: address, walletId: "composition-bridge", endpoints: endpoints)
         let second = try Kit.instance(address: address, walletId: "composition-bridge", endpoints: endpoints)
 
-        let firstRuntimeID = await first.dependencies.sendRuntime.databaseRuntimeIdentifier()
-        let secondRuntimeID = await second.dependencies.sendRuntime.databaseRuntimeIdentifier()
+        let firstRuntimeID = await first.sendRuntime.databaseRuntimeIdentifier()
+        let secondRuntimeID = await second.sendRuntime.databaseRuntimeIdentifier()
         XCTAssertEqual(firstRuntimeID, secondRuntimeID)
     }
 
@@ -52,8 +47,8 @@ final class KitCompositionTests: XCTestCase {
         let first = try Kit.instance(address: address, walletId: "composition-writer", endpoints: endpoints)
         let second = try Kit.instance(address: address, walletId: "composition-writer", endpoints: endpoints)
 
-        let firstRuntimeID = await first.dependencies.sendRuntime.databaseRuntimeIdentifier()
-        let secondRuntimeID = await second.dependencies.sendRuntime.databaseRuntimeIdentifier()
+        let firstRuntimeID = await first.sendRuntime.databaseRuntimeIdentifier()
+        let secondRuntimeID = await second.sendRuntime.databaseRuntimeIdentifier()
         XCTAssertEqual(firstRuntimeID, secondRuntimeID)
     }
 
@@ -182,9 +177,9 @@ final class KitCompositionTests: XCTestCase {
             observedAt: Date(timeIntervalSince1970: 1)
         )
 
-        XCTAssertNotEqual(ObjectIdentifier(instance.dependencies.sendRuntime), ObjectIdentifier(fixture.dependencies.sendRuntime))
-        let instanceAuthority = await instance.dependencies.sendRuntime.authorityClientID()
-        let fixtureAuthority = await fixture.dependencies.sendRuntime.authorityClientID()
+        XCTAssertNotEqual(ObjectIdentifier(instance.sendRuntime), ObjectIdentifier(fixture.sendRuntime))
+        let instanceAuthority = await instance.sendRuntime.authorityClientID()
+        let fixtureAuthority = await fixture.sendRuntime.authorityClientID()
         XCTAssertNotEqual(instanceAuthority, fixtureAuthority)
         XCTAssertTrue(instance.pendingTransactions.isEmpty)
         XCTAssertTrue(fixture.pendingTransactions.isEmpty)
@@ -211,9 +206,16 @@ final class KitCompositionTests: XCTestCase {
         )
         fixture.start()
 
-        let isActive = await fixture.dependencies.sendRuntime.isAdmissionActive()
+        var isActive = false
+        var urls = [URL]()
+        for _ in 0..<100 {
+            isActive = await fixture.sendRuntime.isAdmissionActive()
+            urls = await transport.requestURLs()
+            if isActive && !urls.isEmpty { break }
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+
         XCTAssertTrue(isActive)
-        let urls = await transport.requestURLs()
         XCTAssertFalse(urls.isEmpty)
         XCTAssertTrue(urls.allSatisfy { $0.host == family.cosmosRestURL.host || $0.host == family.cometBftURL.host })
     }
@@ -239,7 +241,7 @@ final class KitCompositionTests: XCTestCase {
             databasePath: databaseURL.path,
             observedAt: Date(timeIntervalSince1970: 1)
         )
-        let runtime = fixture.dependencies.sendRuntime
+        let runtime = fixture.sendRuntime
         await runtime.activate(generation: 1)
         let snapshot = try SendSnapshot(
             familyID: family.id,

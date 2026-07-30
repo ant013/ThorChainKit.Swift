@@ -7,12 +7,7 @@ import XCTest
 final class SendPublicApiTests: XCTestCase {
     func testPendingFacadeReplaysEmptyDegradedSnapshotWithoutStorage() throws {
         let address = try sendTestAddress()
-        let kit = Kit(
-            address: address,
-            dependencies: KitDependencies(lifecycle: NoOpLifecycle()),
-            persistenceNamespace: "send-public-api",
-            facadeDispatcher: DispatchQueue(label: "send-public-api")
-        )
+        let kit = makeTestKit(address: address, persistenceNamespace: "send-public-api")
         var snapshots = [[PendingTransaction]]()
         var statuses = [PendingTransactionsStatus]()
         let snapshotCancellable = kit.pendingTransactionsPublisher.sink { snapshots.append($0) }
@@ -36,12 +31,7 @@ final class SendPublicApiTests: XCTestCase {
     func testLifecycleAdmissionPrecedesValidationAndDeferredEnginesFailClosed() async throws {
         let address = try sendTestAddress()
         let runtime = SendRuntime(address: address)
-        let kit = Kit(
-            address: address,
-            dependencies: KitDependencies(lifecycle: NoOpLifecycle(), sendRuntime: runtime),
-            persistenceNamespace: "send-admission",
-            facadeDispatcher: DispatchQueue(label: "send-admission")
-        )
+        let kit = makeTestKit(address: address, sendRuntime: runtime, persistenceNamespace: "send-admission")
 
         do {
             _ = try await kit.quote(to: address, amount: .exact(0))
@@ -66,12 +56,7 @@ final class SendPublicApiTests: XCTestCase {
     func testQuoteZeroAmountPrecedesRecipientChecks() async throws {
         let address = try sendTestAddress()
         let runtime = SendRuntime(address: address)
-        let kit = Kit(
-            address: address,
-            dependencies: KitDependencies(lifecycle: NoOpLifecycle(), sendRuntime: runtime),
-            persistenceNamespace: "send-validation-order",
-            facadeDispatcher: DispatchQueue(label: "send-validation-order")
-        )
+        let kit = makeTestKit(address: address, sendRuntime: runtime, persistenceNamespace: "send-validation-order")
 
         await runtime.activate(generation: 1)
         do {

@@ -25,10 +25,6 @@ let package = Package(
             url: "https://github.com/apple/swift-protobuf.git",
             exact: "1.33.3"
         ),
-        .package(
-            url: "https://github.com/horizontalsystems/HdWalletKit.Swift.git",
-            revision: "2fc0dbfc089f78a9804baafe8e1bc4aab69cbad1"
-        ),
     ],
     targets: [
         .target(

@@ -61,8 +61,7 @@ final class EndpointOperationRunnerTests: XCTestCase {
         catch { XCTFail("unexpected error: \(error)") }
 
         gate.open()
-        for _ in 0..<20 { await Task.yield() }
-        do { _ = try await runner.run { 3 } }
+        do { _ = try await runAfterOrphansRelease(runner) { 3 } }
         catch { XCTFail("late completion must release capacity: \(error)") }
     }
 
@@ -80,8 +79,7 @@ final class EndpointOperationRunnerTests: XCTestCase {
         catch let error as EndpointOperationError { XCTAssertEqual(error, .orphanCapReached) }
         catch { XCTFail("unexpected error: \(error)") }
         gate.open()
-        for _ in 0..<20 { await Task.yield() }
-        do { _ = try await runner.run { 3 } }
+        do { _ = try await runAfterOrphansRelease(runner) { 3 } }
         catch { XCTFail("late completion must release capacity: \(error)") }
     }
 
@@ -102,7 +100,7 @@ final class EndpointOperationRunnerTests: XCTestCase {
         catch let error as EndpointOperationError { XCTAssertEqual(error, .deadlineExceeded) }
         catch { XCTFail("unexpected error: \(error)") }
         do {
-            let result = try await runner.run { 2 }
+            let result = try await runAfterOrphansRelease(runner) { 2 }
             XCTAssertEqual(result, 2)
         }
         catch { XCTFail("returned dependency must release capacity: \(error)") }
@@ -120,9 +118,8 @@ final class EndpointOperationRunnerTests: XCTestCase {
         catch let error as EndpointOperationError { XCTAssertEqual(error, .orphanCapReached) }
         catch { XCTFail("unexpected error: \(error)") }
         firstGate.open(); secondGate.open()
-        for _ in 0..<20 { await Task.yield() }
         do {
-            let result = try await runner.run { 4 }
+            let result = try await runAfterOrphansRelease(runner) { 4 }
             XCTAssertEqual(result, 4)
         } catch { XCTFail("both late completions must release capacity: \(error)") }
     }
@@ -145,7 +142,7 @@ final class EndpointOperationRunnerTests: XCTestCase {
         catch let error as EndpointOperationError { XCTAssertEqual(error, .cancelled) }
         catch { XCTFail("unexpected error: \(error)") }
         do {
-            let result = try await runner.run { 2 }
+            let result = try await runAfterOrphansRelease(runner) { 2 }
             XCTAssertEqual(result, 2)
         } catch { XCTFail("returned dependency must release capacity: \(error)") }
     }
@@ -173,8 +170,7 @@ final class EndpointOperationRunnerTests: XCTestCase {
         catch { XCTFail("unexpected error: \(error)") }
 
         firstGate.open(); secondGate.open()
-        for _ in 0..<20 { await Task.yield() }
-        do { _ = try await runner.run(familyID: "family-a") { 5 } }
+        do { _ = try await runAfterOrphansRelease(runner) { 5 } }
         catch { XCTFail("completed orphans must release capacity: \(error)") }
     }
 
@@ -212,6 +208,20 @@ final class EndpointOperationRunnerTests: XCTestCase {
 
         await fulfillment(of: [finished], timeout: 1)
     }
+}
+
+private func runAfterOrphansRelease<T: Sendable>(
+    _ runner: EndpointOperationRunner,
+    operation: @escaping @Sendable () async throws -> T
+) async throws -> T {
+    for _ in 0..<100 {
+        do {
+            return try await runner.run(operation)
+        } catch EndpointOperationError.orphanCapReached {
+            try? await Task.sleep(nanoseconds: 1_000_000)
+        }
+    }
+    throw EndpointOperationError.orphanCapReached
 }
 
 private final class AsyncGate: @unchecked Sendable {

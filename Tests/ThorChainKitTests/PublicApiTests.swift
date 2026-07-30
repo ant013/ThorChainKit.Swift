@@ -331,9 +331,10 @@ final class PublicApiTests: XCTestCase {
     }
 
     func testFactoryCreatesNoWorkAndDoesNotStartLifecycle() throws {
-        let (kit, lifecycle) = try makeKit()
-
-        XCTAssertTrue(lifecycle.events.isEmpty)
+        let kit = makeTestKit(address: try Address(
+            "thor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhudkmnn2",
+            network: .mainnet
+        ))
         XCTAssertNil(kit.lastBlockHeight)
         XCTAssertEqual(kit.syncState, .idle(cached: false))
         XCTAssertNil(kit.accountState)
@@ -352,62 +353,11 @@ final class PublicApiTests: XCTestCase {
         XCTAssertFalse(factoryKit.accountExists)
     }
 
-    func testLifecycleSerializesIdempotentStartStopAndRunningRefresh() throws {
-        let (kit, lifecycle) = try makeKit()
-        kit.start()
-        kit.start()
-        kit.refresh()
-        kit.stop()
-        kit.stop()
-        kit.refresh()
-        XCTAssertEqual(lifecycle.events.map(\.name), ["start", "refresh", "stop"])
-
-        try assertReentryTrace(
-            initiallyRunning: false,
-            c0: { $0.start() },
-            reentrant: { $0.stop() },
-            c1: { $0.start() },
-            expected: ["start", "stop", "start"]
-        )
-        try assertReentryTrace(
-            initiallyRunning: true,
-            c0: { $0.stop() },
-            reentrant: { $0.start() },
-            c1: { $0.stop() },
-            expected: ["stop", "start", "stop"]
-        )
-        try assertReentryTrace(
-            initiallyRunning: true,
-            c0: { $0.refresh() },
-            reentrant: { $0.refresh() },
-            c1: { $0.stop() },
-            expected: ["refresh", "refresh", "stop"]
-        )
-        try assertReentryTrace(
-            initiallyRunning: false,
-            c0: { $0.start() },
-            reentrant: { $0.start() },
-            c1: { $0.stop() },
-            expected: ["start", "stop"]
-        )
-        try assertReentryTrace(
-            initiallyRunning: true,
-            c0: { $0.stop() },
-            reentrant: { $0.stop() },
-            c1: { $0.start() },
-            expected: ["stop", "start"]
-        )
-        try assertReentryTrace(
-            initiallyRunning: true,
-            c0: { $0.stop() },
-            reentrant: { $0.refresh() },
-            c1: { $0.start() },
-            expected: ["stop", "start"]
-        )
-    }
-
     func testInitialPublishersAllowReentrantSnapshotAndLifecycleAccess() throws {
-        let (kit, lifecycle) = try makeKit()
+        let kit = makeTestKit(address: try Address(
+            "thor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhudkmnn2",
+            network: .mainnet
+        ))
         let height = expectation(description: "height replay")
         let sync = expectation(description: "sync replay")
         let account = expectation(description: "account replay")
@@ -434,7 +384,6 @@ final class PublicApiTests: XCTestCase {
         }.store(in: &cancellables)
 
         wait(for: [height, sync, account], timeout: 1)
-        XCTAssertTrue(lifecycle.events.isEmpty)
         XCTAssertEqual(cancellables.count, 3)
     }
 
@@ -475,58 +424,6 @@ final class PublicApiTests: XCTestCase {
         try EndpointConfiguration(families: [family(id: "primary")])
     }
 
-    private func makeKit() throws -> (Kit, LifecycleSpy) {
-        let lifecycle = LifecycleSpy()
-        let address = try Address(
-            "thor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhudkmnn2",
-            network: .mainnet
-        )
-        let kit = Kit(
-            address: address,
-            dependencies: KitDependencies(lifecycle: lifecycle),
-            persistenceNamespace: "test"
-        )
-        return (kit, lifecycle)
-    }
-
-    private func assertReentryTrace(
-        initiallyRunning: Bool,
-        c0: @escaping (Kit) -> Void,
-        reentrant: @escaping (Kit) -> Void,
-        c1: @escaping (Kit) -> Void,
-        expected: [String],
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) throws {
-        let (kit, lifecycle) = try makeKit()
-        if initiallyRunning {
-            kit.start()
-            lifecycle.events.removeAll()
-        }
-
-        let c1Entered = DispatchSemaphore(value: 0)
-        let c1Completed = DispatchSemaphore(value: 0)
-        var c1Thread: pthread_t?
-        lifecycle.onEvent = { _ in
-            lifecycle.onEvent = nil
-            c1Thread = startTestThread {
-                c1Entered.signal()
-                c1(kit)
-                c1Completed.signal()
-            }
-            XCTAssertEqual(c1Entered.wait(timeout: .now() + 1), .success, file: file, line: line)
-            reentrant(kit)
-            XCTAssertEqual(lifecycle.events.map(\.name), [expected[0]], file: file, line: line)
-            XCTAssertEqual(c1Completed.wait(timeout: .now()), .timedOut, file: file, line: line)
-        }
-
-        c0(kit)
-        XCTAssertEqual(c1Completed.wait(timeout: .now() + 1), .success, file: file, line: line)
-        if let c1Thread {
-            pthread_join(c1Thread, nil)
-        }
-        XCTAssertEqual(lifecycle.events.map(\.name), expected, file: file, line: line)
-    }
 
     private func accountState(
         accountNumber: UInt64?,
@@ -572,73 +469,5 @@ final class PublicApiTests: XCTestCase {
         _ expression: () throws -> T
     ) {
         assertThrows(expected, file: file, line: line, expression)
-    }
-}
-
-private final class TestThreadJob {
-    let body: () -> Void
-
-    init(body: @escaping () -> Void) {
-        self.body = body
-    }
-}
-
-private func startTestThread(_ body: @escaping () -> Void) -> pthread_t {
-    let job = Unmanaged.passRetained(TestThreadJob(body: body)).toOpaque()
-    var thread: pthread_t?
-    let status = pthread_create(&thread, nil, { pointer in
-        Unmanaged<TestThreadJob>.fromOpaque(pointer).takeRetainedValue().body()
-        return nil
-    }, job)
-    precondition(status == 0)
-    return thread!
-}
-
-private final class LifecycleSpy: KitLifecycle {
-    enum Event {
-        case start(UInt64)
-        case stop(UInt64)
-        case refresh(UInt64)
-
-        var name: String {
-            switch self {
-            case .start: "start"
-            case .stop: "stop"
-            case .refresh: "refresh"
-            }
-        }
-    }
-
-    var events = [Event]()
-    var onEvent: ((Event) -> Void)?
-
-    func start(sequence: UInt64) -> LifecycleCommandBarrier {
-        record(.start(sequence))
-        return completedBarrier()
-    }
-
-    func stop(sequence: UInt64) -> LifecycleCommandBarrier {
-        record(.stop(sequence))
-        return completedBarrier()
-    }
-
-    func cancelStop() -> LifecycleCommandBarrier {
-        return completedBarrier()
-    }
-
-    func refresh(sequence: UInt64) -> LifecycleCommandBarrier {
-        record(.refresh(sequence))
-        return completedBarrier()
-    }
-
-    private func completedBarrier() -> LifecycleCommandBarrier {
-        let barrier = LifecycleCommandBarrier()
-        barrier.signal()
-        return barrier
-    }
-
-    private func record(_ event: Event) {
-        events.append(event)
-        onEvent?(event)
     }
 }

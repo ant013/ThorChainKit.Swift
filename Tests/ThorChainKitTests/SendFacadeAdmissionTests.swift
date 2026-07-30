@@ -8,12 +8,7 @@ final class SendFacadeAdmissionTests: XCTestCase {
     func testRetryAdmissionIsLifecycleFirstAndDeferredEngineFailsClosed() async throws {
         let address = try sendTestAddress()
         let runtime = SendRuntime(address: address)
-        let kit = Kit(
-            address: address,
-            dependencies: KitDependencies(lifecycle: NoOpLifecycle(), sendRuntime: runtime),
-            persistenceNamespace: "admission",
-            facadeDispatcher: DispatchQueue(label: "admission")
-        )
+        let kit = makeTestKit(address: address, sendRuntime: runtime, persistenceNamespace: "admission")
         let transactionId = try XCTUnwrap(TransactionID(hash: String(repeating: "A", count: 64)))
 
         do {
@@ -35,12 +30,7 @@ final class SendFacadeAdmissionTests: XCTestCase {
     func testInactiveFacadeRejectsEveryMutationBeforeDeferredDependencies() async throws {
         let address = try sendTestAddress()
         let runtime = SendRuntime(address: address)
-        let kit = Kit(
-            address: address,
-            dependencies: KitDependencies(lifecycle: NoOpLifecycle(), sendRuntime: runtime),
-            persistenceNamespace: "admission-all",
-            facadeDispatcher: DispatchQueue(label: "admission-all")
-        )
+        let kit = makeTestKit(address: address, sendRuntime: runtime, persistenceNamespace: "admission-all")
         let source = QuoteStore()
         let sourceClock = TestSendClock()
         let quote = try issueTestQuote(in: source, clock: sourceClock)

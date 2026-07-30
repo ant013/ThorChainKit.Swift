@@ -130,7 +130,7 @@ final class PendingTransactionRepositoryTests: XCTestCase {
             journal: fixture.journal,
             observationStarter: source.start
         )
-        weak var weakRepository = repository
+        weak let weakRepository = repository
         let entered = DispatchSemaphore(value: 0)
         let release = DispatchSemaphore(value: 0)
 
