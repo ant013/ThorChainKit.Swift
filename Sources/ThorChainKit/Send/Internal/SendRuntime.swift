@@ -55,11 +55,15 @@ struct SendRetryObservability: Sendable {
     }
 }
 
+private struct AccountAttemptState: Sendable {
+    let hold: OperationHold
+    let ownerToken: Data
+}
+
 actor SendRuntime {
     private let address: Address?
+    private let persistenceNamespace: String
     private let quoteStore: QuoteStore
-    private let clientID: UUID
-    private let sharedState: SendRuntimeSharedState
     private let sequenceReservations: (any SequenceReservationManaging)?
     private let journal: SendJournal?
     private let pendingRepository: PendingTransactionRepository?
@@ -76,6 +80,8 @@ actor SendRuntime {
     fileprivate nonisolated let admissionState = SendRuntimeAdmissionState()
     private var activeGeneration: UInt64?
     private var preflightAttempts = [UUID: (generation: UInt64, familyID: String?, routeID: String?)]()
+    private var activeAccounts = [String: AccountAttemptState]()
+    private var signerFences = Set<String>()
 
     init(
         address: Address? = nil,
@@ -95,7 +101,7 @@ actor SendRuntime {
         retryObservability: SendRetryObservability = SendRetryObservability()
     ) {
         self.address = address
-        self.clientID = clientID
+        self.persistenceNamespace = persistenceNamespace
         network = address?.network
         quoteStore = QuoteStore(clientID: clientID)
         sequenceReservations = reservationStore
@@ -116,15 +122,8 @@ actor SendRuntime {
         self.retryEndpointLeaseOperation = retryEndpointLeaseOperation
         self.retryPolicyOperation = retryPolicyOperation
         self.retryObservability = retryObservability
-        sharedState = SendRuntimeSharedState(persistenceNamespace: persistenceNamespace)
-        if sharedState.claimRecovery() {
-            do {
-                _ = try journal?.removeUnlinkedReservations()
-                _ = try journal?.normalizeBroadcastingToUnknown()
-            } catch {
-                sharedState.releaseRecovery()
-            }
-        }
+        _ = try? journal?.removeUnlinkedReservations()
+        _ = try? journal?.normalizeBroadcastingToUnknown()
         _ = self.pendingRepository?.refresh()
     }
 
@@ -133,20 +132,17 @@ actor SendRuntime {
     func activate(generation: UInt64) {
         activeGeneration = generation
         admissionState.activate(generation: generation)
-        sharedState.activate(clientID: clientID)
     }
 
     func invalidate(generation: UInt64) {
         if activeGeneration == generation { activeGeneration = nil }
         admissionState.invalidate(generation: generation)
-        sharedState.invalidate(clientID: clientID)
         quoteStore.invalidate(generation: generation)
         preflightAttempts = preflightAttempts.filter { $0.value.generation != generation }
     }
 
     nonisolated func invalidateImmediately(generation: UInt64) {
         admissionState.invalidate(generation: generation)
-        sharedState.invalidate(clientID: clientID)
     }
 
     nonisolated func isAdmissionActive(generation: UInt64) -> Bool {
@@ -163,7 +159,7 @@ actor SendRuntime {
         let senderAddress = try Address(sender, network: network)
         return try sequenceReservations.acquire(
             SequenceReservationKey(
-                persistenceNamespace: sharedState.persistenceNamespace,
+                persistenceNamespace: persistenceNamespace,
                 senderPayload: senderAddress.payload,
                 sequence: sequence
             ),
@@ -176,7 +172,7 @@ actor SendRuntime {
         let senderAddress = try Address(sender, network: network)
         return try sequenceReservations.release(
             SequenceReservationKey(
-                persistenceNamespace: sharedState.persistenceNamespace,
+                persistenceNamespace: persistenceNamespace,
                 senderPayload: senderAddress.payload,
                 sequence: sequence
             ),
@@ -195,7 +191,15 @@ actor SendRuntime {
 
     func beginAccountAttempt(_ sender: String) -> Bool {
         guard admissionState.isActive() else { return false }
-        return sharedState.beginAccount(sender)
+        guard activeAccounts[sender] == nil, !signerFences.contains(sender) else { return false }
+        activeAccounts[sender] = AccountAttemptState(
+            hold: OperationHold(
+                id: UUID(),
+                accountGate: AccountGate(persistenceNamespace: persistenceNamespace, sender: sender)
+            ),
+            ownerToken: Data()
+        )
+        return true
     }
 
     func acquireAccountAttempt(_ sender: String, ownerToken: Data) -> OperationHold? {
@@ -203,28 +207,35 @@ actor SendRuntime {
         let hold = OperationHold(
             id: UUID(),
             accountGate: AccountGate(
-                persistenceNamespace: sharedState.persistenceNamespace,
+                persistenceNamespace: persistenceNamespace,
                 sender: sender
             )
         )
-        guard sharedState.beginAccount(sender, hold: hold, ownerToken: ownerToken) else { return nil }
+        guard activeAccounts[sender] == nil, !signerFences.contains(sender) else { return nil }
+        activeAccounts[sender] = AccountAttemptState(hold: hold, ownerToken: ownerToken)
         return hold
     }
 
     func endAccountAttempt(_ sender: String) {
-        sharedState.endAccount(sender)
+        activeAccounts.removeValue(forKey: sender)
     }
 
     func releaseOperationHold(_ hold: OperationHold, ownerToken: Data) -> Bool {
-        sharedState.releaseAccount(hold, ownerToken: ownerToken)
+        guard let state = activeAccounts[hold.accountGate.sender],
+              state.hold == hold,
+              state.ownerToken == ownerToken else { return false }
+        activeAccounts.removeValue(forKey: hold.accountGate.sender)
+        return true
     }
 
     func beginSignerFence(_ sender: String) -> Bool {
-        sharedState.beginSignerFence(sender)
+        guard !signerFences.contains(sender) else { return false }
+        signerFences.insert(sender)
+        return true
     }
 
     func endSignerFence(_ sender: String) {
-        sharedState.endSignerFence(sender)
+        signerFences.remove(sender)
     }
 
     func beginPreflight() throws -> SendPreflightAttempt {
@@ -301,7 +312,7 @@ actor SendRuntime {
         guard journal != nil else { throw SendError.operationUnavailable }
         let result = await SendCoordinator(
             runtime: self,
-            persistenceNamespace: sharedState.persistenceNamespace,
+            persistenceNamespace: persistenceNamespace,
             network: network ?? .mainnet
         ).execute(quote: quote, signer: signer)
         guard case let .handoff(handoff) = result else {

@@ -3,7 +3,7 @@ import XCTest
 @testable import ThorChainKit
 
 final class SendRuntimeOwnershipTests: XCTestCase {
-    func testPerKitLifecycleIsIndependentOfSharedRepair() async throws {
+    func testPerKitLifecycleIsIndependent() async throws {
         let sender = try sendTestAddress()
         let namespace = "ownership-\(UUID().uuidString)"
         let first = SendRuntime(address: sender, clientID: UUID(), persistenceNamespace: namespace)
@@ -23,13 +23,4 @@ final class SendRuntimeOwnershipTests: XCTestCase {
         XCTAssertTrue(secondStillActive)
     }
 
-    func testSingleRuntimeOwnsItsRecovery() throws {
-        let namespace = "ownership-recovery-\(UUID().uuidString)"
-        let state = SendRuntimeSharedState(persistenceNamespace: namespace)
-        XCTAssertTrue(state.claimRecovery())
-        XCTAssertFalse(state.claimRecovery())
-        state.releaseRecovery()
-        XCTAssertTrue(state.claimRecovery())
-        state.releaseRecovery()
-    }
 }
