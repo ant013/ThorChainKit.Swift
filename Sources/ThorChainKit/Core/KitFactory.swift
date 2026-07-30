@@ -52,10 +52,27 @@ public extension Kit {
         )
         let publicationBarrier = PendingPublicationBarrier()
         let journal = SendJournal(storage: transactionStorage, persistenceNamespace: namespace)
-        let transactionManager = TransactionManager(
+        let pendingTransactionManager = PendingTransactionManager(
             journal: journal,
             network: address.network,
             publicationBarrier: publicationBarrier
+        )
+        let transactionRepository = TransactionRepository(storage: transactionStorage, persistenceNamespace: namespace)
+        let transactionManager = TransactionManager(
+            storage: transactionStorage,
+            repository: transactionRepository,
+            journal: journal,
+            pendingTransactionManager: pendingTransactionManager
+        )
+        let transactionSyncer = endpoints.midgardURLs.isEmpty ? nil : TransactionSyncer(
+            provider: MidgardProvider(
+                baseURLs: endpoints.midgardURLs,
+                requestTimeout: endpoints.requestTimeout,
+                clientId: endpoints.clientId
+            ),
+            repository: transactionRepository,
+            transactionManager: transactionManager,
+            address: address
         )
         let transactionSender = TransactionSender(
             address: address,
@@ -66,7 +83,7 @@ public extension Kit {
                 guard let client = broadcastClients[familyID] else { throw BroadcastTransportError.invalidEndpoint }
                 return try await client.broadcast(transaction: transaction)
             },
-            transactionManager: transactionManager,
+            transactionManager: pendingTransactionManager,
             publicationBarrier: publicationBarrier,
             lookupOperation: { familyID, transactionID in
                 guard let client = lookupClients[familyID] else { return .providerInconsistent }
@@ -78,7 +95,8 @@ public extension Kit {
             accountInfoManager: accountInfoManager,
             reader: reader,
             storage: syncerStorage,
-            address: address
+            address: address,
+            transactionSyncer: transactionSyncer
         )
         let preflight = SendPreflightCoordinator(
             runtime: transactionSender,
@@ -117,7 +135,9 @@ public extension Kit {
             syncer: syncer,
             accountInfoManager: accountInfoManager,
             transactionSender: transactionSender,
+            pendingTransactionManager: pendingTransactionManager,
             transactionManager: transactionManager,
+            transactionSyncer: transactionSyncer,
             preflight: preflight,
             persistenceNamespace: namespace
         )
@@ -176,10 +196,28 @@ public extension Kit {
         )
         let publicationBarrier = PendingPublicationBarrier()
         let journal = SendJournal(storage: transactionStorage, persistenceNamespace: namespace)
-        let transactionManager = TransactionManager(
+        let pendingTransactionManager = PendingTransactionManager(
             journal: journal,
             network: address.network,
             publicationBarrier: publicationBarrier
+        )
+        let transactionRepository = TransactionRepository(storage: transactionStorage, persistenceNamespace: namespace)
+        let transactionManager = TransactionManager(
+            storage: transactionStorage,
+            repository: transactionRepository,
+            journal: journal,
+            pendingTransactionManager: pendingTransactionManager
+        )
+        let transactionSyncer = endpoints.midgardURLs.isEmpty ? nil : TransactionSyncer(
+            provider: MidgardProvider(
+                baseURLs: endpoints.midgardURLs,
+                requestTimeout: endpoints.requestTimeout,
+                clientId: endpoints.clientId,
+                transport: adapter
+            ),
+            repository: transactionRepository,
+            transactionManager: transactionManager,
+            address: address
         )
         let transactionSender = TransactionSender(
             address: address,
@@ -190,7 +228,7 @@ public extension Kit {
                 guard let client = broadcastClients[familyID] else { throw BroadcastTransportError.invalidEndpoint }
                 return try await client.broadcast(transaction: transaction)
             },
-            transactionManager: transactionManager,
+            transactionManager: pendingTransactionManager,
             publicationBarrier: publicationBarrier,
             lookupOperation: { familyID, transactionID in
                 guard let client = lookupClients[familyID] else { return .providerInconsistent }
@@ -202,7 +240,8 @@ public extension Kit {
             accountInfoManager: accountInfoManager,
             reader: reader,
             storage: syncerStorage,
-            address: address
+            address: address,
+            transactionSyncer: transactionSyncer
         )
         let preflight = SendPreflightCoordinator(
             runtime: transactionSender,
@@ -241,7 +280,9 @@ public extension Kit {
             syncer: syncer,
             accountInfoManager: accountInfoManager,
             transactionSender: transactionSender,
+            pendingTransactionManager: pendingTransactionManager,
             transactionManager: transactionManager,
+            transactionSyncer: transactionSyncer,
             preflight: preflight,
             persistenceNamespace: namespace
         )

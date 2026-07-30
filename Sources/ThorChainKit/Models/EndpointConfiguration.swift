@@ -2,6 +2,10 @@ import Foundation
 
 public struct EndpointConfiguration: Sendable {
     public let families: [EndpointFamilyDescriptor]
+    /// Separate Midgard action-history endpoints. They are intentionally not
+    /// EndpointPool families: a Midgard response cannot establish a THORNode
+    /// height lease used by balance reads and signing.
+    public let midgardURLs: [URL]
     public let clientId: String?
     public let requestTimeout: TimeInterval
     public let policy: EndpointPolicy
@@ -12,6 +16,7 @@ public struct EndpointConfiguration: Sendable {
 
     public init(
         families: [EndpointFamilyDescriptor],
+        midgardURLs: [URL] = [],
         clientId: String? = nil,
         requestTimeout: TimeInterval = 15,
         policy: EndpointPolicy = .default
@@ -22,6 +27,9 @@ public struct EndpointConfiguration: Sendable {
         var ids = Set<String>()
         for family in families where !ids.insert(family.id).inserted {
             throw EndpointConfigurationError.duplicateFamilyId(family.id)
+        }
+        for url in midgardURLs {
+            try EndpointFamilyDescriptor.validateURL(url)
         }
 
         let normalizedClientId = clientId?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -38,6 +46,7 @@ public struct EndpointConfiguration: Sendable {
         }
 
         self.families = families
+        self.midgardURLs = midgardURLs
         self.clientId = normalizedClientId?.isEmpty == false ? normalizedClientId : nil
         self.requestTimeout = requestTimeout
         self.policy = policy

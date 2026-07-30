@@ -32,6 +32,9 @@ struct SendJournalRecord: Sendable, Equatable {
 }
 
 final class SendJournal: @unchecked Sendable {
+    private static let recoveryLock = NSLock()
+    private static var recoveredStorageNamespaces = Set<String>()
+
     private let storage: TransactionStorage
     let persistenceNamespace: String
     private let now: @Sendable () -> Date
@@ -111,6 +114,37 @@ final class SendJournal: @unchecked Sendable {
         return changed
     }
 
+    /// Recovery is process-local and must run once per physical database and
+    /// namespace. A second Kit can share that database while the first sender is
+    /// active; it must not rewrite the first sender's in-flight journal rows.
+    func recover() throws {
+        let key = "\(storage.identity)\u{0}\(persistenceNamespace)"
+        Self.recoveryLock.lock()
+        guard Self.recoveredStorageNamespaces.insert(key).inserted else {
+            Self.recoveryLock.unlock()
+            return
+        }
+        Self.recoveryLock.unlock()
+
+        do {
+            try storage.write { db in
+                try db.execute(
+                    sql: "DELETE FROM send_sequence_reservations WHERE persistence_namespace = ? AND local_hash IS NULL",
+                    arguments: [persistenceNamespace]
+                )
+                try db.execute(
+                    sql: "UPDATE send_journal SET state = ?, broadcast_generation = 0, updated_at = ? WHERE persistence_namespace = ? AND state = ?",
+                    arguments: [SendJournalState.unknown.rawValue, now(), persistenceNamespace, SendJournalState.broadcasting.rawValue]
+                )
+            }
+        } catch {
+            Self.recoveryLock.lock()
+            Self.recoveredStorageNamespaces.remove(key)
+            Self.recoveryLock.unlock()
+            throw error
+        }
+    }
+
     func removeUnlinkedReservations() throws -> Int {
         try storage.write { db in
             try db.execute(
@@ -163,6 +197,26 @@ final class SendJournal: @unchecked Sendable {
     func pendingRecords() throws -> [SendJournalRecord] {
         try storage.read { db in
             try pendingRecords(in: db)
+        }
+    }
+
+    func removeIncluded(transactionIDs: [TransactionID]) throws {
+        guard !transactionIDs.isEmpty else { return }
+        try storage.write { db in
+            try removeIncluded(transactionIDs: transactionIDs, in: db)
+        }
+    }
+
+    func removeIncluded(transactionIDs: [TransactionID], in db: Database) throws {
+        for transactionID in transactionIDs {
+            try db.execute(
+                sql: "DELETE FROM send_journal WHERE persistence_namespace = ? AND local_hash = ?",
+                arguments: [persistenceNamespace, transactionID.hash]
+            )
+            try db.execute(
+                sql: "DELETE FROM send_sequence_reservations WHERE persistence_namespace = ? AND local_hash = ?",
+                arguments: [persistenceNamespace, transactionID.hash]
+            )
         }
     }
 

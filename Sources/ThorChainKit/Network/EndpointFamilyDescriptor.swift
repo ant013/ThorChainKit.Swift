@@ -12,14 +12,14 @@ public struct EndpointFamilyDescriptor: Hashable, Sendable {
         else {
             throw EndpointConfigurationError.invalidFamilyId
         }
-        try Self.validate(url: cosmosRestURL)
-        try Self.validate(url: cometBftURL)
+        try Self.validateURL(cosmosRestURL)
+        try Self.validateURL(cometBftURL)
         self.id = normalizedId
         self.cosmosRestURL = cosmosRestURL
         self.cometBftURL = cometBftURL
     }
 
-    private static func validate(url: URL) throws {
+    static func validateURL(_ url: URL) throws {
         guard url.scheme?.lowercased() == "https", url.host?.isEmpty == false else {
             throw EndpointConfigurationError.insecureURL
         }

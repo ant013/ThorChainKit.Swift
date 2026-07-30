@@ -159,11 +159,65 @@ also pretends to be a history engine.
 | Proposed family | Primary naming/role analog | Required contract |
 |---|---|---|
 | `TransactionManager` | `TronKit.TransactionManager` | Own normalized historical transaction cache/projection and publish ordered transactions. It never signs or reserves sequences. |
-| `TransactionSyncer` | `TronKit.TransactionSyncer` | Own pagination/cursor/schedule and trigger manager updates; lifecycle binds to Kit start/stop. |
+| `TransactionSyncer` | `TronKit.TransactionSyncer` | Own pagination/cursor/schedule and trigger manager updates on the normal account-sync cycle; Kit lifecycle starts/stops that cycle. |
 | `TransactionRepository` | Existing `PendingTransactionRepository` shape | Single persisted source for normalized history; journal pending records are reconciled into it, not copied into an independent writer. |
-| `ThorNodeTransactionClient` | `LiveThorNodeClient` narrow provider style | Typed Cosmos tx-search/GetTx transport with pagination, strict decode and family lease. |
-| `TransactionStatusResolver` | TRON decoration/transaction status responsibility | Projects pending/checkTx/unknown/confirmed/failed/reorg-safe state without claiming inclusion from broadcast. |
+| `MidgardProvider` | `LiveThorNodeClient` narrow provider style | Typed `v2/actions` transport with a separately configured URL list, bounded failover and strict decode of required fields. It is not an EndpointPool family and does not participate in a Cosmos lease. |
+| `TransactionSyncState` | Android `TransactionSyncState` protocol delta | One persisted watermark plus resumable `nextPageToken` backfill cursor. Writes preserve the companion field. |
 | Host `ThorChainTransactionAdapter`/history consumer | Existing WalletCore transaction adapter contract | Added only after the Kit model is stable; it consumes Kit publisher, never queries Cosmos directly. |
+
+### THOR-specific source of truth for Sprint 3
+
+`TronKit.Swift` remains the default implementation source for the transaction
+family. THOR-specific wire and state semantics come from two checked sources:
+
+- Android source: `/Users/ant013/Data/AI/research-cache/thorchain-kit-android`,
+  pinned revision `fcbb5566948fc4ca3ae2058c65834e3a6f65ecdb`. Its
+  `TransactionSyncer`, `MidgardProvider`, `MidgardApi`, `Transaction`, and
+  transaction storage are the working THOR history reference.
+- Vultisig source: `/Users/ant013/Data/AI/research-cache/vultisig-ios-d3123dbe`,
+  pinned revision `d3123dbe6`. It corroborates known-hash THOR action status.
+
+Required Android THOR delta to the Tron-shaped vertical:
+
+- Address history is `GET /v2/actions?address=<address>&limit=<n>&nextPageToken=<token>`.
+  A separate `txid` request rechecks persisted `pending` hashes that no longer
+  appear in recent pages. Cosmos `/cosmos/tx/v1beta1/txs/{hash}` remains the
+  direct lookup/retry primitive, not the account-history feed.
+- Persist `hash`, `height`, timestamp in seconds (Midgard reports nanoseconds),
+  `type`, raw `status`, optional memo, and the complete `in`/`out` transfer
+  arrays (`address`, `asset`, integer `amount`). Do not reduce history to
+  `MsgSend` or a single RUNE amount.
+- Recent history is newest-first with `limit = 50` and a bounded 20-page round.
+  Stop only on a non-pending transaction at or below the saved timestamp. If the
+  cap is reached first, save the next-page token **before** advancing the
+  timestamp watermark; later cycles resume that old-history backfill. An empty
+  recent response never clears an existing backfill token.
+- A Midgard URL list is an explicit `EndpointConfiguration` input and is
+  independently host-allowlisted by WalletCore. It is not coupled to a THORNode
+  family: Midgard cannot provide the signed Cosmos/Comet height lease. Retry a
+  different configured Midgard URL for transport/5xx errors; treat 4xx as
+  definitive.
+- Decode nullable/additive Midgard JSON defensively. Required action and coin
+  fields are validated; unrelated JSON is ignored. Both numeric JSON values and
+  quoted decimal strings are accepted for `date` and `height`, because the live
+  Midgard response uses the latter.
+
+Vultisig supplies the following additional known-hash evidence:
+
+- source: `/Users/ant013/Data/AI/research-cache/vultisig-ios-d3123dbe`, pinned
+  revision `d3123dbe6`;
+- `THORChainTransactionStatusProvider` and
+  `THORChainTransactionStatusAPI` show the real THOR action-status request:
+  `GET /v2/actions?txid=<hash>`;
+- decode only the required `actions[]` fields: `status`, `height`, `in`, `out`
+  and optional `metadata.refund` / `metadata.failed`; ignore additive JSON
+  fields;
+- action status maps as `success → confirmed`, `pending → pending`, and
+  `refund → failed/refunded`; a missing action or HTTP 404 stays not-found and
+  must never be promoted to inclusion;
+- Vultisig contains status reconciliation for a known hash, **not an
+  address-history feed**. Android is the source for the account-history and
+  pagination behaviour above.
 
 ### Sprint 4 — native actions
 

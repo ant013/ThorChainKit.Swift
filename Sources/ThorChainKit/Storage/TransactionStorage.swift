@@ -3,6 +3,7 @@ import GRDB
 
 final class TransactionStorage {
     private let dbPool: DatabasePool
+    let identity: String
 
     convenience init(databaseDirectoryUrl: URL, databaseFileName: String) throws {
         let databaseURL = databaseDirectoryUrl.appendingPathComponent("\(databaseFileName).sqlite")
@@ -10,6 +11,7 @@ final class TransactionStorage {
     }
 
     init(path: String) throws {
+        identity = URL(fileURLWithPath: path).standardizedFileURL.path
         dbPool = try DatabasePool(path: path)
         try migrator.migrate(dbPool)
     }
@@ -63,6 +65,27 @@ final class TransactionStorage {
                 table.column("created_at", .datetime).notNull()
                 table.column("updated_at", .datetime).notNull()
                 table.primaryKey(["persistence_namespace", "local_hash"])
+            }
+        }
+
+        migrator.registerMigration("v4-history") { db in
+            try db.create(table: "transactions") { table in
+                table.column("persistence_namespace", .text).notNull()
+                table.column("tx_hash", .text).notNull()
+                table.column("block_height", .integer).notNull()
+                table.column("timestamp", .integer).notNull()
+                table.column("type", .text).notNull()
+                table.column("status", .text).notNull()
+                table.column("memo", .text)
+                table.column("incoming", .blob).notNull()
+                table.column("outgoing", .blob).notNull()
+                table.primaryKey(["persistence_namespace", "tx_hash"])
+            }
+            try db.create(index: "transactions_namespace_timestamp", on: "transactions", columns: ["persistence_namespace", "timestamp"])
+            try db.create(table: "transaction_sync_state") { table in
+                table.column("persistence_namespace", .text).primaryKey()
+                table.column("last_timestamp", .integer).notNull()
+                table.column("backfill_page_token", .text)
             }
         }
 

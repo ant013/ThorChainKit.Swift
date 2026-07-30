@@ -66,7 +66,7 @@ actor TransactionSender {
     private let quoteStore: QuoteStore
     private let sequenceReservations: (any SequenceReservationManaging)?
     private let journal: SendJournal?
-    private let transactionManager: TransactionManager?
+    private let transactionManager: PendingTransactionManager?
     private let publicationBarrier: PendingPublicationBarrier
     private let broadcastOperation: (@Sendable (String, SignedTransaction) async throws -> BroadcastResponse)?
     private let lookupOperation: (@Sendable (String, TransactionID) async -> RetryLookupResponse)?
@@ -90,7 +90,7 @@ actor TransactionSender {
         journal: SendJournal? = nil,
         reservationStore: (any SequenceReservationManaging)? = nil,
         broadcastOperation: (@Sendable (String, SignedTransaction) async throws -> BroadcastResponse)? = nil,
-        transactionManager: TransactionManager? = nil,
+        transactionManager: PendingTransactionManager? = nil,
         publicationBarrier: PendingPublicationBarrier = PendingPublicationBarrier(),
         lookupOperation: (@Sendable (String, TransactionID) async -> RetryLookupResponse)? = nil,
         operationDeadline: TimeInterval = 15,
@@ -108,7 +108,7 @@ actor TransactionSender {
         self.journal = journal
         self.publicationBarrier = publicationBarrier
         self.transactionManager = transactionManager ?? journal.map {
-            TransactionManager(
+            PendingTransactionManager(
                 journal: $0,
                 network: address?.network ?? .mainnet,
                 publicationBarrier: publicationBarrier
@@ -122,8 +122,7 @@ actor TransactionSender {
         self.retryEndpointLeaseOperation = retryEndpointLeaseOperation
         self.retryPolicyOperation = retryPolicyOperation
         self.retryObservability = retryObservability
-        _ = try? journal?.removeUnlinkedReservations()
-        _ = try? journal?.normalizeBroadcastingToUnknown()
+        _ = try? journal?.recover()
         _ = self.transactionManager?.refresh()
     }
 

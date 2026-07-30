@@ -8,6 +8,7 @@ final class Syncer: @unchecked Sendable {
     private let reader: any AccountReading
     private let accountInfoManager: AccountInfoManager
     private let storage: SyncerStorage
+    private let transactionSyncer: TransactionSyncer?
     private let schedule: SyncSchedule
     private let publishing = StatePublishing()
 
@@ -23,6 +24,7 @@ final class Syncer: @unchecked Sendable {
         reader: any AccountReading,
         storage: SyncerStorage,
         address: Address,
+        transactionSyncer: TransactionSyncer? = nil,
         schedule: SyncSchedule = .default,
         dispatcher: DispatchQueue = DispatchQueue(label: "io.horizontalsystems.thorchain-kit.syncer")
     ) {
@@ -30,6 +32,7 @@ final class Syncer: @unchecked Sendable {
         self.reader = reader
         self.storage = storage
         self.address = address
+        self.transactionSyncer = transactionSyncer
         self.schedule = schedule
         self.dispatcher = dispatcher
         dispatcher.setSpecific(key: dispatcherKey, value: 1)
@@ -109,6 +112,7 @@ final class Syncer: @unchecked Sendable {
             try accountInfoManager.handle(accountInfo: accountInfo, address: address)
             try storage.save(lastBlockHeight: read.acceptedHeight)
             publish(.synced(accountInfoManager.accountState!))
+            transactionSyncer?.sync()
         } catch {
             publish(.notSynced(.storageUnavailable, cached: accountInfoManager.accountState))
         }

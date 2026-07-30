@@ -12,7 +12,7 @@ func makeTestKit(
     address: Address,
     transactionSender: TransactionSender = TransactionSender(),
     preflight: SendPreflightCoordinator? = nil,
-    transactionManager: TransactionManager? = nil,
+    pendingTransactionManager: PendingTransactionManager? = nil,
     persistenceNamespace: String = "test"
 ) -> Kit {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -26,8 +26,8 @@ func makeTestKit(
         syncer: syncer,
         accountInfoManager: accountInfoManager,
         transactionSender: transactionSender,
+        pendingTransactionManager: pendingTransactionManager,
         preflight: preflight,
-        transactionManager: transactionManager,
         persistenceNamespace: persistenceNamespace
     )
 }

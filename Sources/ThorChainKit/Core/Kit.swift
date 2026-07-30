@@ -8,7 +8,9 @@ public final class Kit {
 
     private let syncer: Syncer
     let transactionSender: TransactionSender
+    private let pendingTransactionManager: PendingTransactionManager?
     private let transactionManager: TransactionManager?
+    private let transactionSyncer: TransactionSyncer?
     let preflight: SendPreflightCoordinator?
     private let accountInfoManager: AccountInfoManager
     private let pendingTransactionsSubject: CurrentValueSubject<[PendingTransaction], Never>
@@ -18,23 +20,25 @@ public final class Kit {
     private var activeGeneration: UInt64?
     let persistenceNamespace: String
 
-    init(address: Address, syncer: Syncer, accountInfoManager: AccountInfoManager, transactionSender: TransactionSender, transactionManager: TransactionManager?, preflight: SendPreflightCoordinator?, persistenceNamespace: String, pendingTransactionsSubject: CurrentValueSubject<[PendingTransaction], Never> = CurrentValueSubject([]), pendingTransactionsStatusSubject: CurrentValueSubject<PendingTransactionsStatus, Never> = CurrentValueSubject(.degraded)) {
+    init(address: Address, syncer: Syncer, accountInfoManager: AccountInfoManager, transactionSender: TransactionSender, pendingTransactionManager: PendingTransactionManager?, transactionManager: TransactionManager? = nil, transactionSyncer: TransactionSyncer? = nil, preflight: SendPreflightCoordinator?, persistenceNamespace: String, pendingTransactionsSubject: CurrentValueSubject<[PendingTransaction], Never> = CurrentValueSubject([]), pendingTransactionsStatusSubject: CurrentValueSubject<PendingTransactionsStatus, Never> = CurrentValueSubject(.degraded)) {
         self.address = address
         network = address.network
         self.syncer = syncer
         self.accountInfoManager = accountInfoManager
         self.transactionSender = transactionSender
+        self.pendingTransactionManager = pendingTransactionManager
         self.transactionManager = transactionManager
+        self.transactionSyncer = transactionSyncer
         self.preflight = preflight
         self.persistenceNamespace = persistenceNamespace
         self.pendingTransactionsSubject = pendingTransactionsSubject
         self.pendingTransactionsStatusSubject = pendingTransactionsStatusSubject
-        if let transactionManager {
-            _ = transactionManager.refresh()
-            self.pendingTransactionsSubject.send(transactionManager.snapshot)
-            self.pendingTransactionsStatusSubject.send(transactionManager.status)
-            transactionManager.publisher.sink { [weak self] in self?.pendingTransactionsSubject.send($0) }.store(in: &pendingCancellables)
-            transactionManager.statusPublisher.sink { [weak self] in self?.pendingTransactionsStatusSubject.send($0) }.store(in: &pendingCancellables)
+        if let pendingTransactionManager {
+            _ = pendingTransactionManager.refresh()
+            self.pendingTransactionsSubject.send(pendingTransactionManager.snapshot)
+            self.pendingTransactionsStatusSubject.send(pendingTransactionManager.status)
+            pendingTransactionManager.publisher.sink { [weak self] in self?.pendingTransactionsSubject.send($0) }.store(in: &pendingCancellables)
+            pendingTransactionManager.statusPublisher.sink { [weak self] in self?.pendingTransactionsStatusSubject.send($0) }.store(in: &pendingCancellables)
         }
     }
 
@@ -47,9 +51,23 @@ public final class Kit {
     public var pendingTransactionsPublisher: AnyPublisher<[PendingTransaction], Never> { pendingTransactionsSubject.eraseToAnyPublisher() }
     public var pendingTransactionsStatus: PendingTransactionsStatus { pendingTransactionsStatusSubject.value }
     public var pendingTransactionsStatusPublisher: AnyPublisher<PendingTransactionsStatus, Never> { pendingTransactionsStatusSubject.eraseToAnyPublisher() }
+    public var transactionsSyncState: TransactionSyncState { transactionSyncer?.state ?? .notSynced }
+    public var transactionsSyncStatePublisher: AnyPublisher<TransactionSyncState, Never> {
+        transactionSyncer?.statePublisher ?? Just(.notSynced).eraseToAnyPublisher()
+    }
+    public var allTransactionsPublisher: AnyPublisher<([Transaction], Bool), Never> {
+        transactionManager?.allTransactionsPublisher ?? Empty().eraseToAnyPublisher()
+    }
+    public var transactionsPublisher: AnyPublisher<[Transaction], Never> {
+        transactionManager?.transactionsPublisher ?? Empty().eraseToAnyPublisher()
+    }
     public var lastBlockHeightPublisher: AnyPublisher<Int64?, Never> { syncer.lastBlockHeightPublisher }
     public var syncStatePublisher: AnyPublisher<SyncState, Never> { syncer.statePublisher }
     public var accountStatePublisher: AnyPublisher<AccountState?, Never> { accountInfoManager.accountStatePublisher }
+
+    public func transactions(hash: String? = nil, descending: Bool = true, limit: Int? = nil) -> [Transaction] {
+        transactionManager?.transactions(hash: hash, descending: descending, limit: limit) ?? []
+    }
 
     public func start() {
         let generation = syncer.start()
@@ -72,9 +90,12 @@ public final class Kit {
         lifecycleLock.unlock()
         transactionSender.invalidateImmediately(generation: generation)
         Task { [transactionSender] in await transactionSender.invalidate(generation: generation) }
+        transactionSyncer?.stop()
     }
 
-    public func refresh() { syncer.refresh() }
+    public func refresh() {
+        syncer.refresh()
+    }
 
     private func isCurrent(generation: UInt64) -> Bool {
         lifecycleLock.lock(); defer { lifecycleLock.unlock() }
