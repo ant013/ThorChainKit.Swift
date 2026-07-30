@@ -15,13 +15,16 @@ public struct CoinTransfer: Equatable, Sendable {
     }
 }
 
-/// A normalized THORChain action returned by Midgard. Local broadcast state
-/// remains exposed separately as `PendingTransaction` until this action proves
-/// inclusion of the same hash.
+/// A normalized THORChain transaction for history. It represents either a
+/// locally broadcast send or a Midgard action that confirms the same hash.
+/// `PendingTransaction` separately keeps the send retry lifecycle.
 public struct Transaction: Equatable, Sendable {
     public let transactionId: TransactionID
     public let blockHeight: Int64
     public let timestamp: Date
+    /// Raw Midgard timestamp. `Date` is for presentation; this value preserves
+    /// the provider ordering used by the history cursor.
+    let timestampNanoseconds: Int64
     public let type: String
     public let status: String
     public let memo: String?
@@ -38,6 +41,7 @@ public struct Transaction: Equatable, Sendable {
         transactionId: TransactionID,
         blockHeight: Int64,
         timestamp: Date,
+        timestampNanoseconds: Int64? = nil,
         type: String,
         status: String,
         memo: String?,
@@ -47,6 +51,7 @@ public struct Transaction: Equatable, Sendable {
         self.transactionId = transactionId
         self.blockHeight = blockHeight
         self.timestamp = timestamp
+        self.timestampNanoseconds = timestampNanoseconds ?? Int64(timestamp.timeIntervalSince1970 * 1_000_000_000)
         self.type = type
         self.status = status
         self.memo = memo
@@ -55,9 +60,15 @@ public struct Transaction: Equatable, Sendable {
     }
 }
 
+public enum TransactionSyncError: Equatable, Sendable {
+    case notStarted
+    case storageUnavailable
+    case providerUnavailable
+    case invalidResponse
+}
+
 public enum TransactionSyncState: Equatable, Sendable {
-    case notSynced
+    case notSynced(error: TransactionSyncError)
     case syncing
     case synced
-    case failed
 }

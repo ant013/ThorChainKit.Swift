@@ -3,7 +3,7 @@ import Foundation
 import GRDB
 
 struct TransactionSyncCursor: Equatable, Sendable {
-    let lastTimestamp: Int64
+    let lastTimestampNanoseconds: Int64
     let backfillPageToken: String?
 }
 
@@ -22,11 +22,22 @@ final class TransactionRepository: @unchecked Sendable {
     func transactions(hash: String? = nil, descending: Bool = true, limit: Int? = nil) throws -> [Transaction] {
         guard limit.map({ $0 > 0 }) ?? true else { return [] }
         return try storage.read { db in
-            var sql = "SELECT tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing FROM transactions WHERE persistence_namespace = ?"
+            var sql = "SELECT tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing, is_local FROM transactions WHERE persistence_namespace = ?"
             var arguments: [any DatabaseValueConvertible] = [persistenceNamespace]
-            if let hash {
-                sql += " AND tx_hash = ?"
-                arguments.append(hash)
+            if let hash,
+               let cursor = try Row.fetchOne(
+                   db,
+                   sql: "SELECT timestamp, tx_hash FROM transactions WHERE persistence_namespace = ? AND tx_hash = ?",
+                   arguments: [persistenceNamespace, hash]
+               ),
+               let timestamp: Int64 = cursor["timestamp"],
+               let transactionHash: String = cursor["tx_hash"]
+            {
+                let comparison = descending ? "<" : ">"
+                sql += " AND (timestamp \(comparison) ? OR (timestamp = ? AND tx_hash \(comparison) ?))"
+                arguments.append(timestamp)
+                arguments.append(timestamp)
+                arguments.append(transactionHash)
             }
             let order = descending ? "DESC" : "ASC"
             sql += " ORDER BY timestamp \(order), tx_hash \(order)"
@@ -41,26 +52,39 @@ final class TransactionRepository: @unchecked Sendable {
         try storage.read { db in
             try Row.fetchAll(
                 db,
-                sql: "SELECT tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing FROM transactions WHERE persistence_namespace = ? AND status = ? ORDER BY timestamp DESC, tx_hash DESC",
+                sql: "SELECT tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing, is_local FROM transactions WHERE persistence_namespace = ? AND status = ? ORDER BY timestamp DESC, tx_hash DESC",
                 arguments: [persistenceNamespace, "pending"]
             ).map(Self.transaction)
         }
     }
 
-    func save(_ transactions: [Transaction]) throws {
-        guard !transactions.isEmpty else { return }
-        try storage.write { db in
-            try save(transactions, in: db)
+    @discardableResult
+    func save(_ transactions: [Transaction], isLocal: Bool = false) throws -> [Transaction] {
+        guard !transactions.isEmpty else { return [] }
+        return try storage.write { db in
+            try save(transactions, isLocal: isLocal, in: db)
         }
     }
 
-    func save(_ transactions: [Transaction], in db: Database) throws {
+    func save(_ transactions: [Transaction], isLocal: Bool = false, in db: Database) throws -> [Transaction] {
+        var changed = [Transaction]()
         for transaction in transactions {
+            if let existing = try Row.fetchOne(
+                db,
+                sql: "SELECT tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing, is_local FROM transactions WHERE persistence_namespace = ? AND tx_hash = ?",
+                arguments: [persistenceNamespace, transaction.transactionId.hash]
+            ),
+                let persisted = try? Self.transaction(existing),
+                persisted == transaction,
+                let persistedIsLocal: Bool = existing["is_local"], persistedIsLocal == isLocal
+            {
+                continue
+            }
             try db.execute(
                     sql: """
                     INSERT INTO transactions
-                    (persistence_namespace, tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (persistence_namespace, tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing, processed, is_local)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
                     ON CONFLICT(persistence_namespace, tx_hash) DO UPDATE SET
                         block_height = excluded.block_height,
                         timestamp = excluded.timestamp,
@@ -68,21 +92,82 @@ final class TransactionRepository: @unchecked Sendable {
                         status = excluded.status,
                         memo = excluded.memo,
                         incoming = excluded.incoming,
-                        outgoing = excluded.outgoing
+                        outgoing = excluded.outgoing,
+                        processed = 0,
+                        is_local = excluded.is_local
                     """,
                     arguments: [
                         persistenceNamespace,
                         transaction.transactionId.hash,
                         transaction.blockHeight,
-                        Int64(transaction.timestamp.timeIntervalSince1970),
+                        transaction.timestampNanoseconds,
                         transaction.type,
                         transaction.status,
                         transaction.memo,
                         try Self.transferData(transaction.incoming),
                         try Self.transferData(transaction.outgoing),
+                        isLocal,
                     ]
             )
+            changed.append(transaction)
         }
+        return changed
+    }
+
+    func saveLocal(_ transactions: [Transaction], in db: Database) throws -> [Transaction] {
+        var inserted = [Transaction]()
+        for transaction in transactions {
+            try db.execute(
+                sql: """
+                INSERT INTO transactions
+                (persistence_namespace, tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing, processed, is_local)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1)
+                ON CONFLICT(persistence_namespace, tx_hash) DO NOTHING
+                """,
+                arguments: [
+                    persistenceNamespace,
+                    transaction.transactionId.hash,
+                    transaction.blockHeight,
+                    transaction.timestampNanoseconds,
+                    transaction.type,
+                    transaction.status,
+                    transaction.memo,
+                    try Self.transferData(transaction.incoming),
+                    try Self.transferData(transaction.outgoing),
+                ]
+            )
+            if db.changesCount == 1 { inserted.append(transaction) }
+        }
+        return inserted
+    }
+
+    func unprocessedTransactions() throws -> [Transaction] {
+        try storage.read { db in
+            try unprocessedTransactions(in: db)
+        }
+    }
+
+    func unprocessedTransactions(in db: Database) throws -> [Transaction] {
+        try Row.fetchAll(
+            db,
+            sql: "SELECT tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing, is_local FROM transactions WHERE persistence_namespace = ? AND processed = 0",
+            arguments: [persistenceNamespace]
+        ).map(Self.transaction)
+    }
+
+    func localTransactions(in db: Database) throws -> [Transaction] {
+        try Row.fetchAll(
+            db,
+            sql: "SELECT tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing, is_local FROM transactions WHERE persistence_namespace = ? AND is_local = 1",
+            arguments: [persistenceNamespace]
+        ).map(Self.transaction)
+    }
+
+    func markProcessed(in db: Database) throws {
+        try db.execute(
+            sql: "UPDATE transactions SET processed = 1 WHERE persistence_namespace = ? AND processed = 0",
+            arguments: [persistenceNamespace]
+        )
     }
 
     func cursor() throws -> TransactionSyncCursor {
@@ -92,20 +177,20 @@ final class TransactionRepository: @unchecked Sendable {
                 sql: "SELECT last_timestamp, backfill_page_token FROM transaction_sync_state WHERE persistence_namespace = ?",
                 arguments: [persistenceNamespace]
             ) else {
-                return TransactionSyncCursor(lastTimestamp: 0, backfillPageToken: nil)
+                return TransactionSyncCursor(lastTimestampNanoseconds: 0, backfillPageToken: nil)
             }
             guard let timestamp: Int64 = row["last_timestamp"], timestamp >= 0 else { throw StorageError.invalid }
-            return TransactionSyncCursor(lastTimestamp: timestamp, backfillPageToken: row["backfill_page_token"])
+            return TransactionSyncCursor(lastTimestampNanoseconds: timestamp, backfillPageToken: row["backfill_page_token"])
         }
     }
 
-    func save(lastTimestamp: Int64) throws {
-        guard lastTimestamp >= 0 else { throw StorageError.invalid }
+    func save(lastTimestampNanoseconds: Int64) throws {
+        guard lastTimestampNanoseconds >= 0 else { throw StorageError.invalid }
         try storage.write { db in
             let current = try Self.cursor(db: db, namespace: persistenceNamespace)
             try db.execute(
                 sql: "INSERT OR REPLACE INTO transaction_sync_state (persistence_namespace, last_timestamp, backfill_page_token) VALUES (?, ?, ?)",
-                arguments: [persistenceNamespace, lastTimestamp, current.backfillPageToken]
+                arguments: [persistenceNamespace, lastTimestampNanoseconds, current.backfillPageToken]
             )
         }
     }
@@ -115,7 +200,7 @@ final class TransactionRepository: @unchecked Sendable {
             let current = try Self.cursor(db: db, namespace: persistenceNamespace)
             try db.execute(
                 sql: "INSERT OR REPLACE INTO transaction_sync_state (persistence_namespace, last_timestamp, backfill_page_token) VALUES (?, ?, ?)",
-                arguments: [persistenceNamespace, current.lastTimestamp, backfillPageToken]
+                arguments: [persistenceNamespace, current.lastTimestampNanoseconds, backfillPageToken]
             )
         }
     }
@@ -126,10 +211,10 @@ final class TransactionRepository: @unchecked Sendable {
             sql: "SELECT last_timestamp, backfill_page_token FROM transaction_sync_state WHERE persistence_namespace = ?",
             arguments: [namespace]
         ) else {
-            return TransactionSyncCursor(lastTimestamp: 0, backfillPageToken: nil)
+            return TransactionSyncCursor(lastTimestampNanoseconds: 0, backfillPageToken: nil)
         }
         guard let timestamp: Int64 = row["last_timestamp"], timestamp >= 0 else { throw StorageError.invalid }
-        return TransactionSyncCursor(lastTimestamp: timestamp, backfillPageToken: row["backfill_page_token"])
+        return TransactionSyncCursor(lastTimestampNanoseconds: timestamp, backfillPageToken: row["backfill_page_token"])
     }
 
     private static func transaction(_ row: Row) throws -> Transaction {
@@ -146,7 +231,8 @@ final class TransactionRepository: @unchecked Sendable {
         return Transaction(
             transactionId: transactionId,
             blockHeight: height,
-            timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp)),
+            timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1_000_000_000),
+            timestampNanoseconds: timestamp,
             type: type,
             status: status,
             memo: row["memo"],

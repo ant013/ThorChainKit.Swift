@@ -51,9 +51,9 @@ public final class Kit {
     public var pendingTransactionsPublisher: AnyPublisher<[PendingTransaction], Never> { pendingTransactionsSubject.eraseToAnyPublisher() }
     public var pendingTransactionsStatus: PendingTransactionsStatus { pendingTransactionsStatusSubject.value }
     public var pendingTransactionsStatusPublisher: AnyPublisher<PendingTransactionsStatus, Never> { pendingTransactionsStatusSubject.eraseToAnyPublisher() }
-    public var transactionsSyncState: TransactionSyncState { transactionSyncer?.state ?? .notSynced }
+    public var transactionsSyncState: TransactionSyncState { transactionSyncer?.state ?? .notSynced(error: .notStarted) }
     public var transactionsSyncStatePublisher: AnyPublisher<TransactionSyncState, Never> {
-        transactionSyncer?.statePublisher ?? Just(.notSynced).eraseToAnyPublisher()
+        transactionSyncer?.statePublisher ?? Just(.notSynced(error: .notStarted)).eraseToAnyPublisher()
     }
     public var allTransactionsPublisher: AnyPublisher<([Transaction], Bool), Never> {
         transactionManager?.allTransactionsPublisher ?? Empty().eraseToAnyPublisher()

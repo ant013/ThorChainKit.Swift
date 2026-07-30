@@ -44,11 +44,26 @@ final class TransactionHistoryTests: XCTestCase {
     func testRepositoryPreservesBackfillTokenWhenWatermarkChanges() throws {
         let repository = try repository(namespace: "cursor")
         try repository.save(backfillPageToken: "older")
-        try repository.save(lastTimestamp: 100)
-        XCTAssertEqual(try repository.cursor(), TransactionSyncCursor(lastTimestamp: 100, backfillPageToken: "older"))
+        try repository.save(lastTimestampNanoseconds: 100)
+        XCTAssertEqual(try repository.cursor(), TransactionSyncCursor(lastTimestampNanoseconds: 100, backfillPageToken: "older"))
 
         try repository.save(backfillPageToken: nil)
-        XCTAssertEqual(try repository.cursor(), TransactionSyncCursor(lastTimestamp: 100, backfillPageToken: nil))
+        XCTAssertEqual(try repository.cursor(), TransactionSyncCursor(lastTimestampNanoseconds: 100, backfillPageToken: nil))
+    }
+
+    func testRepositoryUsesTransactionHashAsPaginationCursor() throws {
+        let repository = try repository(namespace: "pagination")
+        let newest = try transactionID(3)
+        let middle = try transactionID(2)
+        let oldest = try transactionID(1)
+        try repository.save([
+            transaction(id: newest, status: "success", timestamp: 300),
+            transaction(id: middle, status: "success", timestamp: 200),
+            transaction(id: oldest, status: "success", timestamp: 100),
+        ])
+
+        XCTAssertEqual(try repository.transactions(hash: middle.hash, descending: true, limit: nil).map(\.transactionId), [oldest])
+        XCTAssertEqual(try repository.transactions(hash: middle.hash, descending: false, limit: nil).map(\.transactionId), [newest])
     }
 
     func testTerminalActionClearsJournalButPendingActionDoesNot() throws {
@@ -77,15 +92,18 @@ final class TransactionHistoryTests: XCTestCase {
         XCTAssertEqual(manager.transactions().first?.status, "unknown")
     }
 
-    func testTransactionManagerPublishesOnlySuppliedDelta() throws {
+    func testTransactionManagerPublishesOnlyUnprocessedDelta() throws {
         let fixture = try historyFixture()
         let first = transaction(id: try transactionID(1), status: "success")
         let second = transaction(id: try transactionID(2), status: "success")
         var emissions = [([Transaction], Bool)]()
         let cancellable = fixture.manager.allTransactionsPublisher.sink { emissions.append($0) }
 
-        fixture.manager.process(transactions: [first], initial: true)
-        fixture.manager.process(transactions: [second], initial: false)
+        try fixture.manager.save(transactions: [first])
+        fixture.manager.process(initial: true)
+        fixture.manager.process(initial: false)
+        try fixture.manager.save(transactions: [second])
+        fixture.manager.process(initial: false)
 
         XCTAssertEqual(emissions.count, 2)
         XCTAssertEqual(emissions[0].0, [first])
@@ -93,6 +111,51 @@ final class TransactionHistoryTests: XCTestCase {
         XCTAssertEqual(emissions[1].0, [second])
         XCTAssertFalse(emissions[1].1)
         withExtendedLifetime(cancellable) {}
+    }
+
+    func testLocalJournalTransactionIsPublishedThenReplacedByMidgard() throws {
+        let fixture = try journalFixture()
+        let pending = PendingTransactionManager(journal: fixture.journal)
+        let repository = TransactionRepository(storage: fixture.storage, persistenceNamespace: fixture.namespace)
+        let manager = TransactionManager(storage: fixture.storage, repository: repository, journal: fixture.journal, pendingTransactionManager: pending)
+        var emissions = [[Transaction]]()
+        let cancellable = manager.transactionsPublisher.sink { emissions.append($0) }
+
+        try manager.reconcileLocalTransactions()
+
+        XCTAssertEqual(manager.transactions().first?.transactionId, fixture.transactionID)
+        XCTAssertEqual(manager.transactions().first?.status, "pending")
+        XCTAssertEqual(emissions.last?.first?.status, "pending")
+
+        try manager.save(transactions: [transaction(id: fixture.transactionID, status: "success")])
+        manager.process(initial: false)
+
+        XCTAssertEqual(manager.transactions().first?.status, "success")
+        XCTAssertTrue(try fixture.journal.pendingRecords().isEmpty)
+        XCTAssertEqual(emissions.last?.first?.status, "success")
+        withExtendedLifetime(cancellable) {}
+    }
+
+    func testRejectedLocalJournalTransactionBecomesFailedHistoryRecord() throws {
+        let fixture = try journalFixture()
+        let pending = PendingTransactionManager(journal: fixture.journal)
+        let repository = TransactionRepository(storage: fixture.storage, persistenceNamespace: fixture.namespace)
+        let manager = TransactionManager(storage: fixture.storage, repository: repository, journal: fixture.journal, pendingTransactionManager: pending)
+
+        try manager.reconcileLocalTransactions()
+        XCTAssertEqual(manager.transactions().first?.status, "pending")
+
+        XCTAssertTrue(try fixture.journal.transition(
+            transactionID: fixture.transactionID,
+            from: .broadcasting,
+            expectedGeneration: 1,
+            to: .rejected,
+            generation: 0
+        ))
+        try manager.reconcileLocalTransactions()
+
+        XCTAssertEqual(manager.transactions().first?.status, "failed")
+        XCTAssertTrue(try fixture.journal.pendingRecords().isEmpty)
     }
 
     func testTerminalHistoryAndJournalReconciliationRollBackTogether() throws {
@@ -144,11 +207,11 @@ final class TransactionHistoryTests: XCTestCase {
     func testSyncerStopsRecentPagingAtTerminalWatermark() async throws {
         let fixture = try historyFixture()
         let repository = fixture.repository
-        try repository.save(lastTimestamp: 123)
+        try repository.save(lastTimestampNanoseconds: 123_000_000_000)
         let provider = ScriptedHistoryProvider { request in
             XCTAssertNil(request.transactionID)
             return MidgardActionPage(
-                actions: [self.action(id: try self.transactionID(3), status: "success")],
+                actions: [self.action(id: try self.transactionID(3), status: "success", nanoseconds: 122_999_999_999)],
                 nextPageToken: "must-not-be-requested"
             )
         }
@@ -158,6 +221,42 @@ final class TransactionHistoryTests: XCTestCase {
 
         let requests = await provider.requests()
         XCTAssertEqual(requests.count, 1)
+    }
+
+    func testSyncerContinuesThroughActionsAtWatermarkTimestamp() async throws {
+        let fixture = try historyFixture()
+        let watermark = 123_000_000_000 as Int64
+        try fixture.repository.save(lastTimestampNanoseconds: watermark)
+        let provider = ScriptedHistoryProvider { request in
+            switch request.nextPageToken {
+            case nil:
+                return MidgardActionPage(
+                    actions: [self.action(id: try self.transactionID(9), status: "success", nanoseconds: watermark)],
+                    nextPageToken: "same-timestamp"
+                )
+            case "same-timestamp":
+                return MidgardActionPage(
+                    actions: [self.action(id: try self.transactionID(8), status: "success", nanoseconds: watermark)],
+                    nextPageToken: "older"
+                )
+            case "older":
+                return MidgardActionPage(
+                    actions: [self.action(id: try self.transactionID(7), status: "success", nanoseconds: watermark - 1)],
+                    nextPageToken: nil
+                )
+            default:
+                XCTFail("unexpected page token")
+                return MidgardActionPage(actions: [], nextPageToken: nil)
+            }
+        }
+        let syncer = TransactionSyncer(provider: provider, repository: fixture.repository, transactionManager: fixture.manager, address: try sendTestAddress())
+
+        await waitForState(.synced, syncer: syncer)
+
+        let requests = await provider.requests()
+        XCTAssertEqual(requests.count, 3)
+        XCTAssertEqual(try fixture.repository.cursor().lastTimestampNanoseconds, watermark)
+        XCTAssertEqual(Set(try fixture.repository.transactions().map(\.transactionId)), [try transactionID(9), try transactionID(8), try transactionID(7)])
     }
 
     func testSyncerDoesNotRecheckPendingActionSeenInRecentPage() async throws {
@@ -193,7 +292,7 @@ final class TransactionHistoryTests: XCTestCase {
         let provider = PageCapHistoryProvider(action: try action(id: transactionID(42), status: "success"))
         let syncer = TransactionSyncer(provider: provider, repository: fixture.repository, transactionManager: fixture.manager, address: try sendTestAddress())
 
-        await waitForState(.failed, syncer: syncer)
+        await waitForState(.notSynced(error: .providerUnavailable), syncer: syncer)
 
         XCTAssertEqual(try fixture.repository.cursor().backfillPageToken, "backfill")
         let requests = await provider.requests()
@@ -214,7 +313,7 @@ final class TransactionHistoryTests: XCTestCase {
         syncer.sync()
         await fulfillment(of: [stopped], timeout: 2)
 
-        XCTAssertEqual(syncer.state, .notSynced)
+        XCTAssertEqual(syncer.state, .notSynced(error: .notStarted))
         let requests = await provider.requests()
         XCTAssertTrue(requests.isEmpty)
         withExtendedLifetime(cancellable) {}
@@ -222,7 +321,12 @@ final class TransactionHistoryTests: XCTestCase {
 
     func testCancelledOldSyncCannotOverwriteNewSyncState() async throws {
         let fixture = try historyFixture()
-        let provider = GateHistoryProvider()
+        let oldTimestamp: Int64 = 100_000_000_000
+        let newTimestamp: Int64 = 200_000_000_000
+        let provider = GateHistoryProvider(
+            firstPage: MidgardActionPage(actions: [try action(id: transactionID(1), status: "success", nanoseconds: oldTimestamp)], nextPageToken: nil),
+            followingPage: MidgardActionPage(actions: [try action(id: transactionID(2), status: "success", nanoseconds: newTimestamp)], nextPageToken: nil)
+        )
         let syncer = TransactionSyncer(provider: provider, repository: fixture.repository, transactionManager: fixture.manager, address: try sendTestAddress())
         let newSyncCompleted = expectation(description: "new sync completed")
         let obsoleteCompletion = expectation(description: "old sync changed state")
@@ -230,7 +334,7 @@ final class TransactionHistoryTests: XCTestCase {
         let gate = StateEventGate()
         let cancellable = syncer.statePublisher.sink { state in
             if state == .synced { newSyncCompleted.fulfill() }
-            if state == .notSynced, gate.isArmed { obsoleteCompletion.fulfill() }
+            if case .notSynced = state, gate.isArmed { obsoleteCompletion.fulfill() }
         }
 
         syncer.sync()
@@ -238,11 +342,13 @@ final class TransactionHistoryTests: XCTestCase {
         syncer.stop()
         syncer.sync()
         await fulfillment(of: [newSyncCompleted], timeout: 2)
+        XCTAssertEqual(try fixture.repository.cursor().lastTimestampNanoseconds, newTimestamp)
 
         gate.arm()
         await provider.releaseFirstRequest()
         await fulfillment(of: [obsoleteCompletion], timeout: 0.2)
         XCTAssertEqual(syncer.state, .synced)
+        XCTAssertEqual(try fixture.repository.cursor().lastTimestampNanoseconds, newTimestamp)
         withExtendedLifetime(cancellable) {}
     }
 
@@ -293,11 +399,11 @@ final class TransactionHistoryTests: XCTestCase {
         return fixture
     }
 
-    private func transaction(id: TransactionID, status: String) -> Transaction {
+    private func transaction(id: TransactionID, status: String, timestamp: TimeInterval = 123) -> Transaction {
         Transaction(
             transactionId: id,
             blockHeight: 123,
-            timestamp: Date(timeIntervalSince1970: 123),
+            timestamp: Date(timeIntervalSince1970: timestamp),
             type: "send",
             status: status,
             memo: "memo",
@@ -306,9 +412,9 @@ final class TransactionHistoryTests: XCTestCase {
         )
     }
 
-    private func action(id: TransactionID, status: String) -> MidgardAction {
+    private func action(id: TransactionID, status: String, nanoseconds: Int64 = 123_000_000_000) -> MidgardAction {
         try! JSONDecoder().decode(MidgardAction.self, from: Data("""
-        {"date":"123000000000","height":"123","type":"send","status":"\(status)","in":[{"address":"sender","txID":"\(id.hash)","coins":[{"asset":"THOR.RUNE","amount":"42"}]}],"out":[{"address":"recipient","txID":"\(id.hash)","coins":[{"asset":"THOR.RUNE","amount":"42"}]}]}
+        {"date":"\(nanoseconds)","height":"123","type":"send","status":"\(status)","in":[{"address":"sender","txID":"\(id.hash)","coins":[{"asset":"THOR.RUNE","amount":"42"}]}],"out":[{"address":"recipient","txID":"\(id.hash)","coins":[{"asset":"THOR.RUNE","amount":"42"}]}]}
         """.utf8))
     }
 
@@ -410,17 +516,24 @@ private actor PageCapHistoryProvider: MidgardActionProviding {
 }
 
 private actor GateHistoryProvider: MidgardActionProviding {
+    private let firstPage: MidgardActionPage
+    private let followingPage: MidgardActionPage
     private var firstRequestStarted = false
     private var firstRequestWaiter: CheckedContinuation<Void, Never>?
     private var firstRequestRelease: CheckedContinuation<Void, Never>?
 
+    init(firstPage: MidgardActionPage, followingPage: MidgardActionPage) {
+        self.firstPage = firstPage
+        self.followingPage = followingPage
+    }
+
     func fetchActions(address: String, limit: Int, nextPageToken: String?, transactionID: TransactionID?) async throws -> MidgardActionPage {
-        guard !firstRequestStarted else { return MidgardActionPage(actions: [], nextPageToken: nil) }
+        guard !firstRequestStarted else { return followingPage }
         firstRequestStarted = true
         firstRequestWaiter?.resume()
         firstRequestWaiter = nil
         await withCheckedContinuation { firstRequestRelease = $0 }
-        return MidgardActionPage(actions: [], nextPageToken: nil)
+        return firstPage
     }
 
     func waitForFirstRequest() async {

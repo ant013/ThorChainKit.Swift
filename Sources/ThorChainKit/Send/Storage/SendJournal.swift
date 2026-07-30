@@ -200,6 +200,16 @@ final class SendJournal: @unchecked Sendable {
         }
     }
 
+    func records() throws -> [SendJournalRecord] {
+        try storage.read { db in
+            try Row.fetchAll(
+                db,
+                sql: "SELECT * FROM send_journal WHERE persistence_namespace = ?",
+                arguments: [persistenceNamespace]
+            ).map(makeRecord)
+        }
+    }
+
     func removeIncluded(transactionIDs: [TransactionID]) throws {
         guard !transactionIDs.isEmpty else { return }
         try storage.write { db in

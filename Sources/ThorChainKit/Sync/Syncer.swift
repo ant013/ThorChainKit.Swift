@@ -94,6 +94,9 @@ final class Syncer: @unchecked Sendable {
         refreshInFlight = true
         let activeGeneration = generation
         publish(.syncing(previous: accountInfoManager.accountState))
+        // Midgard history is independent of the THORNode account/balance read.
+        // This mirrors TronKit: a failed balance refresh must not leave history stale.
+        transactionSyncer?.sync()
         refreshTask = Task { [weak self, reader, address] in
             do {
                 let read = try await reader.read(address: address)
@@ -112,7 +115,6 @@ final class Syncer: @unchecked Sendable {
             try accountInfoManager.handle(accountInfo: accountInfo, address: address)
             try storage.save(lastBlockHeight: read.acceptedHeight)
             publish(.synced(accountInfoManager.accountState!))
-            transactionSyncer?.sync()
         } catch {
             publish(.notSynced(.storageUnavailable, cached: accountInfoManager.accountState))
         }

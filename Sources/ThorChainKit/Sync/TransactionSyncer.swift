@@ -15,10 +15,24 @@ final class TransactionSyncer: @unchecked Sendable {
     private let address: Address
     private let dispatcher = DispatchQueue(label: "io.horizontalsystems.thorchain-kit.transaction-syncer")
     private let dispatcherKey = DispatchSpecificKey<UInt8>()
-    private let stateSubject = CurrentValueSubject<TransactionSyncState, Never>(.notSynced)
+    private let stateSubject = CurrentValueSubject<TransactionSyncState, Never>(.notSynced(error: .notStarted))
     private var task: Task<Void, Never>?
     private var syncing = false
     private var syncID: UUID?
+
+    private struct RecentSyncResult {
+        let transactions: [Transaction]
+        let hashes: Set<String>
+        let reachedWatermark: Bool
+        let exhausted: Bool
+        let nextPageToken: String?
+        let newestTimestampNanoseconds: Int64?
+    }
+
+    private struct BackfillSyncResult {
+        let transactions: [Transaction]
+        let nextPageToken: String?
+    }
 
     init(provider: any MidgardActionProviding, repository: TransactionRepository, transactionManager: TransactionManager, address: Address) {
         self.provider = provider
@@ -46,51 +60,42 @@ final class TransactionSyncer: @unchecked Sendable {
         syncID = activeSyncID
         stateSubject.send(.syncing)
         guard syncing, syncID == activeSyncID else { return }
-        task = Task { [weak self, provider, repository, transactionManager, address] in
+        task = Task { [weak self, provider, repository, address] in
             do {
                 let cursor = try repository.cursor()
-                let recent = try await Self.syncRecent(
+                let recent = try await Self.fetchRecent(
                     provider: provider,
-                    repository: repository,
-                    transactionManager: transactionManager,
                     address: address,
                     cursor: cursor
                 )
-                try Task.checkCancellation()
-                transactionManager.process(transactions: recent.transactions, initial: cursor.lastTimestamp == 0)
-                let backfill = try await Self.syncBackfill(
+                try self?.commit(recent: recent, cursor: cursor, syncID: activeSyncID)
+                let backfill = try await Self.fetchBackfill(
                     provider: provider,
-                    repository: repository,
-                    transactionManager: transactionManager,
-                    address: address
+                    address: address,
+                    pageToken: try repository.cursor().backfillPageToken
                 )
-                try Task.checkCancellation()
-                transactionManager.process(transactions: backfill, initial: false)
-                let pending = try await Self.refreshPending(
+                try self?.commit(backfill: backfill, syncID: activeSyncID)
+                let pending = try await Self.fetchPending(
                     provider: provider,
                     repository: repository,
-                    transactionManager: transactionManager,
                     address: address,
                     recentHashes: recent.hashes
                 )
-                try Task.checkCancellation()
-                transactionManager.process(transactions: pending, initial: false)
+                try self?.commit(pending: pending, syncID: activeSyncID)
                 self?.finish(.synced, syncID: activeSyncID)
             } catch is CancellationError {
-                self?.finish(.notSynced, syncID: activeSyncID)
+                self?.finish(.notSynced(error: .notStarted), syncID: activeSyncID)
             } catch {
-                self?.finish(.failed, syncID: activeSyncID)
+                self?.finish(.notSynced(error: Self.map(error)), syncID: activeSyncID)
             }
         }
     }
 
-    private static func syncRecent(
+    private static func fetchRecent(
         provider: any MidgardActionProviding,
-        repository: TransactionRepository,
-        transactionManager: TransactionManager,
         address: Address,
         cursor: TransactionSyncCursor
-    ) async throws -> (transactions: [Transaction], hashes: Set<String>) {
+    ) async throws -> RecentSyncResult {
         var updated = [Transaction]()
         var nextPageToken: String?
         var reachedWatermark = false
@@ -107,36 +112,33 @@ final class TransactionSyncer: @unchecked Sendable {
             try Task.checkCancellation()
             let transactions = try page.actions.compactMap(transaction)
             updated.append(contentsOf: transactions)
-            reachedWatermark = transactions.contains { !$0.isPending && Int64($0.timestamp.timeIntervalSince1970) <= cursor.lastTimestamp }
+            // Midgard exposes an opaque page token but no documented secondary
+            // ordering key for actions sharing the same timestamp. Keep paging
+            // through the complete watermark timestamp segment; otherwise an
+            // equal-timestamp action on the next page can be skipped forever.
+            reachedWatermark = transactions.contains { !$0.isPending && $0.timestampNanoseconds < cursor.lastTimestampNanoseconds }
             nextPageToken = page.nextPageToken
             exhausted = page.nextPageToken == nil || page.actions.isEmpty
             if reachedWatermark || exhausted { break }
         }
 
-        // Store actions before advancing either cursor. This must be written before
-        // the timestamp watermark. A crash
-        // can then only repeat reads, never omit the older history segment.
-        if !updated.isEmpty {
-            try Task.checkCancellation()
-            try transactionManager.save(transactions: updated)
-        }
-        if !reachedWatermark, !exhausted, let nextPageToken {
-            try repository.save(backfillPageToken: nextPageToken)
-        }
-        if let newest = updated.lazy.filter({ !$0.isPending }).map({ Int64($0.timestamp.timeIntervalSince1970) }).max(), newest > cursor.lastTimestamp {
-            try repository.save(lastTimestamp: newest)
-        }
-        return (updated, Set(updated.map { $0.transactionId.hash }))
+        return RecentSyncResult(
+            transactions: updated,
+            hashes: Set(updated.map { $0.transactionId.hash }),
+            reachedWatermark: reachedWatermark,
+            exhausted: exhausted,
+            nextPageToken: nextPageToken,
+            newestTimestampNanoseconds: updated.lazy.filter { !$0.isPending }.map(\.timestampNanoseconds).max()
+        )
     }
 
-    private static func syncBackfill(
+    private static func fetchBackfill(
         provider: any MidgardActionProviding,
-        repository: TransactionRepository,
-        transactionManager: TransactionManager,
-        address: Address
-    ) async throws -> [Transaction] {
-        var token = try repository.cursor().backfillPageToken
-        guard token != nil else { return [] }
+        address: Address,
+        pageToken: String?
+    ) async throws -> BackfillSyncResult {
+        var token = pageToken
+        guard token != nil else { return BackfillSyncResult(transactions: [], nextPageToken: nil) }
         var updated = [Transaction]()
 
         for _ in 0 ..< maximumPageCount {
@@ -155,18 +157,12 @@ final class TransactionSyncer: @unchecked Sendable {
                 break
             }
         }
-        if !updated.isEmpty {
-            try Task.checkCancellation()
-            try transactionManager.save(transactions: updated)
-        }
-        try repository.save(backfillPageToken: token)
-        return updated
+        return BackfillSyncResult(transactions: updated, nextPageToken: token)
     }
 
-    private static func refreshPending(
+    private static func fetchPending(
         provider: any MidgardActionProviding,
         repository: TransactionRepository,
-        transactionManager: TransactionManager,
         address: Address,
         recentHashes: Set<String>
     ) async throws -> [Transaction] {
@@ -186,10 +182,6 @@ final class TransactionSyncer: @unchecked Sendable {
             for transaction in try page.actions.compactMap(transaction) where transaction.transactionId == pending.transactionId {
                 refreshed.append(transaction)
             }
-        }
-        if !refreshed.isEmpty {
-            try Task.checkCancellation()
-            try transactionManager.save(transactions: refreshed)
         }
         return refreshed
     }
@@ -212,7 +204,8 @@ final class TransactionSyncer: @unchecked Sendable {
         return Transaction(
             transactionId: transactionId,
             blockHeight: height,
-            timestamp: Date(timeIntervalSince1970: TimeInterval(nanoseconds / 1_000_000_000)),
+            timestamp: Date(timeIntervalSince1970: TimeInterval(nanoseconds) / 1_000_000_000),
+            timestampNanoseconds: nanoseconds,
             type: type,
             status: status,
             memo: memo(action.metadata),
@@ -241,12 +234,60 @@ final class TransactionSyncer: @unchecked Sendable {
         metadata?.object?.values.compactMap { $0.object?["memo"]?.string }.first
     }
 
+    private func commit(recent: RecentSyncResult, cursor: TransactionSyncCursor, syncID: UUID) throws {
+        try withActiveSync(syncID) { [self] in
+            _ = try self.transactionManager.save(transactions: recent.transactions)
+            if !recent.reachedWatermark, !recent.exhausted, let nextPageToken = recent.nextPageToken {
+                try self.repository.save(backfillPageToken: nextPageToken)
+            }
+            if let newest = recent.newestTimestampNanoseconds, newest > cursor.lastTimestampNanoseconds {
+                try self.repository.save(lastTimestampNanoseconds: newest)
+            }
+            self.transactionManager.process(initial: cursor.lastTimestampNanoseconds == 0)
+        }
+    }
+
+    private func commit(backfill: BackfillSyncResult, syncID: UUID) throws {
+        try withActiveSync(syncID) { [self] in
+            _ = try self.transactionManager.save(transactions: backfill.transactions)
+            try self.repository.save(backfillPageToken: backfill.nextPageToken)
+            self.transactionManager.process(initial: false)
+        }
+    }
+
+    private func commit(pending: [Transaction], syncID: UUID) throws {
+        try withActiveSync(syncID) { [self] in
+            _ = try self.transactionManager.save(transactions: pending)
+            self.transactionManager.process(initial: false)
+        }
+    }
+
+    private func withActiveSync<T>(_ expectedSyncID: UUID, _ body: @escaping () throws -> T) throws -> T {
+        let guarded = { [self] in
+            guard self.syncID == expectedSyncID, self.syncing, !Task.isCancelled else { throw CancellationError() }
+            return try body()
+        }
+        if DispatchQueue.getSpecific(key: dispatcherKey) == 1 {
+            return try guarded()
+        }
+        return try dispatcher.sync(execute: guarded)
+    }
+
+    private static func map(_ error: Error) -> TransactionSyncError {
+        if error is StorageError { return .storageUnavailable }
+        guard let error = error as? MidgardProviderError else { return .providerUnavailable }
+        switch error {
+        case .unavailable, .clientStatus: return .providerUnavailable
+        case .invalidResponse: return .invalidResponse
+        }
+    }
+
     private func stopOnDispatcher() {
         task?.cancel()
         task = nil
         syncID = nil
         syncing = false
-        stateSubject.send(.notSynced)
+        stateSubject.send(.notSynced(error: .notStarted))
     }
 
     private func finish(_ state: TransactionSyncState, syncID: UUID) {

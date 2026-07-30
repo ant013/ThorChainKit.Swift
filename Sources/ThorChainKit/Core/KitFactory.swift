@@ -64,6 +64,7 @@ public extension Kit {
             journal: journal,
             pendingTransactionManager: pendingTransactionManager
         )
+        try transactionManager.reconcileLocalTransactions()
         let transactionSyncer = endpoints.midgardURLs.isEmpty ? nil : TransactionSyncer(
             provider: MidgardProvider(
                 baseURLs: endpoints.midgardURLs,
@@ -84,6 +85,7 @@ public extension Kit {
                 return try await client.broadcast(transaction: transaction)
             },
             transactionManager: pendingTransactionManager,
+            historyTransactionManager: transactionManager,
             publicationBarrier: publicationBarrier,
             lookupOperation: { familyID, transactionID in
                 guard let client = lookupClients[familyID] else { return .providerInconsistent }
@@ -208,6 +210,7 @@ public extension Kit {
             journal: journal,
             pendingTransactionManager: pendingTransactionManager
         )
+        try transactionManager.reconcileLocalTransactions()
         let transactionSyncer = endpoints.midgardURLs.isEmpty ? nil : TransactionSyncer(
             provider: MidgardProvider(
                 baseURLs: endpoints.midgardURLs,
@@ -229,6 +232,7 @@ public extension Kit {
                 return try await client.broadcast(transaction: transaction)
             },
             transactionManager: pendingTransactionManager,
+            historyTransactionManager: transactionManager,
             publicationBarrier: publicationBarrier,
             lookupOperation: { familyID, transactionID in
                 guard let client = lookupClients[familyID] else { return .providerInconsistent }
