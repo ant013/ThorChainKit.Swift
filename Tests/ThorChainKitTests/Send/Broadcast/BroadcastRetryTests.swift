@@ -10,8 +10,7 @@ final class BroadcastRetryTests: XCTestCase {
         let runtime = SendRuntime(
             address: fixture.sender,
             persistenceNamespace: fixture.namespace,
-            runtimeIdentifier: fixture.namespace,
-            databaseWriter: fixture.database.pool,
+            journal: fixture.journal,
             broadcastOperation: { _, transaction in
                 capture.append(transaction.txRaw)
                 return BroadcastResponse(txHash: transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil)
@@ -40,8 +39,7 @@ final class BroadcastRetryTests: XCTestCase {
         let runtime = SendRuntime(
             address: fixture.sender,
             persistenceNamespace: fixture.namespace,
-            runtimeIdentifier: fixture.namespace,
-            databaseWriter: fixture.database.pool,
+            journal: fixture.journal,
             broadcastOperation: { _, _ in
                 XCTFail("lookup timeout must not broadcast")
                 return BroadcastResponse(txHash: fixture.transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil)
@@ -69,8 +67,7 @@ final class BroadcastRetryTests: XCTestCase {
         let runtime = SendRuntime(
             address: fixture.sender,
             persistenceNamespace: fixture.namespace,
-            runtimeIdentifier: fixture.namespace,
-            databaseWriter: fixture.database.pool,
+            journal: fixture.journal,
             broadcastOperation: { _, _ in try await deferred.wait() },
             lookupOperation: { _, _ in .notFound },
             operationDeadline: 0.03,
@@ -107,8 +104,7 @@ final class BroadcastRetryTests: XCTestCase {
         let firstRuntime = SendRuntime(
             address: fixture.sender,
             persistenceNamespace: fixture.namespace,
-            runtimeIdentifier: fixture.namespace,
-            databaseWriter: fixture.database.pool,
+            journal: fixture.journal,
             broadcastOperation: { _, transaction in
                 firstCapture.append(transaction.txRaw)
                 firstCapture.transportCall()
@@ -145,8 +141,7 @@ final class BroadcastRetryTests: XCTestCase {
         let secondRuntime = SendRuntime(
             address: fixture.sender,
             persistenceNamespace: fixture.namespace,
-            runtimeIdentifier: fixture.namespace,
-            databaseWriter: fixture.database.pool,
+            journal: fixture.journal,
             broadcastOperation: { _, transaction in
                 secondCapture.append(transaction.txRaw)
                 secondCapture.transportCall()
@@ -187,8 +182,7 @@ final class BroadcastRetryTests: XCTestCase {
         let runtime = SendRuntime(
             address: fixture.sender,
             persistenceNamespace: fixture.namespace,
-            runtimeIdentifier: fixture.namespace,
-            databaseWriter: fixture.database.pool,
+            journal: fixture.journal,
             broadcastOperation: { _, transaction in
                 capture.append(transaction.txRaw)
                 capture.transportCall()
@@ -221,8 +215,7 @@ final class BroadcastRetryTests: XCTestCase {
         let runtime = SendRuntime(
             address: fixture.sender,
             persistenceNamespace: fixture.namespace,
-            runtimeIdentifier: fixture.namespace,
-            databaseWriter: fixture.database.pool,
+            journal: fixture.journal,
             retryObservability: SendRetryObservability { events.append($0) }
         )
         await runtime.activate(generation: 1)
@@ -246,8 +239,7 @@ final class BroadcastRetryTests: XCTestCase {
         let runtime = SendRuntime(
             address: fixture.sender,
             persistenceNamespace: fixture.namespace,
-            runtimeIdentifier: fixture.namespace,
-            databaseWriter: fixture.database.pool,
+            journal: fixture.journal,
             broadcastOperation: { _, transaction in
                 capture.append(transaction.txRaw)
                 return BroadcastResponse(txHash: transaction.transactionID.hash, code: 0, codespace: nil, sanitizedLog: nil)
@@ -300,16 +292,16 @@ final class BroadcastRetryTests: XCTestCase {
 
     private func makeUnknownRecord(namespace: String) throws -> RetryFixture {
         let path = FileManager.default.temporaryDirectory.appendingPathComponent("\(namespace).sqlite")
-        let database = try DatabaseRuntime.open(path: path.path)
+        let database = try TransactionStorageFixture.open(path: path.path)
         let sender = try sendTestAddress()
         let recipient = try sendOtherAddress()
         let owner = Data([7, 8, 9])
-        let reservations = SequenceReservationStore(writer: database.pool)
+        let reservations = SequenceReservationStore(storage: database.storage)
         let key = SequenceReservationKey(persistenceNamespace: namespace, senderPayload: sender.payload, sequence: 4)
         XCTAssertTrue(try reservations.acquire(key, ownerToken: owner))
         let raw = Data([0x01, 0x02, 0x03, 0x04])
         let transaction = SignedTransaction(txRaw: raw, transactionID: DirectSignCodec.transactionId(txRaw: raw))
-        let journal = SendJournal(writer: database.pool, persistenceNamespace: namespace)
+        let journal = SendJournal(storage: database.storage, persistenceNamespace: namespace)
         try journal.insertBroadcasting(
             transaction: transaction,
             senderPayload: sender.payload,
@@ -337,7 +329,7 @@ final class BroadcastRetryTests: XCTestCase {
 }
 
 private struct RetryFixture {
-    let database: DatabaseRuntime
+    let database: TransactionStorageFixture
     let journal: SendJournal
     let namespace: String
     let sender: Address

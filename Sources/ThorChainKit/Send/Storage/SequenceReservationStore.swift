@@ -13,16 +13,16 @@ protocol SequenceReservationManaging: Sendable {
 }
 
 final class SequenceReservationStore: SequenceReservationManaging, @unchecked Sendable {
-    private let writer: DatabasePool
+    private let storage: TransactionStorage
 
-    init(writer: DatabasePool) {
-        self.writer = writer
+    init(storage: TransactionStorage) {
+        self.storage = storage
     }
 
     func acquire(_ key: SequenceReservationKey, ownerToken: Data) throws -> Bool {
         guard !ownerToken.isEmpty, key.sequence <= UInt64(Int64.max) else { return false }
         do {
-            try writer.write { db in
+            try storage.write { db in
                 try db.execute(
                     sql: "INSERT INTO send_sequence_reservations (persistence_namespace, sender_payload, sequence, owner_token) VALUES (?, ?, ?, ?)",
                     arguments: [key.persistenceNamespace, key.senderPayload, Int64(key.sequence), ownerToken]
@@ -36,7 +36,7 @@ final class SequenceReservationStore: SequenceReservationManaging, @unchecked Se
 
     func release(_ key: SequenceReservationKey, ownerToken: Data) throws -> Bool {
         var released = false
-        try writer.write { db in
+        try storage.write { db in
             try db.execute(
                 sql: "DELETE FROM send_sequence_reservations WHERE persistence_namespace = ? AND sender_payload = ? AND sequence = ? AND owner_token = ?",
                 arguments: [key.persistenceNamespace, key.senderPayload, Int64(key.sequence), ownerToken]

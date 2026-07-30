@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import GRDB
 
@@ -32,17 +33,17 @@ struct SendJournalRecord: Sendable, Equatable {
 }
 
 final class SendJournal: @unchecked Sendable {
-    private let writer: DatabasePool
+    private let storage: TransactionStorage
     let persistenceNamespace: String
     private let now: @Sendable () -> Date
 
-    init(writer: DatabasePool, persistenceNamespace: String, now: @escaping @Sendable () -> Date = { Date() }) {
-        self.writer = writer
+    init(storage: TransactionStorage, persistenceNamespace: String, now: @escaping @Sendable () -> Date = { Date() }) {
+        self.storage = storage
         self.persistenceNamespace = persistenceNamespace
         self.now = now
     }
 
-    var databaseWriter: DatabasePool { writer }
+    var changesPublisher: AnyPublisher<Void, Never> { storage.changesPublisher }
 
     func insertBroadcasting(
         transaction: SignedTransaction,
@@ -67,7 +68,7 @@ final class SendJournal: @unchecked Sendable {
             throw SendError.storageUnavailable
         }
         let timestamp = now()
-        try writer.write { db in
+        try storage.write { db in
             try db.execute(
                 sql: """
                 INSERT INTO send_journal
@@ -94,26 +95,29 @@ final class SendJournal: @unchecked Sendable {
             )
             guard db.changesCount == 1 else { throw SendError.storageUnavailable }
         }
+        storage.sendChange()
     }
 
     func record(for transactionID: TransactionID) throws -> SendJournalRecord? {
-        try writer.read { db in
+        try storage.read { db in
             try row(for: transactionID, db: db).map(makeRecord)
         }
     }
 
     func normalizeBroadcastingToUnknown() throws -> Int {
-        try writer.write { db in
+        let changed = try storage.write { db in
             try db.execute(
                 sql: "UPDATE send_journal SET state = ?, broadcast_generation = 0, updated_at = ? WHERE persistence_namespace = ? AND state = ?",
                 arguments: [SendJournalState.unknown.rawValue, now(), persistenceNamespace, SendJournalState.broadcasting.rawValue]
             )
             return db.changesCount
         }
+        if changed > 0 { storage.sendChange() }
+        return changed
     }
 
     func removeUnlinkedReservations() throws -> Int {
-        try writer.write { db in
+        try storage.write { db in
             try db.execute(
                 sql: "DELETE FROM send_sequence_reservations WHERE persistence_namespace = ? AND local_hash IS NULL",
                 arguments: [persistenceNamespace]
@@ -133,7 +137,7 @@ final class SendJournal: @unchecked Sendable {
         codespace: String? = nil,
         sanitizedLog: BroadcastDiagnostic? = nil
     ) throws -> Bool {
-        try writer.write { db in
+        let changed = try storage.write { db in
             var changed = false
             try db.execute(
                 sql: """
@@ -158,10 +162,12 @@ final class SendJournal: @unchecked Sendable {
             }
             return changed
         }
+        if changed { storage.sendChange() }
+        return changed
     }
 
     func pendingRecords() throws -> [SendJournalRecord] {
-        try writer.read { db in
+        try storage.read { db in
             try pendingRecords(in: db)
         }
     }

@@ -1,6 +1,5 @@
 import BigInt
 import Foundation
-import GRDB
 
 fileprivate final class SendRuntimeAdmissionState: Sendable {
     private let stateQueue = DispatchQueue(label: "ThorChainKit.Send.Admission")
@@ -82,8 +81,7 @@ actor SendRuntime {
         address: Address? = nil,
         clientID: UUID = UUID(),
         persistenceNamespace: String = UUID().uuidString,
-        runtimeIdentifier: String = "memory",
-        databaseWriter: DatabasePool? = nil,
+        journal: SendJournal? = nil,
         reservationStore: (any SequenceReservationManaging)? = nil,
         broadcastOperation: (@Sendable (String, SignedTransaction) async throws -> BroadcastResponse)? = nil,
         pendingRepository: PendingTransactionRepository? = nil,
@@ -100,8 +98,8 @@ actor SendRuntime {
         self.clientID = clientID
         network = address?.network
         quoteStore = QuoteStore(clientID: clientID)
-        sequenceReservations = reservationStore ?? databaseWriter.map(SequenceReservationStore.init(writer:))
-        journal = databaseWriter.map { SendJournal(writer: $0, persistenceNamespace: persistenceNamespace) }
+        sequenceReservations = reservationStore
+        self.journal = journal
         self.publicationBarrier = publicationBarrier
         self.pendingRepository = pendingRepository ?? journal.map {
             PendingTransactionRepository(
@@ -118,10 +116,7 @@ actor SendRuntime {
         self.retryEndpointLeaseOperation = retryEndpointLeaseOperation
         self.retryPolicyOperation = retryPolicyOperation
         self.retryObservability = retryObservability
-        sharedState = SendRuntimeRegistry.shared.state(
-            for: persistenceNamespace,
-            runtimeIdentifier: runtimeIdentifier
-        )
+        sharedState = SendRuntimeSharedState(persistenceNamespace: persistenceNamespace)
         if sharedState.claimRecovery() {
             do {
                 _ = try journal?.removeUnlinkedReservations()
@@ -161,10 +156,6 @@ actor SendRuntime {
     func isAdmissionActive() -> Bool {
         guard let activeGeneration else { return false }
         return admissionState.isActive(generation: activeGeneration)
-    }
-
-    func databaseRuntimeIdentifier() -> String {
-        sharedState.runtimeIdentifier
     }
 
     func acquireReservation(sender: String, sequence: UInt64, ownerToken: Data) throws -> Bool {

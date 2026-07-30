@@ -1,8 +1,40 @@
+import Combine
+import Foundation
 import GRDB
 
-enum ThorChainMigrations {
-    static func migrator() -> DatabaseMigrator {
+final class TransactionStorage {
+    private let dbPool: DatabasePool
+    private let changesSubject = PassthroughSubject<Void, Never>()
+
+    init(databaseDirectoryUrl: URL, databaseFileName: String) throws {
+        let databaseURL = databaseDirectoryUrl.appendingPathComponent("\(databaseFileName).sqlite")
+        try self.init(path: databaseURL.path)
+    }
+
+    init(path: String) throws {
+        dbPool = try DatabasePool(path: path)
+        try migrator.migrate(dbPool)
+    }
+
+    var changesPublisher: AnyPublisher<Void, Never> {
+        changesSubject.eraseToAnyPublisher()
+    }
+
+    func sendChange() {
+        changesSubject.send(())
+    }
+
+    func read<T>(_ updates: (Database) throws -> T) throws -> T {
+        try dbPool.read(updates)
+    }
+
+    func write<T>(_ updates: (Database) throws -> T) throws -> T {
+        try dbPool.write(updates)
+    }
+
+    private var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
+
         migrator.registerMigration("v2-send-reservations") { db in
             try db.create(table: "send_sequence_reservations") { table in
                 table.column("persistence_namespace", .text).notNull()
@@ -12,6 +44,7 @@ enum ThorChainMigrations {
                 table.primaryKey(["persistence_namespace", "sender_payload", "sequence"])
             }
         }
+
         migrator.registerMigration("v3-send-journal") { db in
             try db.alter(table: "send_sequence_reservations") { table in
                 table.add(column: "local_hash", .text)
@@ -42,6 +75,7 @@ enum ThorChainMigrations {
                 table.primaryKey(["persistence_namespace", "local_hash"])
             }
         }
+
         return migrator
     }
 }

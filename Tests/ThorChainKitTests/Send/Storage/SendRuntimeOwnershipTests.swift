@@ -23,9 +23,9 @@ final class SendRuntimeOwnershipTests: XCTestCase {
         XCTAssertTrue(secondStillActive)
     }
 
-    func testOnlySharedRuntimeOwnsRecovery() throws {
+    func testSingleRuntimeOwnsItsRecovery() throws {
         let namespace = "ownership-recovery-\(UUID().uuidString)"
-        let state = SendRuntimeRegistry.shared.state(for: namespace, runtimeIdentifier: "fixture")
+        let state = SendRuntimeSharedState(persistenceNamespace: namespace)
         XCTAssertTrue(state.claimRecovery())
         XCTAssertFalse(state.claimRecovery())
         state.releaseRecovery()

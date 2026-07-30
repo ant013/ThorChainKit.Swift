@@ -1,36 +1,16 @@
 import Foundation
 
-final class SendRuntimeRegistry: @unchecked Sendable {
-    static let shared = SendRuntimeRegistry()
-
-    private let lock = NSLock()
-    private var runtimes = [String: SendRuntimeSharedState]()
-
-    func state(for persistenceNamespace: String, runtimeIdentifier: String) -> SendRuntimeSharedState {
-        lock.lock()
-        defer { lock.unlock() }
-        let key = "\(runtimeIdentifier):\(persistenceNamespace)"
-        if let state = runtimes[key] {
-            return state
-        }
-        let state = SendRuntimeSharedState(persistenceNamespace: persistenceNamespace, runtimeIdentifier: runtimeIdentifier)
-        runtimes[key] = state
-        return state
-    }
-}
-
 final class SendRuntimeSharedState: @unchecked Sendable {
     let persistenceNamespace: String
-    let runtimeIdentifier: String
+
     private let lock = NSLock()
     private var activeClients = Set<UUID>()
     private var activeAccounts = [String: AccountAttemptState]()
     private var signerFences = Set<String>()
     private var recoveryClaimed = false
 
-    init(persistenceNamespace: String, runtimeIdentifier: String) {
+    init(persistenceNamespace: String) {
         self.persistenceNamespace = persistenceNamespace
-        self.runtimeIdentifier = runtimeIdentifier
     }
 
     func activate(clientID: UUID) {

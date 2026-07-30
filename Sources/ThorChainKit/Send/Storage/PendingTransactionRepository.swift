@@ -1,48 +1,31 @@
 import Combine
 import Foundation
-import GRDB
-
-typealias PendingObservationStarter = (
-    @escaping ([SendJournalRecord]) -> Void,
-    @escaping () -> Void,
-    DispatchQueue
-) -> AnyCancellable
 
 final class PendingTransactionRepository: @unchecked Sendable {
     private let journal: SendJournal
     private let network: Network
     private let publicationBarrier: PendingPublicationBarrier?
-    private let observationStarter: PendingObservationStarter
     private let stateQueue = DispatchQueue(label: "ThorChainKit.Send.Pending")
     private let subject = CurrentValueSubject<[PendingTransaction], Never>([])
     private let statusSubject = CurrentValueSubject<PendingTransactionsStatus, Never>(.degraded)
     private var lastSnapshot = [PendingTransaction]()
     private var lastRecords = [SendJournalRecord]()
     private var observation: AnyCancellable?
-    private var observationGeneration = 0
 
     init(
         journal: SendJournal,
         network: Network = .mainnet,
-        publicationBarrier: PendingPublicationBarrier? = nil,
-        observationStarter: PendingObservationStarter? = nil
+        publicationBarrier: PendingPublicationBarrier? = nil
     ) {
         self.journal = journal
         self.network = network
         self.publicationBarrier = publicationBarrier
-        self.observationStarter = observationStarter ?? { onChange, onError, queue in
-            let observation = ValueObservation.tracking { [journal] db in
-                try journal.pendingRecords(in: db)
+        observation = journal.changesPublisher.sink { [weak self] in
+            self?.stateQueue.async { [weak self] in
+                self?.refreshLocked()
             }
-            let cancellable = observation.start(
-                in: journal.databaseWriter,
-                scheduling: .async(onQueue: queue),
-                onError: { _ in onError() },
-                onChange: onChange
-            )
-            return AnyCancellable { cancellable.cancel() }
         }
-        installObservation()
+        _ = refresh()
     }
 
     var snapshot: [PendingTransaction] { stateQueue.sync { subject.value } }
@@ -52,59 +35,28 @@ final class PendingTransactionRepository: @unchecked Sendable {
 
     @discardableResult
     func refresh() -> PendingTransactionsStatus {
-        stateQueue.sync {
-            do {
-                let next = try journal.pendingRecords().compactMap { Self.project($0, network: network) }
-                lastSnapshot = next
-                subject.send(next)
-                statusSubject.send(.ready)
-                if observation == nil { installObservation() }
-            } catch {
-                subject.send(lastSnapshot)
-                statusSubject.send(.degraded)
-            }
-            return statusSubject.value
-        }
+        stateQueue.sync { refreshLocked() }
     }
 
-    private func installObservation() {
-        observationGeneration += 1
-        let generation = observationGeneration
-        observation?.cancel()
-        let cancellable = observationStarter(
-            { [weak self] records in
-                self?.stateQueue.async { [weak self] in
-                    guard let self, self.observationGeneration == generation else { return }
-                    self.lastRecords = records
-                    records.filter { $0.state == .broadcasting }.forEach {
-                        self.publicationBarrier?.acknowledge(
-                            transactionID: $0.transactionID,
-                            generation: $0.broadcastGeneration
-                        )
-                    }
-                    self.lastSnapshot = records.compactMap { Self.project($0, network: self.network) }
-                    self.subject.send(self.lastSnapshot)
-                    self.statusSubject.send(.ready)
-                }
-            },
-            { [weak self] in
-                self?.stateQueue.async { [weak self] in
-                    guard let self, self.observationGeneration == generation else { return }
-                    self.observation = nil
-                    self.lastRecords.filter { $0.state == .broadcasting }.forEach {
-                        self.publicationBarrier?.fail(
-                            transactionID: $0.transactionID,
-                            generation: $0.broadcastGeneration
-                        )
-                    }
-                    self.publicationBarrier?.failAll()
-                    self.statusSubject.send(.degraded)
-                    self.installObservation()
-                }
-            },
-            stateQueue
-        )
-        self.observation = cancellable
+    private func refreshLocked() -> PendingTransactionsStatus {
+        do {
+            let records = try journal.pendingRecords()
+            lastRecords = records
+            records.filter { $0.state == .broadcasting }.forEach {
+                publicationBarrier?.acknowledge(transactionID: $0.transactionID, generation: $0.broadcastGeneration)
+            }
+            lastSnapshot = records.compactMap { Self.project($0, network: network) }
+            subject.send(lastSnapshot)
+            statusSubject.send(.ready)
+        } catch {
+            lastRecords.filter { $0.state == .broadcasting }.forEach {
+                publicationBarrier?.fail(transactionID: $0.transactionID, generation: $0.broadcastGeneration)
+            }
+            publicationBarrier?.failAll()
+            subject.send(lastSnapshot)
+            statusSubject.send(.degraded)
+        }
+        return statusSubject.value
     }
 
     private static func project(_ record: SendJournalRecord, network: Network) -> PendingTransaction? {

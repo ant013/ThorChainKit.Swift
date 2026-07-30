@@ -28,7 +28,10 @@ public extension Kit {
             databaseFileName: "account-info-storage-\(namespace)"
         )
         let accountInfoManager = AccountInfoManager(storage: accountInfoStorage)
-        let databaseRuntime = try DatabaseRuntime.open(path: try databasePath(namespace: namespace))
+        let transactionStorage = try TransactionStorage(
+            databaseDirectoryUrl: databaseDirectory,
+            databaseFileName: "transactions-\(namespace)"
+        )
         let probe = LiveNodeProbe(configuration: endpoints)
         let pool = EndpointPool(network: address.network, configuration: endpoints, probe: probe)
         let liveClient = LiveThorNodeClient(
@@ -48,16 +51,17 @@ public extension Kit {
             configuration: endpoints
         )
         let publicationBarrier = PendingPublicationBarrier()
+        let journal = SendJournal(storage: transactionStorage, persistenceNamespace: namespace)
         let pendingRepository = PendingTransactionRepository(
-            journal: SendJournal(writer: databaseRuntime.pool, persistenceNamespace: namespace),
+            journal: journal,
             network: address.network,
             publicationBarrier: publicationBarrier
         )
         let sendRuntime = SendRuntime(
             address: address,
             persistenceNamespace: namespace,
-            runtimeIdentifier: databaseRuntime.location.identity.rawValue,
-            databaseWriter: databaseRuntime.pool,
+            journal: journal,
+            reservationStore: SequenceReservationStore(storage: transactionStorage),
             broadcastOperation: { familyID, transaction in
                 guard let client = broadcastClients[familyID] else { throw BroadcastTransportError.invalidEndpoint }
                 return try await client.broadcast(transaction: transaction)
@@ -125,7 +129,7 @@ public extension Kit {
             databaseFileName: "account-info-storage-\(namespace)"
         )
         let accountInfoManager = AccountInfoManager(storage: accountInfoStorage)
-        let databaseRuntime = try DatabaseRuntime.open(path: databasePath)
+        let transactionStorage = try TransactionStorage(path: databasePath)
         let adapter = FixtureHTTPTransportAdapter(transport: transport)
         let probe = LiveNodeProbe(configuration: endpoints, transport: adapter)
         let pool = EndpointPool(network: address.network, configuration: endpoints, probe: probe)
@@ -148,16 +152,17 @@ public extension Kit {
             wallClock: FixtureAccountReadWallClock(now: observedAt)
         )
         let publicationBarrier = PendingPublicationBarrier()
+        let journal = SendJournal(storage: transactionStorage, persistenceNamespace: namespace)
         let pendingRepository = PendingTransactionRepository(
-            journal: SendJournal(writer: databaseRuntime.pool, persistenceNamespace: namespace),
+            journal: journal,
             network: address.network,
             publicationBarrier: publicationBarrier
         )
         let sendRuntime = SendRuntime(
             address: address,
             persistenceNamespace: namespace,
-            runtimeIdentifier: databaseRuntime.location.identity.rawValue,
-            databaseWriter: databaseRuntime.pool,
+            journal: journal,
+            reservationStore: SequenceReservationStore(storage: transactionStorage),
             broadcastOperation: { familyID, transaction in
                 guard let client = broadcastClients[familyID] else { throw BroadcastTransportError.invalidEndpoint }
                 return try await client.broadcast(transaction: transaction)
@@ -217,12 +222,6 @@ public extension Kit {
             pendingRepository: pendingRepository,
             persistenceNamespace: namespace
         )
-    }
-
-    private static func databasePath(namespace: String) throws -> String {
-        try databaseDirectory()
-            .appendingPathComponent("account-\(namespace).sqlite")
-            .path
     }
 
     private static func databaseDirectory() throws -> URL {
