@@ -2,11 +2,17 @@ import Foundation
 import BigInt
 @testable import ThorChainKit
 
+typealias SendRuntime = TransactionSender
+
+extension Kit {
+    var sendRuntime: TransactionSender { transactionSender }
+}
+
 func makeTestKit(
     address: Address,
-    sendRuntime: SendRuntime = SendRuntime(),
+    transactionSender: TransactionSender = TransactionSender(),
     preflight: SendPreflightCoordinator? = nil,
-    pendingRepository: PendingTransactionRepository? = nil,
+    transactionManager: TransactionManager? = nil,
     persistenceNamespace: String = "test"
 ) -> Kit {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -19,9 +25,9 @@ func makeTestKit(
         address: address,
         syncer: syncer,
         accountInfoManager: accountInfoManager,
-        sendRuntime: sendRuntime,
+        transactionSender: transactionSender,
         preflight: preflight,
-        pendingRepository: pendingRepository,
+        transactionManager: transactionManager,
         persistenceNamespace: persistenceNamespace
     )
 }

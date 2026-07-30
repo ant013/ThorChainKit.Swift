@@ -31,7 +31,7 @@ final class SendPublicApiTests: XCTestCase {
     func testLifecycleAdmissionPrecedesValidationAndDeferredEnginesFailClosed() async throws {
         let address = try sendTestAddress()
         let runtime = SendRuntime(address: address)
-        let kit = makeTestKit(address: address, sendRuntime: runtime, persistenceNamespace: "send-admission")
+        let kit = makeTestKit(address: address, transactionSender: runtime, persistenceNamespace: "send-admission")
 
         do {
             _ = try await kit.quote(to: address, amount: .exact(0))
@@ -56,7 +56,7 @@ final class SendPublicApiTests: XCTestCase {
     func testQuoteZeroAmountPrecedesRecipientChecks() async throws {
         let address = try sendTestAddress()
         let runtime = SendRuntime(address: address)
-        let kit = makeTestKit(address: address, sendRuntime: runtime, persistenceNamespace: "send-validation-order")
+        let kit = makeTestKit(address: address, transactionSender: runtime, persistenceNamespace: "send-validation-order")
 
         await runtime.activate(generation: 1)
         do {

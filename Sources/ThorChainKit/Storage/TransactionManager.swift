@@ -1,7 +1,7 @@
 import Combine
 import Foundation
 
-final class PendingTransactionRepository: @unchecked Sendable {
+final class TransactionManager: @unchecked Sendable {
     private let journal: SendJournal
     private let network: Network
     private let publicationBarrier: PendingPublicationBarrier?

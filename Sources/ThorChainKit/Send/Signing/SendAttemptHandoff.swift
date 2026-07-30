@@ -16,7 +16,7 @@ struct SendAttemptHandoff: Sendable {
     let sequence: UInt64
     let reservationOwnerToken: Data
     let operationHold: OperationHold
-    let runtime: SendRuntime
+    let runtime: TransactionSender
 }
 
 struct OperationHold: Sendable, Equatable {

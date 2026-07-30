@@ -3,10 +3,10 @@ import Foundation
 import XCTest
 @testable import ThorChainKit
 
-final class PendingTransactionRepositoryTests: XCTestCase {
+final class TransactionManagerTests: XCTestCase {
     func testUnknownJournalProjectsAsAvailableAndTerminalAcceptedIsNotApplicable() throws {
         let fixture = try makeJournal()
-        let repository = PendingTransactionRepository(journal: fixture.journal)
+        let repository = TransactionManager(journal: fixture.journal)
         guard case .ready = repository.refresh() else {
             return XCTFail("valid journal must publish a ready snapshot")
         }
@@ -32,7 +32,7 @@ final class PendingTransactionRepositoryTests: XCTestCase {
 
     func testRefreshFailurePreservesLastSnapshotAsDegraded() throws {
         let fixture = try makeJournal()
-        let repository = PendingTransactionRepository(journal: fixture.journal)
+        let repository = TransactionManager(journal: fixture.journal)
         XCTAssertEqual(repository.refresh(), .ready)
         try fixture.database.storage.write { db in
             try db.execute(sql: "DROP TABLE send_journal")
@@ -46,7 +46,7 @@ final class PendingTransactionRepositoryTests: XCTestCase {
 
     func testObservationPublishesCommittedTransition() throws {
         let fixture = try makeJournal()
-        let repository = PendingTransactionRepository(journal: fixture.journal)
+        let repository = TransactionManager(journal: fixture.journal)
         XCTAssertEqual(repository.refresh(), .ready)
         let expectation = expectation(description: "pending observation")
         var cancellable: AnyCancellable?
@@ -71,7 +71,7 @@ final class PendingTransactionRepositoryTests: XCTestCase {
     func testObservationAcknowledgesBroadcastingGeneration() async throws {
         let fixture = try makeJournal()
         let barrier = PendingPublicationBarrier()
-        let repository = PendingTransactionRepository(journal: fixture.journal, publicationBarrier: barrier)
+        let repository = TransactionManager(journal: fixture.journal, publicationBarrier: barrier)
         XCTAssertTrue(try fixture.journal.transition(
             transactionID: fixture.transaction.transactionID,
             from: .unknown,

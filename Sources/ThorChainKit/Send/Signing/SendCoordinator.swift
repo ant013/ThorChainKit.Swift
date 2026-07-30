@@ -1,14 +1,14 @@
 import Foundation
 
 actor SendCoordinator {
-    private let runtime: SendRuntime
+    private let runtime: TransactionSender
     private let preflight: SendPreflightCoordinator?
     private let persistenceNamespace: String
     private let network: Network
     private let now: @Sendable () -> Date
 
     init(
-        runtime: SendRuntime,
+        runtime: TransactionSender,
         preflight: SendPreflightCoordinator? = nil,
         persistenceNamespace: String = "",
         network: Network = .mainnet,
@@ -182,7 +182,7 @@ actor SendCoordinator {
 
     private func finalize(
         result: SendCoordinatorResult,
-        runtime: SendRuntime,
+        runtime: TransactionSender,
         sender: String,
         sequence: UInt64,
         ownerToken: Data,
@@ -257,14 +257,14 @@ private struct SignerRaceResult: Sendable {
 private final class SignerOperation: @unchecked Sendable {
     private let signer: any Signer
     private let request: SigningRequest
-    private let runtime: SendRuntime
+    private let runtime: TransactionSender
     private let sender: String
     private let lock = NSLock()
     private var task: Task<Void, Never>?
     private var result: SignerRaceResult?
     private var waiter: CheckedContinuation<SignerRaceResult, Never>?
 
-    init(signer: any Signer, request: SigningRequest, runtime: SendRuntime, sender: String) {
+    init(signer: any Signer, request: SigningRequest, runtime: TransactionSender, sender: String) {
         self.signer = signer
         self.request = request
         self.runtime = runtime

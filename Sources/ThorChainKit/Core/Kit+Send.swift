@@ -13,16 +13,16 @@ public extension Kit {
                 )
             ).quote
         }
-        return try await sendRuntime.quote(to: recipient, amount: amount, memo: memo == "" ? nil : memo)
+        return try await transactionSender.quote(to: recipient, amount: amount, memo: memo == "" ? nil : memo)
     }
 
     func send(quote: SendQuote, signer: any Signer) async throws -> SendSubmission {
-        try await sendRuntime.send(quote: quote, signer: signer)
+        try await transactionSender.send(quote: quote, signer: signer)
     }
 
     func retryBroadcast(transactionId: TransactionID, acceptingNativeFee: BigUInt? = nil) async throws -> SendSubmission {
         let snapshot = acceptingNativeFee.map { SendMagnitude($0).data }
-        return try await sendRuntime.retryBroadcast(
+        return try await transactionSender.retryBroadcast(
             transactionId: transactionId,
             acceptingNativeFee: snapshot
         )

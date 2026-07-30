@@ -52,12 +52,12 @@ public extension Kit {
         )
         let publicationBarrier = PendingPublicationBarrier()
         let journal = SendJournal(storage: transactionStorage, persistenceNamespace: namespace)
-        let pendingRepository = PendingTransactionRepository(
+        let transactionManager = TransactionManager(
             journal: journal,
             network: address.network,
             publicationBarrier: publicationBarrier
         )
-        let sendRuntime = SendRuntime(
+        let transactionSender = TransactionSender(
             address: address,
             persistenceNamespace: namespace,
             journal: journal,
@@ -66,7 +66,7 @@ public extension Kit {
                 guard let client = broadcastClients[familyID] else { throw BroadcastTransportError.invalidEndpoint }
                 return try await client.broadcast(transaction: transaction)
             },
-            pendingRepository: pendingRepository,
+            transactionManager: transactionManager,
             publicationBarrier: publicationBarrier,
             lookupOperation: { familyID, transactionID in
                 guard let client = lookupClients[familyID] else { return .providerInconsistent }
@@ -81,11 +81,11 @@ public extension Kit {
             address: address
         )
         let preflight = SendPreflightCoordinator(
-            runtime: sendRuntime,
+            runtime: transactionSender,
             provider: ThorNodeSendPreflightProvider(
                 node: ThorNodeSendClient(transport: liveClient),
                 leaseProvider: { try await pool.lease(excludingFamilyIds: []) },
-                runtime: sendRuntime,
+                runtime: transactionSender,
                 freshLeaseProvider: { familyID in try await pool.freshLease(familyID: familyID) }
             )
         )
@@ -93,9 +93,9 @@ public extension Kit {
             address: address,
             syncer: syncer,
             accountInfoManager: accountInfoManager,
-            sendRuntime: sendRuntime,
+            transactionSender: transactionSender,
             preflight: preflight,
-            pendingRepository: pendingRepository,
+            transactionManager: transactionManager,
             persistenceNamespace: namespace
         )
     }
@@ -153,12 +153,12 @@ public extension Kit {
         )
         let publicationBarrier = PendingPublicationBarrier()
         let journal = SendJournal(storage: transactionStorage, persistenceNamespace: namespace)
-        let pendingRepository = PendingTransactionRepository(
+        let transactionManager = TransactionManager(
             journal: journal,
             network: address.network,
             publicationBarrier: publicationBarrier
         )
-        let sendRuntime = SendRuntime(
+        let transactionSender = TransactionSender(
             address: address,
             persistenceNamespace: namespace,
             journal: journal,
@@ -167,7 +167,7 @@ public extension Kit {
                 guard let client = broadcastClients[familyID] else { throw BroadcastTransportError.invalidEndpoint }
                 return try await client.broadcast(transaction: transaction)
             },
-            pendingRepository: pendingRepository,
+            transactionManager: transactionManager,
             publicationBarrier: publicationBarrier,
             lookupOperation: { familyID, transactionID in
                 guard let client = lookupClients[familyID] else { return .providerInconsistent }
@@ -182,7 +182,7 @@ public extension Kit {
             address: address
         )
         let preflight = SendPreflightCoordinator(
-            runtime: sendRuntime,
+            runtime: transactionSender,
             provider: ThorNodeSendPreflightProvider(
                 node: ThorNodeSendClient(transport: liveClient),
                 leaseProvider: { try await pool.lease(excludingFamilyIds: []) },
@@ -209,7 +209,7 @@ public extension Kit {
                         }
                     )
                 },
-                runtime: sendRuntime,
+                runtime: transactionSender,
                 freshLeaseProvider: { familyID in try await pool.freshLease(familyID: familyID) }
             )
         )
@@ -217,9 +217,9 @@ public extension Kit {
             address: address,
             syncer: syncer,
             accountInfoManager: accountInfoManager,
-            sendRuntime: sendRuntime,
+            transactionSender: transactionSender,
             preflight: preflight,
-            pendingRepository: pendingRepository,
+            transactionManager: transactionManager,
             persistenceNamespace: namespace
         )
     }

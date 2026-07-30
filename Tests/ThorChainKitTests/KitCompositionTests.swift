@@ -5,22 +5,22 @@ import XCTest
 @_spi(Testing) @testable import ThorChainKit
 
 final class KitCompositionTests: XCTestCase {
-    func testKitCompositionRetainsOneSendRuntimeAndPendingFacade() throws {
+    func testKitCompositionRetainsTransactionSenderAndPendingFacade() throws {
         let address = try sendTestAddress()
-        let runtime = SendRuntime(address: address)
-        let kit = makeTestKit(address: address, sendRuntime: runtime, persistenceNamespace: "composition")
+        let sender = TransactionSender(address: address)
+        let kit = makeTestKit(address: address, transactionSender: sender, persistenceNamespace: "composition")
 
         XCTAssertTrue(kit.pendingTransactions.isEmpty)
         if case .degraded = kit.pendingTransactionsStatus {} else {
             XCTFail("S2-01 pending state must be explicitly degraded")
         }
-        XCTAssertNotNil(kit.sendRuntime)
+        XCTAssertNotNil(kit.transactionSender)
     }
 
     func testTwoClientsInSameNamespaceStoppingADoesNotStopB() async throws {
         let address = try sendTestAddress()
-        let first = SendRuntime(address: address, persistenceNamespace: "same-namespace")
-        let second = SendRuntime(address: address, persistenceNamespace: "same-namespace")
+        let first = TransactionSender(address: address, persistenceNamespace: "same-namespace")
+        let second = TransactionSender(address: address, persistenceNamespace: "same-namespace")
 
         await first.activate(generation: 1)
         await second.activate(generation: 1)
@@ -30,7 +30,7 @@ final class KitCompositionTests: XCTestCase {
         XCTAssertTrue(secondIsActive)
     }
 
-    func testInstanceAndFixtureFactoriesEachOwnOneDistinctSendRuntime() async throws {
+    func testInstanceAndFixtureFactoriesEachOwnOneDistinctTransactionSender() async throws {
         let address = try sendTestAddress()
         let walletId = "composition-same-wallet"
         let endpoints = try EndpointConfiguration(families: [
@@ -57,9 +57,9 @@ final class KitCompositionTests: XCTestCase {
             observedAt: Date(timeIntervalSince1970: 1)
         )
 
-        XCTAssertNotEqual(ObjectIdentifier(instance.sendRuntime), ObjectIdentifier(fixture.sendRuntime))
-        let instanceAuthority = await instance.sendRuntime.authorityClientID()
-        let fixtureAuthority = await fixture.sendRuntime.authorityClientID()
+        XCTAssertNotEqual(ObjectIdentifier(instance.transactionSender), ObjectIdentifier(fixture.transactionSender))
+        let instanceAuthority = await instance.transactionSender.authorityClientID()
+        let fixtureAuthority = await fixture.transactionSender.authorityClientID()
         XCTAssertNotEqual(instanceAuthority, fixtureAuthority)
         XCTAssertTrue(instance.pendingTransactions.isEmpty)
         XCTAssertTrue(fixture.pendingTransactions.isEmpty)
@@ -89,7 +89,7 @@ final class KitCompositionTests: XCTestCase {
         var isActive = false
         var urls = [URL]()
         for _ in 0..<100 {
-            isActive = await fixture.sendRuntime.isAdmissionActive()
+            isActive = await fixture.transactionSender.isAdmissionActive()
             urls = await transport.requestURLs()
             if isActive && !urls.isEmpty { break }
             try await Task.sleep(nanoseconds: 5_000_000)
@@ -121,7 +121,7 @@ final class KitCompositionTests: XCTestCase {
             databasePath: databaseURL.path,
             observedAt: Date(timeIntervalSince1970: 1)
         )
-        let runtime = fixture.sendRuntime
+        let runtime = fixture.transactionSender
         await runtime.activate(generation: 1)
         let snapshot = try SendSnapshot(
             familyID: family.id,

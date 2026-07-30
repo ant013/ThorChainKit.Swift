@@ -7,7 +7,8 @@ public final class Kit {
     public let network: Network
 
     private let syncer: Syncer
-    let sendRuntime: SendRuntime
+    let transactionSender: TransactionSender
+    private let transactionManager: TransactionManager?
     let preflight: SendPreflightCoordinator?
     private let accountInfoManager: AccountInfoManager
     private let pendingTransactionsSubject: CurrentValueSubject<[PendingTransaction], Never>
@@ -17,22 +18,23 @@ public final class Kit {
     private var activeGeneration: UInt64?
     let persistenceNamespace: String
 
-    init(address: Address, syncer: Syncer, accountInfoManager: AccountInfoManager, sendRuntime: SendRuntime, preflight: SendPreflightCoordinator?, pendingRepository: PendingTransactionRepository?, persistenceNamespace: String, pendingTransactionsSubject: CurrentValueSubject<[PendingTransaction], Never> = CurrentValueSubject([]), pendingTransactionsStatusSubject: CurrentValueSubject<PendingTransactionsStatus, Never> = CurrentValueSubject(.degraded)) {
+    init(address: Address, syncer: Syncer, accountInfoManager: AccountInfoManager, transactionSender: TransactionSender, transactionManager: TransactionManager?, preflight: SendPreflightCoordinator?, persistenceNamespace: String, pendingTransactionsSubject: CurrentValueSubject<[PendingTransaction], Never> = CurrentValueSubject([]), pendingTransactionsStatusSubject: CurrentValueSubject<PendingTransactionsStatus, Never> = CurrentValueSubject(.degraded)) {
         self.address = address
         network = address.network
         self.syncer = syncer
         self.accountInfoManager = accountInfoManager
-        self.sendRuntime = sendRuntime
+        self.transactionSender = transactionSender
+        self.transactionManager = transactionManager
         self.preflight = preflight
         self.persistenceNamespace = persistenceNamespace
         self.pendingTransactionsSubject = pendingTransactionsSubject
         self.pendingTransactionsStatusSubject = pendingTransactionsStatusSubject
-        if let pendingRepository {
-            _ = pendingRepository.refresh()
-            self.pendingTransactionsSubject.send(pendingRepository.snapshot)
-            self.pendingTransactionsStatusSubject.send(pendingRepository.status)
-            pendingRepository.publisher.sink { [weak self] in self?.pendingTransactionsSubject.send($0) }.store(in: &pendingCancellables)
-            pendingRepository.statusPublisher.sink { [weak self] in self?.pendingTransactionsStatusSubject.send($0) }.store(in: &pendingCancellables)
+        if let transactionManager {
+            _ = transactionManager.refresh()
+            self.pendingTransactionsSubject.send(transactionManager.snapshot)
+            self.pendingTransactionsStatusSubject.send(transactionManager.status)
+            transactionManager.publisher.sink { [weak self] in self?.pendingTransactionsSubject.send($0) }.store(in: &pendingCancellables)
+            transactionManager.statusPublisher.sink { [weak self] in self?.pendingTransactionsStatusSubject.send($0) }.store(in: &pendingCancellables)
         }
     }
 
@@ -54,11 +56,11 @@ public final class Kit {
         lifecycleLock.lock()
         activeGeneration = generation
         lifecycleLock.unlock()
-        Task { [weak self, sendRuntime] in
+        Task { [weak self, transactionSender] in
             guard self?.isCurrent(generation: generation) == true else { return }
-            await sendRuntime.activate(generation: generation)
+            await transactionSender.activate(generation: generation)
             if self?.isCurrent(generation: generation) != true {
-                await sendRuntime.invalidate(generation: generation)
+                await transactionSender.invalidate(generation: generation)
             }
         }
     }
@@ -68,8 +70,8 @@ public final class Kit {
         lifecycleLock.lock()
         if activeGeneration == generation { activeGeneration = nil }
         lifecycleLock.unlock()
-        sendRuntime.invalidateImmediately(generation: generation)
-        Task { [sendRuntime] in await sendRuntime.invalidate(generation: generation) }
+        transactionSender.invalidateImmediately(generation: generation)
+        Task { [transactionSender] in await transactionSender.invalidate(generation: generation) }
     }
 
     public func refresh() { syncer.refresh() }

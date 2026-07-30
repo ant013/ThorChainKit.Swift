@@ -9,7 +9,7 @@ final class DirectLifecycleAdmissionTests: XCTestCase {
         let runtime = SendRuntime(address: address)
         let kit = makeTestKit(
             address: address,
-            sendRuntime: runtime,
+            transactionSender: runtime,
             persistenceNamespace: "direct-admission"
         )
 

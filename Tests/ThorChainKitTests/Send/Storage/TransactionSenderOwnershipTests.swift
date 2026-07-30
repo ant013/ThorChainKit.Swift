@@ -2,12 +2,12 @@ import Foundation
 import XCTest
 @testable import ThorChainKit
 
-final class SendRuntimeOwnershipTests: XCTestCase {
+final class TransactionSenderOwnershipTests: XCTestCase {
     func testPerKitLifecycleIsIndependent() async throws {
         let sender = try sendTestAddress()
         let namespace = "ownership-\(UUID().uuidString)"
-        let first = SendRuntime(address: sender, clientID: UUID(), persistenceNamespace: namespace)
-        let second = SendRuntime(address: sender, clientID: UUID(), persistenceNamespace: namespace)
+        let first = TransactionSender(address: sender, clientID: UUID(), persistenceNamespace: namespace)
+        let second = TransactionSender(address: sender, clientID: UUID(), persistenceNamespace: namespace)
         await first.activate(generation: 1)
         await second.activate(generation: 1)
         let firstActive = await first.isAdmissionActive()

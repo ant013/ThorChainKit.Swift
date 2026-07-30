@@ -75,13 +75,13 @@ struct SendPreflightFixtureProvider: SendPreflightProviding {
 }
 
 final class SendPreflightCoordinator: @unchecked Sendable {
-    private let runtime: SendRuntime
+    private let runtime: TransactionSender
     private let provider: any SendPreflightProviding
     private let policy: SendPolicy
     private let runner: EndpointOperationRunner
     private let validationState = SendValidationState()
 
-    init(runtime: SendRuntime, provider: any SendPreflightProviding, policy: SendPolicy? = nil) {
+    init(runtime: TransactionSender, provider: any SendPreflightProviding, policy: SendPolicy? = nil) {
         self.runtime = runtime; self.provider = provider; self.policy = policy ?? .standard
         runner = EndpointOperationRunner(deadline: (policy ?? .standard).operationDeadline)
     }
@@ -205,11 +205,11 @@ struct ThorNodeSendPreflightProvider: SendPreflightProviding {
     let node: ThorNodeSendClient
     let leaseProvider: @Sendable () async throws -> EndpointLease
     let capabilities: [SendFamilyCapability]
-    let runtime: SendRuntime?
+    let runtime: TransactionSender?
     let runner: EndpointOperationRunner
     let freshLeaseProvider: (@Sendable (String) async throws -> EndpointLease)?
 
-    init(node: ThorNodeSendClient, leaseProvider: @escaping @Sendable () async throws -> EndpointLease, capabilities: [SendFamilyCapability] = NativeRuneEndpointRegistry.capabilities(), runtime: SendRuntime? = nil, operationDeadline: TimeInterval = 15, freshLeaseProvider: (@Sendable (String) async throws -> EndpointLease)? = nil) {
+    init(node: ThorNodeSendClient, leaseProvider: @escaping @Sendable () async throws -> EndpointLease, capabilities: [SendFamilyCapability] = NativeRuneEndpointRegistry.capabilities(), runtime: TransactionSender? = nil, operationDeadline: TimeInterval = 15, freshLeaseProvider: (@Sendable (String) async throws -> EndpointLease)? = nil) {
         self.node = node; self.leaseProvider = leaseProvider; self.capabilities = capabilities; self.runtime = runtime; runner = EndpointOperationRunner(deadline: operationDeadline); self.freshLeaseProvider = freshLeaseProvider
     }
 

@@ -60,13 +60,13 @@ private struct AccountAttemptState: Sendable {
     let ownerToken: Data
 }
 
-actor SendRuntime {
+actor TransactionSender {
     private let address: Address?
     private let persistenceNamespace: String
     private let quoteStore: QuoteStore
     private let sequenceReservations: (any SequenceReservationManaging)?
     private let journal: SendJournal?
-    private let pendingRepository: PendingTransactionRepository?
+    private let transactionManager: TransactionManager?
     private let publicationBarrier: PendingPublicationBarrier
     private let broadcastOperation: (@Sendable (String, SignedTransaction) async throws -> BroadcastResponse)?
     private let lookupOperation: (@Sendable (String, TransactionID) async -> RetryLookupResponse)?
@@ -90,7 +90,7 @@ actor SendRuntime {
         journal: SendJournal? = nil,
         reservationStore: (any SequenceReservationManaging)? = nil,
         broadcastOperation: (@Sendable (String, SignedTransaction) async throws -> BroadcastResponse)? = nil,
-        pendingRepository: PendingTransactionRepository? = nil,
+        transactionManager: TransactionManager? = nil,
         publicationBarrier: PendingPublicationBarrier = PendingPublicationBarrier(),
         lookupOperation: (@Sendable (String, TransactionID) async -> RetryLookupResponse)? = nil,
         operationDeadline: TimeInterval = 15,
@@ -107,8 +107,8 @@ actor SendRuntime {
         sequenceReservations = reservationStore
         self.journal = journal
         self.publicationBarrier = publicationBarrier
-        self.pendingRepository = pendingRepository ?? journal.map {
-            PendingTransactionRepository(
+        self.transactionManager = transactionManager ?? journal.map {
+            TransactionManager(
                 journal: $0,
                 network: address?.network ?? .mainnet,
                 publicationBarrier: publicationBarrier
@@ -124,7 +124,7 @@ actor SendRuntime {
         self.retryObservability = retryObservability
         _ = try? journal?.removeUnlinkedReservations()
         _ = try? journal?.normalizeBroadcastingToUnknown()
-        _ = self.pendingRepository?.refresh()
+        _ = self.transactionManager?.refresh()
     }
 
     func authorityClientID() -> UUID { quoteStore.clientID }
@@ -344,7 +344,7 @@ actor SendRuntime {
             )
             guard await publicationBarrier.wait(transactionID: handoff.transaction.transactionID, generation: 1) else {
                 _ = try? journal.transition(transactionID: handoff.transaction.transactionID, from: .broadcasting, expectedGeneration: 1, to: .unknown, generation: 0)
-                _ = pendingRepository?.refresh()
+                _ = transactionManager?.refresh()
                 return SendSubmission(transactionId: handoff.transaction.transactionID, state: .unknown)
             }
         } catch {
@@ -354,7 +354,7 @@ actor SendRuntime {
         defer { _ = releaseOperationHold(handoff.operationHold, ownerToken: handoff.reservationOwnerToken) }
         guard let broadcastOperation else {
             _ = try? journal.transition(transactionID: handoff.transaction.transactionID, from: .broadcasting, expectedGeneration: 1, to: .unknown, generation: 0)
-            _ = pendingRepository?.refresh()
+            _ = transactionManager?.refresh()
             return SendSubmission(transactionId: handoff.transaction.transactionID, state: .unknown)
         }
         do {
@@ -366,28 +366,28 @@ actor SendRuntime {
                 guard (try? journal.transition(transactionID: handoff.transaction.transactionID, from: .broadcasting, expectedGeneration: 1, to: .checkTxAccepted, generation: 1, code: response.code, codespace: response.codespace, sanitizedLog: response.sanitizedLog)) == true else {
                     return SendSubmission(transactionId: handoff.transaction.transactionID, state: .unknown)
                 }
-                _ = pendingRepository?.refresh()
+                _ = transactionManager?.refresh()
                 return SendSubmission(transactionId: handoff.transaction.transactionID, state: .checkTxAccepted)
             case let .rejected(rejection):
                 guard (try? journal.transition(transactionID: handoff.transaction.transactionID, from: .broadcasting, expectedGeneration: 1, to: .rejected, generation: 0, code: rejection.code, codespace: response.codespace, sanitizedLog: response.sanitizedLog)) == true else {
                     return SendSubmission(transactionId: handoff.transaction.transactionID, state: .unknown)
                 }
-                _ = pendingRepository?.refresh()
+                _ = transactionManager?.refresh()
                 throw SendError.broadcastRejected(rejection)
             case .unknown:
                 _ = try? journal.transition(transactionID: handoff.transaction.transactionID, from: .broadcasting, expectedGeneration: 1, to: .unknown, generation: 0, code: response.code, codespace: response.codespace, sanitizedLog: response.sanitizedLog)
-                _ = pendingRepository?.refresh()
+                _ = transactionManager?.refresh()
                 return SendSubmission(transactionId: handoff.transaction.transactionID, state: .unknown)
             }
         } catch is CancellationError {
             _ = try? journal.transition(transactionID: handoff.transaction.transactionID, from: .broadcasting, expectedGeneration: 1, to: .unknown, generation: 0)
-            _ = pendingRepository?.refresh()
+            _ = transactionManager?.refresh()
             return SendSubmission(transactionId: handoff.transaction.transactionID, state: .unknown)
         } catch let error as SendError {
             throw error
         } catch {
             _ = try? journal.transition(transactionID: handoff.transaction.transactionID, from: .broadcasting, expectedGeneration: 1, to: .unknown, generation: 0)
-            _ = pendingRepository?.refresh()
+            _ = transactionManager?.refresh()
             return SendSubmission(transactionId: handoff.transaction.transactionID, state: .unknown)
         }
     }
@@ -420,7 +420,7 @@ actor SendRuntime {
         retryObservability.record(.publicationWait)
         guard await publicationBarrier.wait(transactionID: transactionId, generation: nextGeneration) else {
             _ = try? journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration)
-            _ = pendingRepository?.refresh()
+            _ = transactionManager?.refresh()
             return SendSubmission(transactionId: transactionId, state: .unknown)
         }
         let transaction = SignedTransaction(txRaw: record.signedTxRaw, transactionID: transactionId)
@@ -441,15 +441,15 @@ actor SendRuntime {
             case let .found(foundID, _):
                 guard foundID == transactionId,
                       try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .checkTxAccepted, generation: nextGeneration) else { return SendSubmission(transactionId: transactionId, state: .unknown) }
-                _ = pendingRepository?.refresh()
+                _ = transactionManager?.refresh()
                 return SendSubmission(transactionId: transactionId, state: .checkTxAccepted)
             case .providerInconsistent:
                 _ = try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration, blockedReason: .providerInconsistent)
-                _ = pendingRepository?.refresh()
+                _ = transactionManager?.refresh()
                 throw SendError.retryBlocked(.providerInconsistent)
             case .transportFailure:
                 _ = try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration)
-                _ = pendingRepository?.refresh()
+                _ = transactionManager?.refresh()
                 return SendSubmission(transactionId: transactionId, state: .unknown)
             case .notFound:
                 if let retryPolicyOperation {
@@ -461,25 +461,25 @@ actor SendRuntime {
                     let snapshot = try await retryAccountOperation()
                     if snapshot.sequence < record.sequence {
                         _ = try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration, blockedReason: .providerInconsistent)
-                        _ = pendingRepository?.refresh()
+                        _ = transactionManager?.refresh()
                         throw SendError.retryBlocked(.providerInconsistent)
                     }
                     if snapshot.sequence > record.sequence {
                         retryObservability.record(.sequenceAdvancedMutation)
                         _ = try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration, blockedReason: .sequenceAdvanced)
-                        _ = pendingRepository?.refresh()
+                        _ = transactionManager?.refresh()
                         throw SendError.retryBlocked(.sequenceAdvanced)
                     }
                     if snapshot.nativeFee != record.quotedNativeFee,
                        acceptingNativeFee != snapshot.nativeFee {
                         _ = try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration)
-                        _ = pendingRepository?.refresh()
+                        _ = transactionManager?.refresh()
                         throw SendError.retryFeeChanged(NativeFeeChange(previous: BigUInt(record.quotedNativeFee), current: BigUInt(snapshot.nativeFee)))
                     }
                     if snapshot.nativeFee == record.quotedNativeFee,
                        let acceptingNativeFee, acceptingNativeFee != snapshot.nativeFee {
                         _ = try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration)
-                        _ = pendingRepository?.refresh()
+                        _ = transactionManager?.refresh()
                         throw SendError.retryFeeChanged(NativeFeeChange(previous: BigUInt(record.quotedNativeFee), current: BigUInt(snapshot.nativeFee)))
                     }
                 }
@@ -492,21 +492,21 @@ actor SendRuntime {
             switch BroadcastClassifier.classify(localHash: transactionId, response: response) {
             case .checkTxAccepted:
                 guard try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .checkTxAccepted, generation: nextGeneration, code: response.code, codespace: response.codespace, sanitizedLog: response.sanitizedLog) else { return SendSubmission(transactionId: transactionId, state: .unknown) }
-                _ = pendingRepository?.refresh()
+                _ = transactionManager?.refresh()
                 return SendSubmission(transactionId: transactionId, state: .checkTxAccepted)
             case let .rejected(rejection):
                 guard try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .rejected, generation: nextGeneration, code: rejection.code, codespace: response.codespace, sanitizedLog: response.sanitizedLog) else { return SendSubmission(transactionId: transactionId, state: .unknown) }
-                _ = pendingRepository?.refresh()
+                _ = transactionManager?.refresh()
                 throw SendError.broadcastRejected(rejection)
             case .unknown:
                 _ = try journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration, code: response.code, codespace: response.codespace, sanitizedLog: response.sanitizedLog)
-                _ = pendingRepository?.refresh()
+                _ = transactionManager?.refresh()
                 return SendSubmission(transactionId: transactionId, state: .unknown)
             }
         } catch let error as SendError { throw error }
         catch {
             _ = try? journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration)
-            _ = pendingRepository?.refresh()
+            _ = transactionManager?.refresh()
             return SendSubmission(transactionId: transactionId, state: .unknown)
         }
     }
