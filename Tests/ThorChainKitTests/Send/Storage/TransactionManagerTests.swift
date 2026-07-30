@@ -39,16 +39,16 @@ final class TransactionManagerTests: XCTestCase {
         }
 
         guard case .degraded = repository.refresh() else {
-            return XCTFail("observation failure must install degraded status")
+            return XCTFail("transaction manager refresh must install degraded status")
         }
         XCTAssertEqual(repository.snapshot.count, 1)
     }
 
-    func testObservationPublishesCommittedTransition() throws {
+    func testRefreshPublishesCommittedTransition() throws {
         let fixture = try makeJournal()
         let repository = TransactionManager(journal: fixture.journal)
         XCTAssertEqual(repository.refresh(), .ready)
-        let expectation = expectation(description: "pending observation")
+        let expectation = expectation(description: "pending refresh")
         var cancellable: AnyCancellable?
         cancellable = repository.publisher.sink { snapshot in
             if let transaction = snapshot.first,
@@ -65,10 +65,11 @@ final class TransactionManagerTests: XCTestCase {
             to: .checkTxAccepted,
             generation: 1
         ))
+        _ = repository.refresh()
         wait(for: [expectation], timeout: 2)
     }
 
-    func testObservationAcknowledgesBroadcastingGeneration() async throws {
+    func testRefreshAcknowledgesBroadcastingGeneration() async throws {
         let fixture = try makeJournal()
         let barrier = PendingPublicationBarrier()
         let repository = TransactionManager(journal: fixture.journal, publicationBarrier: barrier)
@@ -79,6 +80,7 @@ final class TransactionManagerTests: XCTestCase {
             to: .broadcasting,
             generation: 7
         ))
+        _ = repository.refresh()
 
         let acknowledged = await barrier.wait(transactionID: fixture.transaction.transactionID, generation: 7)
         XCTAssertTrue(acknowledged)

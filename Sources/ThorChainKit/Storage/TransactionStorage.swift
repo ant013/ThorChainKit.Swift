@@ -1,10 +1,8 @@
-import Combine
 import Foundation
 import GRDB
 
 final class TransactionStorage {
     private let dbPool: DatabasePool
-    private let changesSubject = PassthroughSubject<Void, Never>()
 
     init(databaseDirectoryUrl: URL, databaseFileName: String) throws {
         let databaseURL = databaseDirectoryUrl.appendingPathComponent("\(databaseFileName).sqlite")
@@ -14,14 +12,6 @@ final class TransactionStorage {
     init(path: String) throws {
         dbPool = try DatabasePool(path: path)
         try migrator.migrate(dbPool)
-    }
-
-    var changesPublisher: AnyPublisher<Void, Never> {
-        changesSubject.eraseToAnyPublisher()
-    }
-
-    func sendChange() {
-        changesSubject.send(())
     }
 
     func read<T>(_ updates: (Database) throws -> T) throws -> T {

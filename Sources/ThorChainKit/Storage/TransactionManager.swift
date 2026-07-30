@@ -10,7 +10,6 @@ final class TransactionManager: @unchecked Sendable {
     private let statusSubject = CurrentValueSubject<PendingTransactionsStatus, Never>(.degraded)
     private var lastSnapshot = [PendingTransaction]()
     private var lastRecords = [SendJournalRecord]()
-    private var observation: AnyCancellable?
 
     init(
         journal: SendJournal,
@@ -20,11 +19,6 @@ final class TransactionManager: @unchecked Sendable {
         self.journal = journal
         self.network = network
         self.publicationBarrier = publicationBarrier
-        observation = journal.changesPublisher.sink { [weak self] in
-            self?.stateQueue.async { [weak self] in
-                self?.refreshLocked()
-            }
-        }
         _ = refresh()
     }
 

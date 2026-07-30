@@ -342,6 +342,7 @@ actor TransactionSender {
                 quoteHeight: handoff.quoteHeight,
                 reservationOwnerToken: handoff.reservationOwnerToken
             )
+            _ = transactionManager?.refresh()
             guard await publicationBarrier.wait(transactionID: handoff.transaction.transactionID, generation: 1) else {
                 _ = try? journal.transition(transactionID: handoff.transaction.transactionID, from: .broadcasting, expectedGeneration: 1, to: .unknown, generation: 0)
                 _ = transactionManager?.refresh()
@@ -417,6 +418,7 @@ actor TransactionSender {
               retryCAS(journal: journal, transactionId: transactionId, expectedGeneration: record.broadcastGeneration, nextGeneration: nextGeneration) else {
             throw SendError.sendInProgress
         }
+        _ = transactionManager?.refresh()
         retryObservability.record(.publicationWait)
         guard await publicationBarrier.wait(transactionID: transactionId, generation: nextGeneration) else {
             _ = try? journal.transition(transactionID: transactionId, from: .broadcasting, expectedGeneration: nextGeneration, to: .unknown, generation: nextGeneration)

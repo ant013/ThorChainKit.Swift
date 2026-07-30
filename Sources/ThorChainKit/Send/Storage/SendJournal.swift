@@ -1,4 +1,3 @@
-import Combine
 import Foundation
 import GRDB
 
@@ -42,8 +41,6 @@ final class SendJournal: @unchecked Sendable {
         self.persistenceNamespace = persistenceNamespace
         self.now = now
     }
-
-    var changesPublisher: AnyPublisher<Void, Never> { storage.changesPublisher }
 
     func insertBroadcasting(
         transaction: SignedTransaction,
@@ -95,7 +92,6 @@ final class SendJournal: @unchecked Sendable {
             )
             guard db.changesCount == 1 else { throw SendError.storageUnavailable }
         }
-        storage.sendChange()
     }
 
     func record(for transactionID: TransactionID) throws -> SendJournalRecord? {
@@ -112,7 +108,6 @@ final class SendJournal: @unchecked Sendable {
             )
             return db.changesCount
         }
-        if changed > 0 { storage.sendChange() }
         return changed
     }
 
@@ -162,7 +157,6 @@ final class SendJournal: @unchecked Sendable {
             }
             return changed
         }
-        if changed { storage.sendChange() }
         return changed
     }
 
