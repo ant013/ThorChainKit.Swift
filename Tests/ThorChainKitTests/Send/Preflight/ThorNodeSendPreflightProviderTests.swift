@@ -48,7 +48,7 @@ final class ThorNodeSendPreflightProviderTests: XCTestCase {
             let path = components.queryItems?.first(where: { $0.name == "path" })?.value
             if let path {
                 XCTAssertEqual(components.host, family.cometBftURL.host)
-                XCTAssertTrue(["/cosmos.auth.v1beta1.Query/Account", "/types.Query/Network"].contains(path))
+                XCTAssertTrue(["\"/cosmos.auth.v1beta1.Query/Account\"", "\"/types.Query/Network\""].contains(path))
                 XCTAssertTrue(CometABCIEncoding.isCanonicalHex(components.queryItems!.first(where: { $0.name == "data" })!.value!))
             } else {
                 XCTAssertEqual(components.host, family.cosmosRestURL.host)
@@ -181,7 +181,7 @@ private final class MatrixSendTransport: ThorNodeSendTransport, @unchecked Senda
         requests.append(request)
         if request.url?.path.contains("module_accounts") == true { bulkModuleAccountsCalled = true }
         let components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!
-        let path = components.queryItems?.first(where: { $0.name == "path" })?.value
+        let path = components.queryItems?.first(where: { $0.name == "path" })?.value?.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
         let route: String
         let body: Data
         let headers: [String: String]
@@ -216,7 +216,7 @@ private final class MatrixSendTransport: ThorNodeSendTransport, @unchecked Senda
 
     private func comet(value: Data) throws -> Data {
         let encoded = value.base64EncodedString()
-        let body = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"response\":{\"code\":0,\"height\":\"42\",\"value\":\"" + encoded + "\"}}}"
+        let body = "{\"jsonrpc\":\"2.0\",\"id\":-1,\"result\":{\"response\":{\"code\":0,\"height\":\"42\",\"value\":\"" + encoded + "\"}}}"
         return Data(body.utf8)
     }
 }

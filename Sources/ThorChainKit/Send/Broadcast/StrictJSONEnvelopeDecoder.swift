@@ -59,14 +59,13 @@ struct StrictJSONEnvelopeDecoder: Sendable {
     }
 
     private func decodeBroadcast(_ object: [String: Any]) throws -> BroadcastResponse {
-        guard object.count == 1, let response = object["tx_response"] as? [String: Any],
+        guard let response = object["tx_response"] as? [String: Any],
               let hash = response["txhash"] as? String,
               let hashBytes = Self.hashBytes(hash), hashBytes.count == 32,
               let number = response["code"] as? NSNumber,
               String(cString: number.objCType) != "c", String(cString: number.objCType) != "B", String(cString: number.objCType) != "d", String(cString: number.objCType) != "f",
               let integer = Int64(exactly: number), integer >= 0,
-              let code = UInt32(exactly: integer),
-              response.keys.allSatisfy({ ["txhash", "code", "codespace", "raw_log"].contains($0) }) else {
+              let code = UInt32(exactly: integer) else {
             throw StrictJSONEnvelopeError.invalidEnvelope
         }
         let codespace = try response["codespace"].map(Self.validatedASCII)

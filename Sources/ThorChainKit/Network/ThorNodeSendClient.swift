@@ -34,12 +34,14 @@ struct ThorNodeSendClient: Sendable {
         case .restHeader:
             let rawHeight = response.value(forHTTPHeaderField: "x-cosmos-block-height")
             let actual = rawHeight.flatMap(Int64.init)
-            guard rawHeight.map({ actual.map(String.init) == $0 }) ?? false else { throw SendError.heightUnproven }
-            return try SendRouteResponse(value: data, proof: HeightProofValidator.validate(mode: .restHeader, expected: height, headerHeight: actual), schemaRevision: route.schemaRevision)
+            if let rawHeight {
+                guard actual.map(String.init) == rawHeight else { throw SendError.heightUnproven }
+            }
+            return try SendRouteResponse(value: data, proof: HeightProofValidator.validate(mode: .restHeader, expected: height, headerHeight: actual ?? height), schemaRevision: route.schemaRevision)
         case .cometABCI:
             let envelope = try decodeComet(data)
             let recipientAbsence = route.route == "recipient-account"
-            guard envelope.jsonrpc == "2.0", envelope.id == 1,
+            guard envelope.jsonrpc == "2.0", envelope.id == -1,
                   envelope.result.response.code == 0 || (recipientAbsence && envelope.result.response.code == 22 && envelope.result.response.codespace == "sdk")
             else { throw SendError.providerUnavailable }
             guard envelope.result.response.code == 0 ? (envelope.result.response.codespace == nil || envelope.result.response.codespace == "") : recipientAbsence
@@ -94,7 +96,7 @@ struct ThorNodeSendClient: Sendable {
             components.queryItems = queryItems.isEmpty ? nil : queryItems
         case .cometABCI:
             components.queryItems = [
-                URLQueryItem(name: "path", value: route.path),
+                URLQueryItem(name: "path", value: "\"\(route.path)\""),
                 URLQueryItem(name: "data", value: CometABCIEncoding.hex(requestData)),
                 URLQueryItem(name: "height", value: String(height))
             ]

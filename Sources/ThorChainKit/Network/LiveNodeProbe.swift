@@ -38,6 +38,14 @@ struct LiveNodeProbe: NodeProbing {
         }
     }
 
+    func latestBlock(family: EndpointFamilyDescriptor) async -> Result<CosmosLatestBlockObservation, RoleProbeFailure> {
+        let outcome = await outcome(index: 0, family: family, request: .cosmosLatestBlock)
+        guard case let .cosmosLatestBlock(result) = outcome.result else {
+            return .failure(.invalidResponse(field: .blockHeaderHeight))
+        }
+        return result
+    }
+
     private func outcome(
         index: Int,
         family: EndpointFamilyDescriptor,

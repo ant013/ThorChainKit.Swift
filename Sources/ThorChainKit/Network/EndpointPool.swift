@@ -50,6 +50,23 @@ actor EndpointPool {
         }
     }
 
+    func readLease(excludingFamilyIds: Set<String>) async throws -> EndpointLease {
+        let cachedLease = try await lease(excludingFamilyIds: excludingFamilyIds)
+        let latestBlock = await probe.latestBlock(family: cachedLease.family)
+        if case let .success(block) = latestBlock,
+           block.chainId == cachedLease.verifiedChainId,
+           block.latestHeight > 0 {
+            return EndpointLease(
+                family: cachedLease.family,
+                verifiedChainId: cachedLease.verifiedChainId,
+                cosmosReadHeight: block.latestHeight,
+                cometReferenceHeight: cachedLease.cometReferenceHeight,
+                poolGeneration: cachedLease.poolGeneration
+            )
+        }
+        return cachedLease
+    }
+
     func freshLease(excludingFamilyIds: Set<String>) async throws -> EndpointLease {
         cachedFamilies = nil
         cacheDate = nil

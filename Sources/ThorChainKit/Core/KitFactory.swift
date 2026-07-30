@@ -85,6 +85,29 @@ public extension Kit {
             provider: ThorNodeSendPreflightProvider(
                 node: ThorNodeSendClient(transport: liveClient),
                 leaseProvider: { try await pool.lease(excludingFamilyIds: []) },
+                capabilities: NativeRuneEndpointRegistry.capabilities().map { capability in
+                    SendFamilyCapability(
+                        familyID: capability.familyID,
+                        manifestRevision: capability.manifestRevision,
+                        routes: capability.routes.map { route in
+                            SendManifestRoute(
+                                record: route.record,
+                                route: route.route,
+                                path: route.path,
+                                requestEncoding: route.requestEncoding,
+                                decoder: route.decoder,
+                                proofMode: route.proofMode,
+                                schemaRevision: route.schemaRevision,
+                                supportedNodeRevision: route.supportedNodeRevision,
+                                historicalHeightParameter: route.historicalHeightParameter,
+                                queryKey: route.queryKey,
+                                queryParameterName: route.queryParameterName,
+                                queryParameterValue: route.queryParameterValue,
+                                capabilityStatus: .pass
+                            )
+                        }
+                    )
+                },
                 runtime: transactionSender,
                 freshLeaseProvider: { familyID in try await pool.freshLease(familyID: familyID) }
             )
@@ -94,8 +117,8 @@ public extension Kit {
             syncer: syncer,
             accountInfoManager: accountInfoManager,
             transactionSender: transactionSender,
-            preflight: preflight,
             transactionManager: transactionManager,
+            preflight: preflight,
             persistenceNamespace: namespace
         )
     }
@@ -218,8 +241,8 @@ public extension Kit {
             syncer: syncer,
             accountInfoManager: accountInfoManager,
             transactionSender: transactionSender,
-            preflight: preflight,
             transactionManager: transactionManager,
+            preflight: preflight,
             persistenceNamespace: namespace
         )
     }

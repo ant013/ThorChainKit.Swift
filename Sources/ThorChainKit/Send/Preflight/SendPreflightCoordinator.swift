@@ -98,9 +98,7 @@ final class SendPreflightCoordinator: @unchecked Sendable {
         let lease = try await runner.run(lifecycle: { !self.runtime.isAdmissionActive(generation: generation) }) { try await self.provider.lease(minimumHeight: nil) }
         attempt = try await runtime.bindFamily(attempt, familyID: lease.family.id)
         try await runtime.guardPreflight(attempt, familyID: lease.family.id)
-        guard NativeRuneEndpointRegistry.familyIDs.contains(lease.family.id), lease.commonReadHeight > 0 else {
-            throw SendError.policyUnavailable
-        }
+        guard NativeRuneEndpointRegistry.familyIDs.contains(lease.family.id), lease.commonReadHeight > 0 else { throw SendError.policyUnavailable }
         let snapshotAttempt = attempt
         let result = try await runner.run(familyID: lease.family.id, lifecycle: { !self.runtime.isAdmissionActive(generation: generation) }) {
             try await self.provider.snapshotResult(request: request, lease: lease, height: lease.commonReadHeight, policy: self.policy, attempt: snapshotAttempt)

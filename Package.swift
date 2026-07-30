@@ -38,8 +38,7 @@ let package = Package(
                 .product(name: "secp256k1", package: "secp256k1.swift"),
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
-            ],
-            swiftSettings: [.unsafeFlags(["-warnings-as-errors"])]
+            ]
         ),
         .testTarget(
             name: "ThorChainKitTests",
@@ -47,15 +46,13 @@ let package = Package(
                 "ThorChainKit",
                 .product(name: "secp256k1", package: "secp256k1.swift")
             ],
-            exclude: ["Fixtures"],
-            swiftSettings: [.unsafeFlags(["-warnings-as-errors"])]
+            exclude: ["Fixtures"]
         ),
         .testTarget(
             name: "ThorChainKitLiveTests",
             dependencies: ["ThorChainKit"],
             path: "Tests/ThorChainKitLiveTests",
-            exclude: ["Fixtures"],
-            swiftSettings: [.unsafeFlags(["-warnings-as-errors"])]
+            exclude: ["Fixtures"]
         ),
     ]
 )

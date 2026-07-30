@@ -40,7 +40,7 @@ struct ReadOperationCoordinator: AccountReading {
 
         for attempt in 1...attempts {
             try Task.checkCancellation()
-            let lease = try await pool.lease(excludingFamilyIds: excluded)
+            let lease = try await pool.readLease(excludingFamilyIds: excluded)
             try Task.checkCancellation()
             excluded.insert(lease.family.id)
 

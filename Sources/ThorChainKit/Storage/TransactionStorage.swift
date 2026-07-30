@@ -4,7 +4,7 @@ import GRDB
 final class TransactionStorage {
     private let dbPool: DatabasePool
 
-    init(databaseDirectoryUrl: URL, databaseFileName: String) throws {
+    convenience init(databaseDirectoryUrl: URL, databaseFileName: String) throws {
         let databaseURL = databaseDirectoryUrl.appendingPathComponent("\(databaseFileName).sqlite")
         try self.init(path: databaseURL.path)
     }

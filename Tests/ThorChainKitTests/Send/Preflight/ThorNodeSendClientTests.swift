@@ -19,9 +19,15 @@ final class ThorNodeSendClientTests: XCTestCase {
         XCTAssertEqual(transport.requests.first?.value(forHTTPHeaderField: "x-cosmos-block-height"), "42")
     }
 
+    func testRESTHeaderProofAcceptsMissingResponseHeightHeader() async throws {
+        let transport = ScriptedSendTransport(data: Data(#"{"account_number":"1"}"#.utf8), headers: ["Content-Type": "application/json"])
+        let result = try await ThorNodeSendClient(transport: transport).read(route: route(.restHeader), using: try lease(), height: 42)
+        XCTAssertEqual(result.proof, .restHeader(expected: 42, actual: 42))
+    }
+
     func testCometABCIProofUsesJSONRPCResponseHeightAndValue() async throws {
         let encoded = Data(#"{"account_number":"1"}"#.utf8).base64EncodedString()
-        let body = Data("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"response\":{\"code\":0,\"height\":\"42\",\"value\":\"\(encoded)\"}}}".utf8)
+        let body = Data("{\"jsonrpc\":\"2.0\",\"id\":-1,\"result\":{\"response\":{\"code\":0,\"height\":\"42\",\"value\":\"\(encoded)\"}}}".utf8)
         let transport = ScriptedSendTransport(data: body, headers: ["Content-Type": "application/json"])
         let result = try await ThorNodeSendClient(transport: transport).read(route: route(.cometABCI, path: "/cosmos.auth.v1beta1.Query/Account"), using: try lease(), height: 42, requestData: Data([1, 2]))
         XCTAssertEqual(result.value, Data(#"{"account_number":"1"}"#.utf8))
@@ -29,7 +35,7 @@ final class ThorNodeSendClientTests: XCTestCase {
         XCTAssertNil(transport.requests.first?.value(forHTTPHeaderField: "x-cosmos-block-height"))
         let components = URLComponents(url: try XCTUnwrap(transport.requests.first?.url), resolvingAgainstBaseURL: false)
         XCTAssertEqual(components?.path, "/abci_query")
-        XCTAssertEqual(components?.queryItems?.first(where: { $0.name == "path" })?.value, "/cosmos.auth.v1beta1.Query/Account")
+        XCTAssertEqual(components?.queryItems?.first(where: { $0.name == "path" })?.value, "\"/cosmos.auth.v1beta1.Query/Account\"")
         XCTAssertEqual(components?.queryItems?.first(where: { $0.name == "data" })?.value, "0x0102")
     }
 
@@ -37,13 +43,13 @@ final class ThorNodeSendClientTests: XCTestCase {
         var network = Types_QueryNetworkResponse()
         network.nativeTxFeeRune = "7"
         let networkValue = try network.serializedData().base64EncodedString()
-        let networkBody = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"response\":{\"code\":0,\"height\":\"42\",\"value\":\"" + networkValue + "\"}}}"
+        let networkBody = "{\"jsonrpc\":\"2.0\",\"id\":-1,\"result\":{\"response\":{\"code\":0,\"height\":\"42\",\"value\":\"" + networkValue + "\"}}}"
         let networkTransport = ScriptedSendTransport(data: Data(networkBody.utf8), headers: ["Content-Type": "application/json"])
         let networkRoute = try XCTUnwrap(NativeRuneEndpointRegistry.capabilities().first?.routes.first { $0.route == "network-fee" })
         let requestData = try CosmosQueryCodec.networkRequest(height: 42)
         _ = try await ThorNodeSendClient(transport: networkTransport).read(route: networkRoute, using: try lease(), height: 42, requestData: requestData)
         let networkQuery = URLComponents(url: try XCTUnwrap(networkTransport.requests.first?.url), resolvingAgainstBaseURL: false)?.queryItems
-        XCTAssertEqual(networkQuery?.first(where: { $0.name == "path" })?.value, "/types.Query/Network")
+        XCTAssertEqual(networkQuery?.first(where: { $0.name == "path" })?.value, "\"/types.Query/Network\"")
         XCTAssertEqual(networkQuery?.first(where: { $0.name == "data" })?.value, CometABCIEncoding.hex(requestData))
 
         let spendableTransport = ScriptedSendTransport(data: Data(#"{"balance":{"denom":"rune","amount":"3"}}"#.utf8), headers: ["Content-Type": "application/json", "x-cosmos-block-height": "42"])
@@ -72,13 +78,13 @@ final class ThorNodeSendClientTests: XCTestCase {
             ",\"value\":null",
             ",\"value\":\"\""
         ] {
-            let response = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"response\":{\"code\":22,\"codespace\":\"sdk\",\"height\":\"42\"" + value + "}}}"
+            let response = "{\"jsonrpc\":\"2.0\",\"id\":-1,\"result\":{\"response\":{\"code\":22,\"codespace\":\"sdk\",\"height\":\"42\"" + value + "}}}"
             let result = try await ThorNodeSendClient(transport: ScriptedSendTransport(data: Data(response.utf8), headers: ["Content-Type": "application/json"])).read(route: recipientRoute(), using: try lease(), height: 42)
             XCTAssertEqual(result.code, 22)
             XCTAssertTrue(result.value.isEmpty)
         }
         for codespace in ["", "baseapp"] {
-            let response = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"response\":{\"code\":22,\"codespace\":\"" + codespace + "\",\"height\":\"42\"}}}"
+            let response = "{\"jsonrpc\":\"2.0\",\"id\":-1,\"result\":{\"response\":{\"code\":22,\"codespace\":\"" + codespace + "\",\"height\":\"42\"}}}"
             await assertProviderFailure(ThorNodeSendClient(transport: ScriptedSendTransport(data: Data(response.utf8), headers: ["Content-Type": "application/json"])), route: recipientRoute())
         }
         let duplicate = Data(#"{"jsonrpc":"2.0","id":1,"result":{"response":{"code":22,"codespace":"sdk","height":"42","value":"","value":""}}}"#.utf8)
@@ -162,14 +168,14 @@ final class ThorNodeSendClientTests: XCTestCase {
         XCTAssertTrue(transport.requests.isEmpty)
 
         let value = Data(#"{"account_number":"1"}"#.utf8).base64EncodedString()
-        let nonCanonical = Data("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"response\":{\"code\":0,\"height\":\"042\",\"value\":\"\(value)\"}}}".utf8)
+        let nonCanonical = Data("{\"jsonrpc\":\"2.0\",\"id\":-1,\"result\":{\"response\":{\"code\":0,\"height\":\"042\",\"value\":\"\(value)\"}}}".utf8)
         await assertProviderFailure(ThorNodeSendClient(transport: ScriptedSendTransport(data: nonCanonical, headers: ["Content-Type": "application/json"])), route: route(.cometABCI, path: "/cosmos.auth.v1beta1.Query/Account"))
 
         let validValue = Data(#"{"account_number":"1"}"#.utf8).base64EncodedString()
         for envelope in [
-            "{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"response\":{\"code\":0,\"height\":\"42\",\"value\":\"" + validValue + "\"}}}",
-            "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"response\":{\"code\":1,\"codespace\":\"sdk\",\"height\":\"42\",\"value\":\"" + validValue + "\"}}}",
-            "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"response\":{\"code\":0,\"height\":\"42\",\"value\":\"not-base64\"}}}"
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"response\":{\"code\":0,\"height\":\"42\",\"value\":\"" + validValue + "\"}}}",
+            "{\"jsonrpc\":\"2.0\",\"id\":-1,\"result\":{\"response\":{\"code\":1,\"codespace\":\"sdk\",\"height\":\"42\",\"value\":\"" + validValue + "\"}}}",
+            "{\"jsonrpc\":\"2.0\",\"id\":-1,\"result\":{\"response\":{\"code\":0,\"height\":\"42\",\"value\":\"not-base64\"}}}"
         ] {
             await assertProviderFailure(ThorNodeSendClient(transport: ScriptedSendTransport(data: Data(envelope.utf8), headers: ["Content-Type": "application/json"])), route: route(.cometABCI, path: "/cosmos.auth.v1beta1.Query/Account"))
         }
