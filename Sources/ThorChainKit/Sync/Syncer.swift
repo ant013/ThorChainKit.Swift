@@ -39,6 +39,12 @@ final class Syncer: @unchecked Sendable {
         publishing.apply(StateSnapshot(accountState: nil, syncState: .idle(cached: false), lastBlockHeight: storage.lastBlockHeight))
     }
 
+    // The loop holds `self` weakly, so nothing cancels it once this object goes away —
+    // it would wake every interval forever. Ownership ends the sync, as in TronKit.
+    deinit {
+        _ = stop()
+    }
+
     var lastBlockHeight: Int64? { withDispatcher { publishing.snapshot.lastBlockHeight } }
     var state: SyncState { withDispatcher { publishing.snapshot.syncState } }
     var lastBlockHeightPublisher: AnyPublisher<Int64?, Never> { publishing.lastBlockHeightSubject.eraseToAnyPublisher() }

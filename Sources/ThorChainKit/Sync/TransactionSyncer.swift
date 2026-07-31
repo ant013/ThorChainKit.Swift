@@ -42,6 +42,10 @@ final class TransactionSyncer: @unchecked Sendable {
         dispatcher.setSpecific(key: dispatcherKey, value: 1)
     }
 
+    deinit {
+        stop()
+    }
+
     var state: TransactionSyncState { withDispatcher { stateSubject.value } }
     var statePublisher: AnyPublisher<TransactionSyncState, Never> { stateSubject.eraseToAnyPublisher() }
 
