@@ -94,12 +94,12 @@ struct IndexedProbeOutcome: Equatable, Sendable {
     let result: ProbeRequestResult
 }
 
-protocol NodeProbing: Sendable {
+protocol INodeProber: Sendable {
     func probe(index: Int, family: EndpointFamilyDescriptor) async -> [IndexedProbeOutcome]
     func latestBlock(family: EndpointFamilyDescriptor) async -> Result<CosmosLatestBlockObservation, RoleProbeFailure>
 }
 
-extension NodeProbing {
+extension INodeProber {
     func latestBlock(family: EndpointFamilyDescriptor) async -> Result<CosmosLatestBlockObservation, RoleProbeFailure> {
         let outcomes = await probe(index: 0, family: family)
         guard let outcome = outcomes.first(where: { $0.index.request == .cosmosLatestBlock }),

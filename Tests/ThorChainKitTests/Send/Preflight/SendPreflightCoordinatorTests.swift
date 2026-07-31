@@ -270,7 +270,7 @@ private func changed(
     )
 }
 
-private final class ScriptedSendProvider: SendPreflightProviding, @unchecked Sendable {
+private final class ScriptedSendProvider: ISendPreflightProvider, @unchecked Sendable {
     private let lock = NSLock()
     private var leases: [EndpointLease]
     private var snapshots: [SendSnapshot]
@@ -317,7 +317,7 @@ private final class ScriptedSendProvider: SendPreflightProviding, @unchecked Sen
     }
 }
 
-private struct DelayedSendProvider: SendPreflightProviding {
+private struct DelayedSendProvider: ISendPreflightProvider {
     let leaseValue: EndpointLease
     let snapshotValue: SendSnapshot
     let runtime: SendRuntime?

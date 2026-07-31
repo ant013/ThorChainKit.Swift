@@ -3,8 +3,8 @@ import Foundation
 actor EndpointPool {
     private let network: Network
     private let configuration: EndpointConfiguration
-    private let probe: any NodeProbing
-    private let clock: any EndpointClock
+    private let probe: any INodeProber
+    private let clock: any IEndpointClock
 
     private var generation: UInt64 = 0
     private var cachedFamilies: [VerifiedFamily]?
@@ -18,8 +18,8 @@ actor EndpointPool {
     init(
         network: Network,
         configuration: EndpointConfiguration,
-        probe: any NodeProbing,
-        clock: any EndpointClock = SystemEndpointClock()
+        probe: any INodeProber,
+        clock: any IEndpointClock = SystemEndpointClock()
     ) {
         self.network = network
         self.configuration = configuration

@@ -8,7 +8,7 @@ public struct CoinTransfer: Equatable, Sendable {
     public let asset: String
     public let amount: BigUInt
 
-    init(address: String, asset: String, amount: BigUInt) {
+    public init(address: String, asset: String, amount: BigUInt) {
         self.address = address
         self.asset = asset
         self.amount = amount
@@ -37,7 +37,7 @@ public struct Transaction: Equatable, Sendable {
     /// a locally broadcast transaction can be removed.
     var isTerminal: Bool { ["success", "refund"].contains(status) }
 
-    init(
+    public init(
         transactionId: TransactionID,
         blockHeight: Int64,
         timestamp: Date,

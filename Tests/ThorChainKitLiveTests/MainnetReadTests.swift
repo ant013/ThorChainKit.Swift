@@ -138,7 +138,7 @@ private struct LiveEvidence: Encodable {
     let absent: Absent
 }
 
-private actor LiveEvidenceTransport: HTTPTransporting {
+private actor LiveEvidenceTransport: IHttpTransport {
     private let base = URLSessionTransport()
     private(set) var runeAmount: String?
 

@@ -7,10 +7,10 @@ struct SyncSchedule: Sendable {
     static let `default` = SyncSchedule(normalInterval: 15, failureBackoff: 60)
 }
 
-protocol SyncClock: Sendable {
+protocol ISyncClock: Sendable {
     var now: Date { get }
 }
 
-struct SystemSyncClock: SyncClock {
+struct SystemSyncClock: ISyncClock {
     var now: Date { Date() }
 }

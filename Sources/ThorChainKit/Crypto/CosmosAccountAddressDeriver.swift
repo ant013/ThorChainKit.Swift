@@ -14,7 +14,7 @@ enum AccountAddressHasher {
     }
 }
 
-struct CosmosAccountAddressDeriver: AccountAddressDeriving, Sendable {
+struct CosmosAccountAddressDeriver: IAddressProvider, Sendable {
     let validator: Secp256k1PublicKeyValidator
 
     init(validator: Secp256k1PublicKeyValidator = Secp256k1PublicKeyValidator()) {

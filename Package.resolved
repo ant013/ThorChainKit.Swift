@@ -1,5 +1,5 @@
 {
-  "originHash" : "7145cb0e3bed9db305d85e38cbdbbedc12e3a502275c20f579e836db17f3f16c",
+  "originHash" : "1613d03362be7a8f6fe472e063cfcf489f20e43e19231ca43de8a79b594166d2",
   "pins" : [
     {
       "identity" : "bigint",
@@ -20,6 +20,15 @@
       }
     },
     {
+      "identity" : "hdwalletkit.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/horizontalsystems/HdWalletKit.Swift.git",
+      "state" : {
+        "revision" : "f01afdc9a3c444261b0ad0c1cad14cc09257e2cb",
+        "version" : "1.3.2"
+      }
+    },
+    {
       "identity" : "hscryptokit.swift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/horizontalsystems/HsCryptoKit.Swift.git",
@@ -33,8 +42,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/horizontalsystems/HsExtensions.Swift.git",
       "state" : {
-        "revision" : "0012014f98ae81ffb89b0d3a2e9c204559e1c278",
-        "version" : "1.0.6"
+        "revision" : "558b3baf4a29c3987f07158494a554915df826c1",
+        "version" : "1.0.7"
       }
     },
     {

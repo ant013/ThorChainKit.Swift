@@ -337,7 +337,7 @@ private actor S1_04StartGate {
     }
 }
 
-private actor S1_04HTTPTransport: HTTPTransporting {
+private actor S1_04HTTPTransport: IHttpTransport {
     enum Response: Sendable {
         case json(String, height: String?)
         case status(Int, body: String, height: String? = nil, retryAfter: String? = nil)

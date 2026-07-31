@@ -69,7 +69,7 @@ final class SendFacadeAdmissionTests: XCTestCase {
     }
 }
 
-private final class AdmissionSigner: Signer, @unchecked Sendable {
+private final class AdmissionSigner: ISigner, @unchecked Sendable {
     let compressedPublicKey = Data()
     private(set) var signCallCount = 0
     func sign(_ request: SigningRequest) async throws -> Data {

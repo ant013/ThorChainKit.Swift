@@ -1,13 +1,13 @@
 import Foundation
 
-struct LiveThorNodeClient: ThorNodeReading {
-    private let transport: any HTTPTransporting
+struct LiveThorNodeClient: INodeApiProvider {
+    private let transport: any IHttpTransport
     private let requestTimeout: TimeInterval
     private let clientId: String?
     private let maximumBalancePageCount: Int
 
     init(
-        transport: any HTTPTransporting = URLSessionTransport(),
+        transport: any IHttpTransport = URLSessionTransport(),
         requestTimeout: TimeInterval = 15,
         clientId: String? = nil,
         maximumBalancePageCount: Int = 100
@@ -209,7 +209,7 @@ struct LiveThorNodeClient: ThorNodeReading {
     }
 }
 
-extension LiveThorNodeClient: ThorNodeSendTransport {
+extension LiveThorNodeClient: ISendTransport {
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         try await send(request)
     }

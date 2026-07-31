@@ -16,7 +16,7 @@ public extension Kit {
         return try await transactionSender.quote(to: recipient, amount: amount, memo: memo == "" ? nil : memo)
     }
 
-    func send(quote: SendQuote, signer: any Signer) async throws -> SendSubmission {
+    func send(quote: SendQuote, signer: any ISigner) async throws -> SendSubmission {
         try await transactionSender.send(quote: quote, signer: signer)
     }
 

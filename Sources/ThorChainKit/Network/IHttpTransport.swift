@@ -1,10 +1,10 @@
 import Foundation
 
-protocol HTTPTransporting: Sendable {
+protocol IHttpTransport: Sendable {
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse)
 }
 
-struct URLSessionTransport: HTTPTransporting, @unchecked Sendable {
+struct URLSessionTransport: IHttpTransport, @unchecked Sendable {
     private let session: URLSession
 
     init(configuration: URLSessionConfiguration = .ephemeral) {

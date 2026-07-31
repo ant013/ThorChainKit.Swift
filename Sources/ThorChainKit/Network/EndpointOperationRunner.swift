@@ -4,12 +4,12 @@ enum EndpointOperationError: Error, Equatable, Sendable {
     case deadlineExceeded, cancelled, lifecycleInvalidated, orphanCapReached
 }
 
-protocol EndpointOperationClock: Sendable {
+protocol IEndpointOperationClock: Sendable {
     var now: UInt64 { get }
     func sleep(until: UInt64) async
 }
 
-struct SystemEndpointOperationClock: EndpointOperationClock {
+struct SystemEndpointOperationClock: IEndpointOperationClock {
     var now: UInt64 { DispatchTime.now().uptimeNanoseconds }
 
     func sleep(until: UInt64) async {
@@ -21,14 +21,14 @@ struct SystemEndpointOperationClock: EndpointOperationClock {
 
 final class EndpointOperationRunner: @unchecked Sendable {
     private let deadline: TimeInterval
-    private let clock: any EndpointOperationClock
+    private let clock: any IEndpointOperationClock
     private let orphanCounter: OrphanCounter
 
     init(
         deadline: TimeInterval = 15,
         maximumOrphanedOperations: Int = 8,
         maximumOrphanedOperationsPerFamily: Int? = nil,
-        clock: any EndpointOperationClock = SystemEndpointOperationClock()
+        clock: any IEndpointOperationClock = SystemEndpointOperationClock()
     ) {
         self.deadline = deadline
         self.clock = clock

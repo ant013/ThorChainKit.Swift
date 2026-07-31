@@ -154,7 +154,7 @@ final class ThorNodeSendPreflightProviderTests: XCTestCase {
     }
 }
 
-private final class MatrixSendTransport: ThorNodeSendTransport, @unchecked Sendable {
+private final class MatrixSendTransport: ISendTransport, @unchecked Sendable {
     let account: Data
     let recipient: Data
     let network: Data

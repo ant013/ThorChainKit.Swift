@@ -32,7 +32,8 @@ Protocol fact
 
 - `v1`: native RUNE account, send, history/status, basic THOR actions, production-grade provider behavior.
 - `v2`: internal THOR-native swap. The existing multichain THORChain provider continues to operate until a separate migration decision is made.
-- Vultisig MPC/TSS is outside the kit's public API: Unstoppable supplies a conventional signing boundary, while the kit does not store a seed/private key.
+- Key handling follows TronKit and EvmKit: the kit owns derivation and signing through a conventional `Signer`, built with `Signer.instance(seed:)` or `Signer.instance(privateKey:)`, with `Signer.address(seed:)` for address lookup. Anything TronKit does this way, ThorChainKit does the same way.
+- Vultisig MPC/TSS stays outside that conventional path. `ISigner` is the seam a substitute signer implements, so an external device or a test double can drive the send pipeline without holding a seed.
 
 ## Definition of Done for Any Sprint
 

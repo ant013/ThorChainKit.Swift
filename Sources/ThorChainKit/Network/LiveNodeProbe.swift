@@ -1,12 +1,12 @@
 import Foundation
 
-struct LiveNodeProbe: NodeProbing {
-    private let transport: any HTTPTransporting
+struct LiveNodeProbe: INodeProber {
+    private let transport: any IHttpTransport
     private let requestTimeout: TimeInterval
     private let clientId: String?
 
     init(
-        transport: any HTTPTransporting = URLSessionTransport(),
+        transport: any IHttpTransport = URLSessionTransport(),
         requestTimeout: TimeInterval = 15,
         clientId: String? = nil
     ) {
@@ -15,7 +15,7 @@ struct LiveNodeProbe: NodeProbing {
         self.clientId = clientId
     }
 
-    init(configuration: EndpointConfiguration, transport: any HTTPTransporting = URLSessionTransport()) {
+    init(configuration: EndpointConfiguration, transport: any IHttpTransport = URLSessionTransport()) {
         self.init(
             transport: transport,
             requestTimeout: configuration.requestTimeout,

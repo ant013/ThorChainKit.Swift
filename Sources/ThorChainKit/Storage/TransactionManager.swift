@@ -65,7 +65,8 @@ final class TransactionManager: @unchecked Sendable {
 
         let changed = try storage.write { db -> Bool in
             var changed = !(try repository.saveLocal(pending, in: db)).isEmpty
-            for transaction in try repository.localTransactions(in: db) where rejected.contains(transaction.transactionId) && transaction.status != "failed" {
+            for transactionID in rejected {
+                guard let transaction = try repository.pendingTransaction(transactionID: transactionID, in: db) else { continue }
                 let failed = Transaction(
                     transactionId: transaction.transactionId,
                     blockHeight: transaction.blockHeight,
@@ -77,7 +78,7 @@ final class TransactionManager: @unchecked Sendable {
                     incoming: transaction.incoming,
                     outgoing: transaction.outgoing
                 )
-                changed = !(try repository.save([failed], isLocal: true, in: db)).isEmpty || changed
+                changed = !(try repository.save([failed], in: db)).isEmpty || changed
             }
             return changed
         }

@@ -9,7 +9,7 @@ final class TransactionSyncer: @unchecked Sendable {
     private static let maximumPageCount = 20
     private static let pendingRefreshLimit = 10
 
-    private let provider: any MidgardActionProviding
+    private let provider: any IHistoryProvider
     private let repository: TransactionRepository
     private let transactionManager: TransactionManager
     private let address: Address
@@ -34,7 +34,7 @@ final class TransactionSyncer: @unchecked Sendable {
         let nextPageToken: String?
     }
 
-    init(provider: any MidgardActionProviding, repository: TransactionRepository, transactionManager: TransactionManager, address: Address) {
+    init(provider: any IHistoryProvider, repository: TransactionRepository, transactionManager: TransactionManager, address: Address) {
         self.provider = provider
         self.repository = repository
         self.transactionManager = transactionManager
@@ -92,7 +92,7 @@ final class TransactionSyncer: @unchecked Sendable {
     }
 
     private static func fetchRecent(
-        provider: any MidgardActionProviding,
+        provider: any IHistoryProvider,
         address: Address,
         cursor: TransactionSyncCursor
     ) async throws -> RecentSyncResult {
@@ -133,7 +133,7 @@ final class TransactionSyncer: @unchecked Sendable {
     }
 
     private static func fetchBackfill(
-        provider: any MidgardActionProviding,
+        provider: any IHistoryProvider,
         address: Address,
         pageToken: String?
     ) async throws -> BackfillSyncResult {
@@ -161,7 +161,7 @@ final class TransactionSyncer: @unchecked Sendable {
     }
 
     private static func fetchPending(
-        provider: any MidgardActionProviding,
+        provider: any IHistoryProvider,
         repository: TransactionRepository,
         address: Address,
         recentHashes: Set<String>

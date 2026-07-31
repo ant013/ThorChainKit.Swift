@@ -259,7 +259,7 @@ private final class LifecycleState: @unchecked Sendable {
     }
 }
 
-private final class TestEndpointOperationClock: EndpointOperationClock, @unchecked Sendable {
+private final class TestEndpointOperationClock: IEndpointOperationClock, @unchecked Sendable {
     private let lock = NSLock()
     private var current: UInt64
     private var waiters = [(UInt64, CheckedContinuation<Void, Never>)]()

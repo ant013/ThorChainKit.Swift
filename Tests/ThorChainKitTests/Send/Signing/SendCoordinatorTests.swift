@@ -342,7 +342,7 @@ private struct GoldenVector {
     let txRawHex: String
 }
 
-private final class CoordinatorH2Provider: SendPreflightProviding, @unchecked Sendable {
+private final class CoordinatorH2Provider: ISendPreflightProvider, @unchecked Sendable {
     private let runtime: SendRuntime
     private let base: SendSnapshot
     private let h2: SendSnapshot
@@ -412,7 +412,7 @@ private final class CoordinatorH2Provider: SendPreflightProviding, @unchecked Se
     }
 }
 
-private final class CountingSigner: Signer, @unchecked Sendable {
+private final class CountingSigner: ISigner, @unchecked Sendable {
     let compressedPublicKey: Data
     private(set) var callCount = 0
 
@@ -426,7 +426,7 @@ private final class CountingSigner: Signer, @unchecked Sendable {
     }
 }
 
-private final class NonCooperativeSigner: Signer, @unchecked Sendable {
+private final class NonCooperativeSigner: ISigner, @unchecked Sendable {
     let compressedPublicKey: Data
     let started = DispatchSemaphore(value: 0)
     let finished = DispatchSemaphore(value: 0)
@@ -485,7 +485,7 @@ private extension SendCoordinatorResult {
     }
 }
 
-private final class FailingReservationStore: SequenceReservationManaging, @unchecked Sendable {
+private final class FailingReservationStore: ISequenceReservationManager, @unchecked Sendable {
     func acquire(_ key: SequenceReservationKey, ownerToken: Data) throws -> Bool { true }
     func release(_ key: SequenceReservationKey, ownerToken: Data) throws -> Bool { false }
 }

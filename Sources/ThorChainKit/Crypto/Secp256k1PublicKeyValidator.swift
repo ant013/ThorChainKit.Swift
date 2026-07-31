@@ -1,20 +1,20 @@
 import Foundation
 import secp256k1
 
-protocol Secp256k1ContextProviding: Sendable {
+protocol ISecp256k1ContextProvider: Sendable {
     func makeContext() throws -> OpaquePointer
 }
 
-struct ProductionSecp256k1ContextProvider: Secp256k1ContextProviding, Sendable {
+struct ProductionSecp256k1ContextProvider: ISecp256k1ContextProvider, Sendable {
     func makeContext() throws -> OpaquePointer {
         try secp256k1.Context.create(.verify)
     }
 }
 
 struct Secp256k1PublicKeyValidator: Sendable {
-    private let contextProvider: any Secp256k1ContextProviding
+    private let contextProvider: any ISecp256k1ContextProvider
 
-    init(contextProvider: any Secp256k1ContextProviding = ProductionSecp256k1ContextProvider()) {
+    init(contextProvider: any ISecp256k1ContextProvider = ProductionSecp256k1ContextProvider()) {
         self.contextProvider = contextProvider
     }
 

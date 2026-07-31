@@ -1,22 +1,22 @@
 import BigInt
 import Foundation
 
-protocol SendMonotonicClock: Sendable {
+protocol ISendMonotonicClock: Sendable {
     var now: UInt64 { get }
 }
 
-struct SystemSendMonotonicClock: SendMonotonicClock {
+struct SystemSendMonotonicClock: ISendMonotonicClock {
     var now: UInt64 { DispatchTime.now().uptimeNanoseconds }
 }
 
 final class QuoteStore: Sendable {
     private enum State: Equatable, Sendable { case active, consumed, invalidated }
     let clientID: UUID
-    private let clock: any SendMonotonicClock
+    private let clock: any ISendMonotonicClock
     private let stateQueue: DispatchQueue
     private let recordsKey = DispatchSpecificKey<[QuoteAuthorityRecord: State]>()
 
-    init(clientID: UUID = UUID(), clock: any SendMonotonicClock = SystemSendMonotonicClock()) {
+    init(clientID: UUID = UUID(), clock: any ISendMonotonicClock = SystemSendMonotonicClock()) {
         self.clientID = clientID
         self.clock = clock
         stateQueue = DispatchQueue(label: "ThorChainKit.Send.QuoteStore")

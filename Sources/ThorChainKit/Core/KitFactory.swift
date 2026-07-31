@@ -145,8 +145,7 @@ public extension Kit {
         )
     }
 
-    @_spi(Testing)
-    static func fixture(
+    internal static func fixture(
         address: Address,
         walletId: String,
         endpoints: EndpointConfiguration,
@@ -304,7 +303,7 @@ public extension Kit {
     }
 }
 
-private struct FixtureHTTPTransportAdapter: HTTPTransporting {
+private struct FixtureHTTPTransportAdapter: IHttpTransport {
     let transport: any TestingHTTPTransport
 
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
@@ -312,6 +311,6 @@ private struct FixtureHTTPTransportAdapter: HTTPTransporting {
     }
 }
 
-private struct FixtureAccountReadWallClock: AccountReadWallClock {
+private struct FixtureAccountReadWallClock: IAccountReadWallClock {
     let now: Date
 }

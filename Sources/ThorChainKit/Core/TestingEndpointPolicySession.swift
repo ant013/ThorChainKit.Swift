@@ -1,6 +1,6 @@
 import Foundation
 
-@_spi(Testing) public struct TestingEndpointPolicySnapshot: Equatable, Sendable {
+struct TestingEndpointPolicySnapshot: Equatable, Sendable {
     public struct Origin: Equatable, Sendable {
         public let scheme: String
         public let host: String
@@ -20,7 +20,7 @@ import Foundation
     public let rejectionReason: String?
 }
 
-@_spi(Testing) public struct TestingEndpointPolicySession: Sendable {
+struct TestingEndpointPolicySession: Sendable {
     public enum Script: String, CaseIterable, Sendable {
         case healthy
         case mixedIdentity
@@ -126,7 +126,7 @@ import Foundation
     }
 }
 
-private struct TestingEndpointProbe: NodeProbing {
+private struct TestingEndpointProbe: INodeProber {
     let script: TestingEndpointPolicySession.Script
     let expectedChainId: String
 

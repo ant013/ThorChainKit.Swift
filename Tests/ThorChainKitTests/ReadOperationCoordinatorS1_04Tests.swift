@@ -102,7 +102,7 @@ private final class CoordinatorCancellationBox: @unchecked Sendable {
     }
 }
 
-private struct CancellingAccountReadWallClock: AccountReadWallClock {
+private struct CancellingAccountReadWallClock: IAccountReadWallClock {
     let cancellation: CoordinatorCancellationBox
 
     var now: Date {
@@ -117,7 +117,7 @@ private actor DelayRecorder {
     func append(_ value: TimeInterval) { values.append(value) }
 }
 
-private actor ScriptedReadClient: ThorNodeReading {
+private actor ScriptedReadClient: INodeApiProvider {
     enum Outcome: Sendable { case success, retryable }
 
     private var outcomes = [String: Outcome]()
@@ -142,7 +142,7 @@ private actor ScriptedReadClient: ThorNodeReading {
     }
 }
 
-private struct HealthyS1_04Probe: NodeProbing {
+private struct HealthyS1_04Probe: INodeProber {
     func probe(index: Int, family: EndpointFamilyDescriptor) async -> [IndexedProbeOutcome] {
         let cosmos = EndpointOrigin(url: family.cosmosRestURL)!
         let comet = EndpointOrigin(url: family.cometBftURL)!

@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@_spi(Testing) @testable import ThorChainKit
+@testable import ThorChainKit
 
 final class TestingAccountReadSessionS1_04Tests: XCTestCase {
     func testSessionReturnsProjectionFromTheRealReadPath() async throws {

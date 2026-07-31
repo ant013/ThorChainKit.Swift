@@ -585,7 +585,7 @@ final class EndpointPoolTests: XCTestCase {
     }
 }
 
-private actor CountingProbe: NodeProbing {
+private actor CountingProbe: INodeProber {
     private let handler: @Sendable (Int, EndpointFamilyDescriptor) -> [IndexedProbeOutcome]
     private(set) var count = 0
 
@@ -599,7 +599,7 @@ private actor CountingProbe: NodeProbing {
     }
 }
 
-private actor FamilyRefreshProbe: NodeProbing {
+private actor FamilyRefreshProbe: INodeProber {
     private(set) var familyIDs = [String]()
 
     func probe(index: Int, family: EndpointFamilyDescriptor) async -> [IndexedProbeOutcome] {
@@ -610,7 +610,7 @@ private actor FamilyRefreshProbe: NodeProbing {
     }
 }
 
-private actor TransientThenHealthyProbe: NodeProbing {
+private actor TransientThenHealthyProbe: INodeProber {
     private(set) var count = 0
 
     func probe(index: Int, family: EndpointFamilyDescriptor) async -> [IndexedProbeOutcome] {
@@ -628,7 +628,7 @@ private actor TransientThenHealthyProbe: NodeProbing {
     }
 }
 
-private actor BlockingProbe: NodeProbing {
+private actor BlockingProbe: INodeProber {
     private(set) var count = 0
     private var started = false
     private var startWaiters = [CheckedContinuation<Void, Never>]()
@@ -654,7 +654,7 @@ private actor BlockingProbe: NodeProbing {
     }
 }
 
-private actor SequencedBlockingProbe: NodeProbing {
+private actor SequencedBlockingProbe: INodeProber {
     private(set) var count = 0
     private var countWaiters = [(Int, CheckedContinuation<Void, Never>)]()
     private var releases = [Int: CheckedContinuation<Void, Never>]()
@@ -686,7 +686,7 @@ private actor SequencedBlockingProbe: NodeProbing {
     }
 }
 
-private final class TestEndpointClock: EndpointClock, @unchecked Sendable {
+private final class TestEndpointClock: IEndpointClock, @unchecked Sendable {
     private let lock = NSLock()
     private var instant = EndpointInstant(nanoseconds: 0)
 

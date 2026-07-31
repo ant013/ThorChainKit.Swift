@@ -11,23 +11,23 @@ struct MidgardActionPage: Sendable {
     let nextPageToken: String?
 }
 
-protocol MidgardActionProviding: Sendable {
+protocol IHistoryProvider: Sendable {
     func fetchActions(address: String, limit: Int, nextPageToken: String?, transactionID: TransactionID?) async throws -> MidgardActionPage
 }
 
 /// THOR-specific historical transport. Unlike a THORNode endpoint family,
 /// Midgard only supplies indexed actions and cannot provide a chain-height lease.
-struct MidgardProvider: MidgardActionProviding, Sendable {
+struct MidgardProvider: IHistoryProvider, Sendable {
     private let baseURLs: [URL]
     private let requestTimeout: TimeInterval
     private let clientId: String?
-    private let transport: any HTTPTransporting
+    private let transport: any IHttpTransport
 
     init(
         baseURLs: [URL],
         requestTimeout: TimeInterval,
         clientId: String?,
-        transport: any HTTPTransporting = URLSessionTransport()
+        transport: any IHttpTransport = URLSessionTransport()
     ) {
         self.baseURLs = baseURLs
         self.requestTimeout = requestTimeout

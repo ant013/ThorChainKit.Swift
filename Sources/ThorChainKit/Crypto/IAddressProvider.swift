@@ -1,5 +1,5 @@
 import Foundation
 
-protocol AccountAddressDeriving: Sendable {
+protocol IAddressProvider: Sendable {
     func address(compressedPublicKey: Data, network: Network) throws -> Address
 }

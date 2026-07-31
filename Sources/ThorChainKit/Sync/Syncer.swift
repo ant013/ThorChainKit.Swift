@@ -5,7 +5,7 @@ final class Syncer: @unchecked Sendable {
     private let dispatcher: DispatchQueue
     private let dispatcherKey = DispatchSpecificKey<UInt8>()
     private let address: Address
-    private let reader: any AccountReading
+    private let reader: any IAccountProvider
     private let accountInfoManager: AccountInfoManager
     private let storage: SyncerStorage
     private let transactionSyncer: TransactionSyncer?
@@ -21,7 +21,7 @@ final class Syncer: @unchecked Sendable {
 
     init(
         accountInfoManager: AccountInfoManager,
-        reader: any AccountReading,
+        reader: any IAccountProvider,
         storage: SyncerStorage,
         address: Address,
         transactionSyncer: TransactionSyncer? = nil,

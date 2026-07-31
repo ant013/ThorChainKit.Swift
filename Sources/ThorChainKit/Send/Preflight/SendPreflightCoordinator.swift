@@ -34,14 +34,14 @@ struct SendSnapshotResult: Sendable {
     let attempt: SendPreflightAttempt
 }
 
-protocol SendPreflightProviding: Sendable {
+protocol ISendPreflightProvider: Sendable {
     func lease(minimumHeight: Int64?) async throws -> EndpointLease
     func lease(minimumHeight: Int64?, familyID: String) async throws -> EndpointLease
     func snapshot(request: SendQuoteRequest, lease: EndpointLease, height: Int64, policy: SendPolicy, attempt: SendPreflightAttempt) async throws -> SendSnapshot
     func snapshotResult(request: SendQuoteRequest, lease: EndpointLease, height: Int64, policy: SendPolicy, attempt: SendPreflightAttempt) async throws -> SendSnapshotResult
 }
 
-extension SendPreflightProviding {
+extension ISendPreflightProvider {
     func lease(minimumHeight: Int64?, familyID: String) async throws -> EndpointLease {
         let lease = try await lease(minimumHeight: minimumHeight)
         guard lease.family.id == familyID else { throw SendError.quoteChanged(QuoteChanges(validating: [.providerIdentity])!) }
@@ -50,7 +50,7 @@ extension SendPreflightProviding {
 
 }
 
-struct SendPreflightFixtureProvider: SendPreflightProviding {
+struct SendPreflightFixtureProvider: ISendPreflightProvider {
     let fixture: SendSnapshot
     let leaseValue: EndpointLease
 
@@ -76,12 +76,12 @@ struct SendPreflightFixtureProvider: SendPreflightProviding {
 
 final class SendPreflightCoordinator: @unchecked Sendable {
     private let runtime: TransactionSender
-    private let provider: any SendPreflightProviding
+    private let provider: any ISendPreflightProvider
     private let policy: SendPolicy
     private let runner: EndpointOperationRunner
     private let validationState = SendValidationState()
 
-    init(runtime: TransactionSender, provider: any SendPreflightProviding, policy: SendPolicy? = nil) {
+    init(runtime: TransactionSender, provider: any ISendPreflightProvider, policy: SendPolicy? = nil) {
         self.runtime = runtime; self.provider = provider; self.policy = policy ?? .standard
         runner = EndpointOperationRunner(deadline: (policy ?? .standard).operationDeadline)
     }
@@ -199,7 +199,7 @@ private actor SendValidationState {
     func record(digest: Data, height: Int64) { acceptedHeights[digest] = height }
 }
 
-struct ThorNodeSendPreflightProvider: SendPreflightProviding {
+struct ThorNodeSendPreflightProvider: ISendPreflightProvider {
     let node: ThorNodeSendClient
     let leaseProvider: @Sendable () async throws -> EndpointLease
     let capabilities: [SendFamilyCapability]

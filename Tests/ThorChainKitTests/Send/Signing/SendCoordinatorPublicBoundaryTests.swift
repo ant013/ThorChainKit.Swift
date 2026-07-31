@@ -19,7 +19,7 @@ final class SendCoordinatorPublicBoundaryTests: XCTestCase {
     }
 }
 
-private final class PublicBoundarySigner: Signer, @unchecked Sendable {
+private final class PublicBoundarySigner: ISigner, @unchecked Sendable {
     let compressedPublicKey = Data(repeating: 0, count: 33)
     private(set) var callCount = 0
 

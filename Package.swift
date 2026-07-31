@@ -14,6 +14,10 @@ let package = Package(
             exact: "1.3.2"
         ),
         .package(
+            url: "https://github.com/horizontalsystems/HdWalletKit.Swift.git",
+            exact: "1.3.2"
+        ),
+        .package(
             url: "https://github.com/GigaBitcoin/secp256k1.swift.git",
             exact: "0.10.0"
         ),
@@ -34,6 +38,10 @@ let package = Package(
                 .product(
                     name: "HsCryptoKit",
                     package: "HsCryptoKit.Swift"
+                ),
+                .product(
+                    name: "HdWalletKit",
+                    package: "HdWalletKit.Swift"
                 ),
                 .product(name: "secp256k1", package: "secp256k1.swift"),
                 .product(name: "GRDB", package: "GRDB.swift"),

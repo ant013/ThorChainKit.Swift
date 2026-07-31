@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 import secp256k1
 import XCTest
-@_spi(Testing) @testable import ThorChainKit
+@testable import ThorChainKit
 
 final class KitCompositionTests: XCTestCase {
     func testKitCompositionRetainsTransactionSenderAndPendingFacade() throws {
@@ -199,7 +199,7 @@ private actor FixtureBroadcastTransport: TestingHTTPTransport {
     func requestPath() -> String? { path }
 }
 
-private final class FixtureBroadcastSigner: Signer, @unchecked Sendable {
+private final class FixtureBroadcastSigner: ISigner, @unchecked Sendable {
     private let key: secp256k1.Signing.PrivateKey
     let compressedPublicKey: Data
 

@@ -47,7 +47,7 @@ final class CosmosTransactionLookupClientTests: XCTestCase {
     }
 }
 
-private actor LookupTransport: HTTPTransporting {
+private actor LookupTransport: IHttpTransport {
     let result: (Data, HTTPURLResponse)
 
     init(result: (Data, HTTPURLResponse)) {

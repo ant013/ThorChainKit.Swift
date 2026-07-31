@@ -13,16 +13,16 @@ struct SendRouteResponse: Sendable, Equatable {
     }
 }
 
-protocol ThorNodeSendTransport: Sendable {
+protocol ISendTransport: Sendable {
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse)
 }
 
 struct ThorNodeSendClient: Sendable {
-    private let transport: any ThorNodeSendTransport
+    private let transport: any ISendTransport
     private let requestTimeout: TimeInterval
     private let maximumBodyBytes: Int
 
-    init(transport: any ThorNodeSendTransport, requestTimeout: TimeInterval = 15, maximumBodyBytes: Int = 1_048_576) {
+    init(transport: any ISendTransport, requestTimeout: TimeInterval = 15, maximumBodyBytes: Int = 1_048_576) {
         self.transport = transport; self.requestTimeout = requestTimeout; self.maximumBodyBytes = maximumBodyBytes
     }
 

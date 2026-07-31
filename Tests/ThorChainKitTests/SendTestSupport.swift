@@ -32,7 +32,7 @@ func makeTestKit(
     )
 }
 
-private struct TestAccountReader: AccountReading {
+private struct TestAccountReader: IAccountProvider {
     func read(address: Address) async throws -> AccountReadTransport {
         try AccountReadTransport(acceptedHeight: 1, account: nil, balances: [], familyId: "test", observedAt: Date())
     }
@@ -52,7 +52,7 @@ func sendOtherAddress() throws -> Address {
     )
 }
 
-final class TestSendClock: SendMonotonicClock, @unchecked Sendable {
+final class TestSendClock: ISendMonotonicClock, @unchecked Sendable {
     var now: UInt64
 
     init(now: UInt64 = 1_000) {

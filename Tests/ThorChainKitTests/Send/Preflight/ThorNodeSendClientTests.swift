@@ -246,7 +246,7 @@ final class ThorNodeSendClientTests: XCTestCase {
     }
 }
 
-private final class ScriptedSendTransport: ThorNodeSendTransport, @unchecked Sendable {
+private final class ScriptedSendTransport: ISendTransport, @unchecked Sendable {
     private let lock = NSLock()
     let data: Data
     let headers: [String: String]

@@ -21,7 +21,7 @@ actor SendCoordinator {
         self.now = now
     }
 
-    func execute(quote: SendQuote, signer: any Signer) async -> SendCoordinatorResult {
+    func execute(quote: SendQuote, signer: any ISigner) async -> SendCoordinatorResult {
         let sender = quote.internalAuthorityRecord.snapshot.sender
         guard !Task.isCancelled else { return .failure(.signerCancelled) }
         guard await runtime.isAdmissionActive() else { return .failure(.kitNotStarted) }
@@ -158,7 +158,7 @@ actor SendCoordinator {
     }
 
     private func runSigner(
-        _ signer: any Signer,
+        _ signer: any ISigner,
         request: SigningRequest,
         sender: String,
         expiresAt: Date
@@ -255,7 +255,7 @@ private struct SignerRaceResult: Sendable {
 }
 
 private final class SignerOperation: @unchecked Sendable {
-    private let signer: any Signer
+    private let signer: any ISigner
     private let request: SigningRequest
     private let runtime: TransactionSender
     private let sender: String
@@ -264,7 +264,7 @@ private final class SignerOperation: @unchecked Sendable {
     private var result: SignerRaceResult?
     private var waiter: CheckedContinuation<SignerRaceResult, Never>?
 
-    init(signer: any Signer, request: SigningRequest, runtime: TransactionSender, sender: String) {
+    init(signer: any ISigner, request: SigningRequest, runtime: TransactionSender, sender: String) {
         self.signer = signer
         self.request = request
         self.runtime = runtime

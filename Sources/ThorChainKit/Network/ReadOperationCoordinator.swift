@@ -1,30 +1,30 @@
 import Foundation
 
-protocol AccountReadWallClock: Sendable {
+protocol IAccountReadWallClock: Sendable {
     var now: Date { get }
 }
 
-struct SystemAccountReadWallClock: AccountReadWallClock {
+struct SystemAccountReadWallClock: IAccountReadWallClock {
     var now: Date { Date() }
 }
 
-struct ReadOperationCoordinator: AccountReading {
+struct ReadOperationCoordinator: IAccountProvider {
     private let pool: EndpointPool
-    private let client: any ThorNodeReading
+    private let client: any INodeApiProvider
     private let configuration: EndpointConfiguration
     private let sleeper: @Sendable (TimeInterval) async throws -> Void
-    private let endpointClock: any EndpointClock
-    private let wallClock: any AccountReadWallClock
+    private let endpointClock: any IEndpointClock
+    private let wallClock: any IAccountReadWallClock
 
     init(
         pool: EndpointPool,
-        client: any ThorNodeReading,
+        client: any INodeApiProvider,
         configuration: EndpointConfiguration,
         sleeper: @escaping @Sendable (TimeInterval) async throws -> Void = { seconds in
             try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
         },
-        endpointClock: any EndpointClock = SystemEndpointClock(),
-        wallClock: any AccountReadWallClock = SystemAccountReadWallClock()
+        endpointClock: any IEndpointClock = SystemEndpointClock(),
+        wallClock: any IAccountReadWallClock = SystemAccountReadWallClock()
     ) {
         self.pool = pool
         self.client = client

@@ -59,7 +59,7 @@ final class DerivationTests: XCTestCase {
     }
 }
 
-private struct FailingContextProvider: Secp256k1ContextProviding {
+private struct FailingContextProvider: ISecp256k1ContextProvider {
     func makeContext() throws -> OpaquePointer {
         throw ContextFailure.unavailable
     }

@@ -64,7 +64,7 @@ actor TransactionSender {
     private let address: Address?
     private let persistenceNamespace: String
     private let quoteStore: QuoteStore
-    private let sequenceReservations: (any SequenceReservationManaging)?
+    private let sequenceReservations: (any ISequenceReservationManager)?
     private let journal: SendJournal?
     private let transactionManager: PendingTransactionManager?
     private let historyTransactionManager: TransactionManager?
@@ -89,7 +89,7 @@ actor TransactionSender {
         clientID: UUID = UUID(),
         persistenceNamespace: String = UUID().uuidString,
         journal: SendJournal? = nil,
-        reservationStore: (any SequenceReservationManaging)? = nil,
+        reservationStore: (any ISequenceReservationManager)? = nil,
         broadcastOperation: (@Sendable (String, SignedTransaction) async throws -> BroadcastResponse)? = nil,
         transactionManager: PendingTransactionManager? = nil,
         historyTransactionManager: TransactionManager? = nil,
@@ -315,7 +315,7 @@ actor TransactionSender {
         )
     }
 
-    func send(quote: SendQuote, signer: any Signer) async throws -> SendSubmission {
+    func send(quote: SendQuote, signer: any ISigner) async throws -> SendSubmission {
         try admit()
         guard journal != nil else { throw SendError.operationUnavailable }
         let result = await SendCoordinator(

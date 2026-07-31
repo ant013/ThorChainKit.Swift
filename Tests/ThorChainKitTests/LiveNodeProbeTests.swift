@@ -143,7 +143,7 @@ final class LiveNodeProbeTests: XCTestCase {
     }
 }
 
-private actor ProbeTransport: HTTPTransporting {
+private actor ProbeTransport: IHttpTransport {
     enum Response: Sendable {
         case json(String)
         case status(Int, retryAfter: String?)
@@ -188,7 +188,7 @@ private actor ProbeTransport: HTTPTransporting {
     }
 }
 
-private actor CancellingTransport: HTTPTransporting {
+private actor CancellingTransport: IHttpTransport {
     private(set) var requestCount = 0
 
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {

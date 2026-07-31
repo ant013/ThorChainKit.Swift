@@ -7,12 +7,12 @@ struct SequenceReservationKey: Hashable, Sendable {
     let sequence: UInt64
 }
 
-protocol SequenceReservationManaging: Sendable {
+protocol ISequenceReservationManager: Sendable {
     func acquire(_ key: SequenceReservationKey, ownerToken: Data) throws -> Bool
     func release(_ key: SequenceReservationKey, ownerToken: Data) throws -> Bool
 }
 
-final class SequenceReservationStore: SequenceReservationManaging, @unchecked Sendable {
+final class SequenceReservationStore: ISequenceReservationManager, @unchecked Sendable {
     private let storage: TransactionStorage
 
     init(storage: TransactionStorage) {

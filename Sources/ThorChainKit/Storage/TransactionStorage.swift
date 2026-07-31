@@ -80,7 +80,6 @@ final class TransactionStorage {
                 table.column("incoming", .blob).notNull()
                 table.column("outgoing", .blob).notNull()
                 table.column("processed", .boolean).notNull().defaults(to: false)
-                table.column("is_local", .boolean).notNull().defaults(to: false)
                 table.primaryKey(["persistence_namespace", "tx_hash"])
             }
             try db.create(index: "transactions_namespace_timestamp", on: "transactions", columns: ["persistence_namespace", "timestamp"])

@@ -25,7 +25,7 @@ final class LifecycleInvariantProbeTests: XCTestCase {
     }
 }
 
-private struct ProbeReader: AccountReading {
+private struct ProbeReader: IAccountProvider {
     func read(address: Address) async throws -> AccountReadTransport {
         try AccountReadTransport(
             acceptedHeight: 1,

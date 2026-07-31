@@ -1,10 +1,10 @@
 import Foundation
 
-@_spi(Testing) public protocol TestingHTTPTransport: Sendable {
+protocol TestingHTTPTransport: Sendable {
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse)
 }
 
-@_spi(Testing) public struct TestingAccountReadProjection: Equatable, Sendable {
+struct TestingAccountReadProjection: Equatable, Sendable {
     public let accountExists: Bool
     public let accountNumber: UInt64?
     public let sequence: UInt64?
@@ -13,7 +13,7 @@ import Foundation
     public let providerFamilyId: String
 }
 
-@_spi(Testing) public struct TestingAccountReadSession: Sendable {
+struct TestingAccountReadSession: Sendable {
     private let address: Address
     private let configuration: EndpointConfiguration
     private let transport: any TestingHTTPTransport
@@ -56,7 +56,7 @@ import Foundation
     }
 }
 
-private struct TestingHTTPTransportAdapter: HTTPTransporting {
+private struct TestingHTTPTransportAdapter: IHttpTransport {
     let transport: any TestingHTTPTransport
 
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {

@@ -3,7 +3,7 @@ import Foundation
 public struct TransactionID: Hashable, Sendable {
     public let hash: String
 
-    internal init?(hash: String) {
+    public init?(hash: String) {
         guard hash.count == 64,
               hash.allSatisfy({ $0.isASCII && ($0.isNumber || ("A"..."F").contains($0)) })
         else { return nil }

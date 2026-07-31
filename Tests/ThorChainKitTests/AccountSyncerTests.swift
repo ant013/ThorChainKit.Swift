@@ -96,7 +96,7 @@ final class AccountSyncerTests: XCTestCase {
     }
 }
 
-private struct ImmediateReader: AccountReading {
+private struct ImmediateReader: IAccountProvider {
     func read(address: Address) async throws -> AccountReadTransport {
         try AccountReadTransport(
             acceptedHeight: 100,
@@ -112,7 +112,7 @@ private func testAddress() throws -> Address {
     try Address("thor166aczv0jatlnyzz8zsczdzk9xxxgppfpu530jl", network: .mainnet)
 }
 
-private actor ControlledReader: AccountReading {
+private actor ControlledReader: IAccountProvider {
     private var continuation: CheckedContinuation<AccountReadTransport, Error>?
     private(set) var didStart = false
 
@@ -133,7 +133,7 @@ private actor ControlledReader: AccountReading {
     }
 }
 
-private struct FailingReader: AccountReading {
+private struct FailingReader: IAccountProvider {
     func read(address _: Address) async throws -> AccountReadTransport {
         throw TestReadError.failed
     }
@@ -141,7 +141,7 @@ private struct FailingReader: AccountReading {
 
 private enum TestReadError: Error { case failed }
 
-private actor CountingHistoryProvider: MidgardActionProviding {
+private actor CountingHistoryProvider: IHistoryProvider {
     private var requests = 0
     private var waiter: CheckedContinuation<Void, Never>?
 

@@ -80,6 +80,20 @@ final class TransactionHistoryTests: XCTestCase {
         XCTAssertEqual(manager.transactions().first?.status, "success")
     }
 
+    func testStoredTransactionPreservesItsDate() throws {
+        let fixture = try journalFixture()
+        let pending = PendingTransactionManager(journal: fixture.journal)
+        let repository = TransactionRepository(storage: fixture.storage, persistenceNamespace: fixture.namespace)
+        let manager = TransactionManager(storage: fixture.storage, repository: repository, journal: fixture.journal, pendingTransactionManager: pending)
+
+        let seconds: TimeInterval = 1_785_427_946.5
+        try manager.save(transactions: [transaction(id: fixture.transactionID, status: "success", timestamp: seconds)])
+
+        let stored = try XCTUnwrap(manager.transactions().first)
+        XCTAssertEqual(stored.timestamp.timeIntervalSince1970, seconds, accuracy: 0.001)
+        XCTAssertEqual(stored.timestampNanoseconds, Int64(seconds * 1_000_000_000))
+    }
+
     func testUnknownActionDoesNotClearJournal() throws {
         let fixture = try journalFixture()
         let pending = PendingTransactionManager(journal: fixture.journal)
@@ -142,6 +156,7 @@ final class TransactionHistoryTests: XCTestCase {
         let repository = TransactionRepository(storage: fixture.storage, persistenceNamespace: fixture.namespace)
         let manager = TransactionManager(storage: fixture.storage, repository: repository, journal: fixture.journal, pendingTransactionManager: pending)
 
+        try manager.save(transactions: [transaction(id: fixture.transactionID, status: "pending")])
         try manager.reconcileLocalTransactions()
         XCTAssertEqual(manager.transactions().first?.status, "pending")
 
@@ -479,7 +494,7 @@ private struct HistoryRequest: Sendable {
     let transactionID: TransactionID?
 }
 
-private actor ScriptedHistoryProvider: MidgardActionProviding {
+private actor ScriptedHistoryProvider: IHistoryProvider {
     private let response: @Sendable (HistoryRequest) throws -> MidgardActionPage
     private var recordedRequests = [HistoryRequest]()
 
@@ -496,7 +511,7 @@ private actor ScriptedHistoryProvider: MidgardActionProviding {
     func requests() -> [HistoryRequest] { recordedRequests }
 }
 
-private actor PageCapHistoryProvider: MidgardActionProviding {
+private actor PageCapHistoryProvider: IHistoryProvider {
     private let action: MidgardAction
     private var recordedRequests = [HistoryRequest]()
 
@@ -515,7 +530,7 @@ private actor PageCapHistoryProvider: MidgardActionProviding {
     func requests() -> [HistoryRequest] { recordedRequests }
 }
 
-private actor GateHistoryProvider: MidgardActionProviding {
+private actor GateHistoryProvider: IHistoryProvider {
     private let firstPage: MidgardActionPage
     private let followingPage: MidgardActionPage
     private var firstRequestStarted = false
@@ -563,7 +578,7 @@ private final class StateEventGate: @unchecked Sendable {
     }
 }
 
-private actor HistoryTransport: HTTPTransporting {
+private actor HistoryTransport: IHttpTransport {
     let result: (Data, HTTPURLResponse)
     private(set) var request: URLRequest?
 
@@ -575,7 +590,7 @@ private actor HistoryTransport: HTTPTransporting {
     }
 }
 
-private actor HistoryProvider: MidgardActionProviding {
+private actor HistoryProvider: IHistoryProvider {
     private let pending: MidgardAction
     private let confirmed: MidgardAction
     private var recentRequests = 0

@@ -39,6 +39,6 @@ struct AccountReadTransport: Equatable, Sendable {
     }
 }
 
-protocol AccountReading: Sendable {
+protocol IAccountProvider: Sendable {
     func read(address: Address) async throws -> AccountReadTransport
 }

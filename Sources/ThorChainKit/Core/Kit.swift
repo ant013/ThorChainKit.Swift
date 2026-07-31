@@ -45,7 +45,22 @@ public final class Kit {
     public var lastBlockHeight: Int64? { syncer.lastBlockHeight }
     public var syncState: SyncState { syncer.state }
     public var accountState: AccountState? { accountInfoManager.accountState }
-    public var runeBalance: BigUInt { accountState?.balances[.rune] ?? 0 }
+    public var runeBalance: BigUInt { balance(denom: .rune) }
+    // One account read carries every denom, so all of an account's tokens are served
+    // by this kit — a denom without its own adapter simply goes unread.
+    public var balances: [Denom: BigUInt] { accountState?.balances ?? [:] }
+
+    public func balance(denom: Denom) -> BigUInt {
+        accountState?.balances[denom] ?? 0
+    }
+
+    public func balancePublisher(denom: Denom) -> AnyPublisher<BigUInt, Never> {
+        accountStatePublisher
+            .map { $0?.balances[denom] ?? 0 }
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+    }
+
     public var accountExists: Bool { accountState?.exists ?? false }
     public var pendingTransactions: [PendingTransaction] { pendingTransactionsSubject.value }
     public var pendingTransactionsPublisher: AnyPublisher<[PendingTransaction], Never> { pendingTransactionsSubject.eraseToAnyPublisher() }

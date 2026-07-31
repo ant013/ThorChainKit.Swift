@@ -21,11 +21,11 @@ struct EndpointInstant: Comparable, Equatable, Sendable {
     }
 }
 
-protocol EndpointClock: Sendable {
+protocol IEndpointClock: Sendable {
     var now: EndpointInstant { get }
 }
 
-struct SystemEndpointClock: EndpointClock {
+struct SystemEndpointClock: IEndpointClock {
     var now: EndpointInstant { EndpointInstant(nanoseconds: DispatchTime.now().uptimeNanoseconds) }
 }
 

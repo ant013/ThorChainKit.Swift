@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@_spi(Testing) @testable import ThorChainKit
+@testable import ThorChainKit
 
 final class TestingEndpointPolicySessionTests: XCTestCase {
     func testFixtureScriptsExecuteTheRealPoolAndReturnSanitizedSnapshots() async throws {

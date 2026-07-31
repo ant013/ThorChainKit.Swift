@@ -6,15 +6,15 @@ enum BroadcastTransportError: Error, Equatable, Sendable {
     case transport
 }
 
-protocol TransactionBroadcaster: Sendable {
+protocol ITransactionBroadcaster: Sendable {
     func broadcast(transaction: SignedTransaction) async throws -> BroadcastResponse
 }
 
-struct CosmosTransactionBroadcaster: TransactionBroadcaster {
+struct CosmosTransactionBroadcaster: ITransactionBroadcaster {
     let baseURL: URL
-    let transport: any HTTPTransporting
+    let transport: any IHttpTransport
 
-    init(baseURL: URL, transport: any HTTPTransporting = URLSessionTransport()) {
+    init(baseURL: URL, transport: any IHttpTransport = URLSessionTransport()) {
         self.baseURL = baseURL
         self.transport = transport
     }
@@ -63,12 +63,12 @@ enum RetryLookupResponse: Sendable, Equatable {
 
 struct CosmosTransactionLookupClient: Sendable {
     let baseURL: URL
-    let transport: any HTTPTransporting
+    let transport: any IHttpTransport
     let notFoundMessage: @Sendable (String) -> String
 
     init(
         baseURL: URL,
-        transport: any HTTPTransporting = URLSessionTransport(),
+        transport: any IHttpTransport = URLSessionTransport(),
         notFoundMessage: @escaping @Sendable (String) -> String = { "rpc error: code = NotFound desc = tx not found: \($0): key not found" }
     ) {
         self.baseURL = baseURL
