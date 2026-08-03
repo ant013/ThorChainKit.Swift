@@ -17,17 +17,16 @@ final class SendSnapshotTests: XCTestCase {
             familyID: base.familyID, chainID: base.chainID, height: base.height, sender: base.sender, recipient: base.recipient,
             accountNumber: base.accountNumber, sequence: base.sequence, amount: base.amount, nativeFee: base.nativeFee,
             spendableRune: base.spendableRune, mimir: base.mimir, memoMaximumBytes: base.memoMaximumBytes,
-            nodeVersion: base.nodeVersion, querierVersion: base.querierVersion, recipientClassification: base.recipientClassification,
             policyRevision: base.policyRevision, accountPublicKey: "/cosmos.crypto.secp256k1.PubKey", accountPublicKeyData: Data([2] + Array(repeating: 1, count: 32))
         )
         XCTAssertNotEqual(base.digest, withKey.digest)
-        XCTAssertEqual(withKey.digestHex, "3d73e3368f3431b3013cb95bcebf510e1bf537bfc771182d729a2b431ca41a42")
+        XCTAssertEqual(withKey.digestHex, "2a17c9aed3b970f1600a1a0487b56aa2411f03e8ec679d791a26739eb0b406d2")
     }
 
     func testDigestMatchesTheApprovedFixedVector() throws {
-        // Re-approved when the digest began binding the denom and the amount's own
-        // spendable balance, so a TCY quote can no longer match a RUNE snapshot.
-        XCTAssertEqual(try SendSnapshot.fixture(height: 42).digestHex, "daadbe8f89434522f1a8e3d60dc3bedfdef4068b4194023954bc82ca9bb524ae")
+        // Re-approved when the node version left the snapshot: the preflight no longer
+        // reads /thorchain/version, so the digest cannot bind what it never saw.
+        XCTAssertEqual(try SendSnapshot.fixture(height: 42).digestHex, "5c0debb7ac331484b77c9b0f8e762fcfbc057a49c2688db00f2277c4eb14a3c6")
     }
 
     func testPublicKeyStateRejectsImpossibleAndUncompressedValues() throws {
@@ -41,7 +40,6 @@ final class SendSnapshotTests: XCTestCase {
                 familyID: base.familyID, chainID: base.chainID, height: base.height, sender: base.sender, recipient: base.recipient,
                 accountNumber: base.accountNumber, sequence: base.sequence, amount: base.amount, nativeFee: base.nativeFee,
                 spendableRune: base.spendableRune, mimir: base.mimir, memoMaximumBytes: base.memoMaximumBytes,
-                nodeVersion: base.nodeVersion, querierVersion: base.querierVersion, recipientClassification: base.recipientClassification,
                 policyRevision: base.policyRevision, accountPublicKey: typeURL, accountPublicKeyData: data
             ))
         }

@@ -24,7 +24,7 @@ final class QuoteStore: Sendable {
 
     func issue(
         sender: Address,
-        recipient: Address,
+        recipient: Address?,
         amountMagnitude: Data,
         isMaximum: Bool,
         nativeFeeMagnitude: Data,
@@ -67,7 +67,7 @@ final class QuoteStore: Sendable {
                     ),
                     snapshot: QuoteReviewSnapshot(
                         sender: sender.raw,
-                        recipient: recipient.raw,
+                        recipient: recipient?.raw ?? "",
                         requestedAmountIsMaximum: isMaximum,
                         amountMagnitude: amountMagnitude,
                         nativeFeeMagnitude: nativeFeeMagnitude,

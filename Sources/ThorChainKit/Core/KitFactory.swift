@@ -91,7 +91,9 @@ public extension Kit {
                 guard let client = lookupClients[familyID] else { return .providerInconsistent }
                 return await client.lookup(transactionID: transactionID)
             },
-            operationDeadline: endpoints.requestTimeout
+            // Not requestTimeout: this bounds how long a broadcast may stay undecided
+            // before it is reported as unknown, and Android resolves that in ~15s too.
+            operationDeadline: 15
         )
         let syncer = Syncer(
             accountInfoManager: accountInfoManager,
@@ -236,7 +238,9 @@ public extension Kit {
                 guard let client = lookupClients[familyID] else { return .providerInconsistent }
                 return await client.lookup(transactionID: transactionID)
             },
-            operationDeadline: endpoints.requestTimeout
+            // Not requestTimeout: this bounds how long a broadcast may stay undecided
+            // before it is reported as unknown, and Android resolves that in ~15s too.
+            operationDeadline: 15
         )
         let syncer = Syncer(
             accountInfoManager: accountInfoManager,

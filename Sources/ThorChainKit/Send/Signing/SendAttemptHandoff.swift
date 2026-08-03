@@ -4,8 +4,9 @@ struct SendAttemptHandoff: Sendable {
     let transaction: SignedTransaction
     let accountGate: AccountGate
     let sender: String
+    // Empty and nil for a deposit, which has no recipient.
     let recipient: String
-    let recipientPayload: Data
+    let recipientPayload: Data?
     let amount: Data
     // Carried from the snapshot so the journal records what was actually sent.
     let denom: Denom

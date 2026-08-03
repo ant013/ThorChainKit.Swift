@@ -3,7 +3,7 @@ import Foundation
 enum SendEndpointRole: String, Sendable { case rest, rpc }
 
 enum SendRequestEncoding: String, Sendable { case jsonREST, protobufABCI }
-enum SendResponseDecoder: String, Sendable { case spendableBalance, accountQueryAny, network, mimir, authParams, nodeVersion }
+enum SendResponseDecoder: String, Sendable { case spendableBalance, accountQueryAny, network, mimir }
 
 enum SendCapabilityStatus: String, Sendable, Equatable { case pass, fail, unrun }
 
@@ -58,7 +58,7 @@ struct SendFamilyCapability: Equatable, Sendable {
     let manifestRevision: String
     let routes: [SendManifestRoute]
     var status: SendCapabilityStatus {
-        guard routes.count == 10 else { return .unrun }
+        guard routes.count == 5 else { return .unrun }
         if routes.contains(where: { $0.capabilityStatus == .fail }) { return .fail }
         return routes.allSatisfy { $0.capabilityStatus == .pass } ? .pass : .unrun
     }
@@ -96,19 +96,16 @@ enum NativeRuneEndpointRegistry {
                 // every THORChain asset. A nil value keeps manifest verification exact.
                 ("spendable", "/cosmos/bank/v1beta1/spendable_balances/{address}/by_denom", .jsonREST, .spendableBalance, .restHeader, .rest, nil, nil, "denom", nil),
                 ("network-fee", "/types.Query/Network", .protobufABCI, .network, .cometABCI, .rpc, nil, nil, nil, nil),
-                ("mimir-halt-chain-global", "/thorchain/mimir/key/{key}", .jsonREST, .mimir, .restHeader, .rest, "height", "HaltChainGlobal", nil, nil),
-                ("mimir-node-pause-chain-global", "/thorchain/mimir/key/{key}", .jsonREST, .mimir, .restHeader, .rest, "height", "NodePauseChainGlobal", nil, nil),
-                ("mimir-halt-thorchain", "/thorchain/mimir/key/{key}", .jsonREST, .mimir, .restHeader, .rest, "height", "HaltTHORChain", nil, nil),
-                ("mimir-solvency-halt-thorchain", "/thorchain/mimir/key/{key}", .jsonREST, .mimir, .restHeader, .rest, "height", "SolvencyHaltTHORChain", nil, nil),
-                ("auth-params", "/cosmos/auth/v1beta1/params", .jsonREST, .authParams, .restHeader, .rest, nil, nil, nil, nil),
-                ("node-version", "/thorchain/version", .jsonREST, .nodeVersion, .restHeader, .rest, "height", nil, nil, nil),
+                // The node returns every mimir key in one response; reading four keys
+                // one at a time cost four requests for the same data.
+                ("mimir", "/thorchain/mimir", .jsonREST, .mimir, .restHeader, .rest, "height", nil, nil, nil),
                 ("recipient-account", "/cosmos.auth.v1beta1.Query/Account", .protobufABCI, .accountQueryAny, .cometABCI, .rpc, nil, nil, nil, nil)
             ]
             let routes = definitions.map { name, path, encoding, decoder, proofMode, role, historicalHeightParameter, queryKey, queryParameterName, queryParameterValue in
                 let record = familyRecords.first { $0.role == role }!
-                return SendManifestRoute(record: record, route: name, path: path, requestEncoding: encoding, decoder: decoder, proofMode: proofMode, schemaRevision: "s2-02-v1", historicalHeightParameter: historicalHeightParameter, queryKey: queryKey, queryParameterName: queryParameterName, queryParameterValue: queryParameterValue, capabilityStatus: .unrun)
+                return SendManifestRoute(record: record, route: name, path: path, requestEncoding: encoding, decoder: decoder, proofMode: proofMode, schemaRevision: "s2-02-v2", historicalHeightParameter: historicalHeightParameter, queryKey: queryKey, queryParameterName: queryParameterName, queryParameterValue: queryParameterValue, capabilityStatus: .unrun)
             }
-            return SendFamilyCapability(familyID: familyID, manifestRevision: "s2-03-manifest-v1", routes: routes)
+            return SendFamilyCapability(familyID: familyID, manifestRevision: "s2-03-manifest-v2", routes: routes)
         }
     }
 

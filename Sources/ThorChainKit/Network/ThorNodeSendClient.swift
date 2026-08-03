@@ -73,16 +73,16 @@ struct ThorNodeSendClient: Sendable {
 
     private func makeRequest(route: SendManifestRoute, lease: EndpointLease, height: Int64, address: String?, requestData: Data, queryParameterValue: String? = nil) throws -> URLRequest {
         let expectedEncoding: SendRequestEncoding = route.proofMode == .cometABCI ? .protobufABCI : .jsonREST
-        guard route.requestEncoding == expectedEncoding else { throw SendError.policyUnavailableLogged() }
+        guard route.requestEncoding == expectedEncoding else { throw SendError.policyUnavailable }
         let expectedRole: SendEndpointRole = route.proofMode == .cometABCI ? .rpc : .rest
         guard route.record.familyID == lease.family.id, route.record.role == expectedRole,
-              route.record == Self.record(for: lease.family, role: expectedRole) else { throw SendError.policyUnavailableLogged() }
+              route.record == Self.record(for: lease.family, role: expectedRole) else { throw SendError.policyUnavailable }
         let base = route.record.role == .rest ? lease.family.cosmosRestURL : lease.family.cometBftURL
         var components = URLComponents(url: base, resolvingAgainstBaseURL: false)!
         guard !route.path.contains("{address}") || !(address ?? "").isEmpty,
-              !route.path.contains("{key}") || !(route.queryKey ?? "").isEmpty else { throw SendError.policyUnavailableLogged() }
+              !route.path.contains("{key}") || !(route.queryKey ?? "").isEmpty else { throw SendError.policyUnavailable }
         let path = route.path.replacingOccurrences(of: "{address}", with: address ?? "").replacingOccurrences(of: "{key}", with: route.queryKey ?? "")
-        guard !path.contains("{") && !path.contains("}") else { throw SendError.policyUnavailableLogged() }
+        guard !path.contains("{") && !path.contains("}") else { throw SendError.policyUnavailable }
         if route.proofMode == .cometABCI {
             components.percentEncodedPath = (components.percentEncodedPath == "/" ? "" : components.percentEncodedPath) + "/abci_query"
         } else {
@@ -98,7 +98,7 @@ struct ThorNodeSendClient: Sendable {
                 // Never fall through without one: the node answers a denom-less spendable
                 // query with a different shape, and we would read it as a zero balance.
                 guard let value = route.queryParameterValue ?? queryParameterValue else {
-                    throw SendError.policyUnavailableLogged()
+                    throw SendError.policyUnavailable
                 }
                 queryItems.append(URLQueryItem(name: name, value: value))
             }

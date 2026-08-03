@@ -98,11 +98,3 @@ public enum SendError: Error, Equatable, Sendable, LocalizedError, CustomStringC
 private func magnitude(_ data: Data) -> BigUInt {
     data.isEmpty ? 0 : BigUInt(data)
 }
-
-// TEMPORARY send-path instrumentation. Remove once the policyUnavailable source is found.
-extension SendError {
-    static func policyUnavailableLogged(_ file: String = #fileID, _ line: Int = #line, note: String = "") -> SendError {
-        print("[THOR] policyUnavailable @ \(file):\(line) \(note)")
-        return .policyUnavailable
-    }
-}

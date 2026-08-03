@@ -34,7 +34,7 @@ final class ThorNodeSendPreflightProviderTests: XCTestCase {
         XCTAssertEqual(snapshot.denom.rawValue, "tcy")
         // Both balances are read, and recipient-account stays last: the preflight binds
         // the attempt to that route, so slipping another read in after it fails closed.
-        XCTAssertEqual(transport.routeNames, ["account", "spendable", "spendable", "network-fee", "mimir-halt-chain-global", "mimir-node-pause-chain-global", "mimir-halt-thorchain", "mimir-solvency-halt-thorchain", "auth-params", "node-version", "recipient-account"])
+        XCTAssertEqual(transport.routeNames, ["account", "spendable", "spendable", "network-fee", "mimir", "recipient-account"])
         XCTAssertEqual(transport.routeNames.last, "recipient-account")
 
         let denoms = transport.requests.compactMap { URLComponents(url: $0.url!, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "denom" })?.value }
@@ -77,8 +77,8 @@ final class ThorNodeSendPreflightProviderTests: XCTestCase {
         XCTAssertEqual(snapshot.sequence, 9)
         XCTAssertEqual(snapshot.nativeFee, 7)
         XCTAssertEqual(snapshot.spendableRune, 1_000)
-        XCTAssertEqual(transport.routeNames, ["account", "spendable", "network-fee", "mimir-halt-chain-global", "mimir-node-pause-chain-global", "mimir-halt-thorchain", "mimir-solvency-halt-thorchain", "auth-params", "node-version", "recipient-account"])
-        XCTAssertEqual(transport.requests.count, 10)
+        XCTAssertEqual(transport.routeNames, ["account", "spendable", "network-fee", "mimir", "recipient-account"])
+        XCTAssertEqual(transport.requests.count, 5)
         XCTAssertFalse(transport.bulkModuleAccountsCalled, "the broken bulk ModuleAccounts route is a regression counterexample")
         for request in transport.requests {
             let components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!
@@ -121,7 +121,7 @@ final class ThorNodeSendPreflightProviderTests: XCTestCase {
                 valid.map { $0.familyID == family.id ? SendFamilyCapability(familyID: $0.familyID, manifestRevision: $0.manifestRevision, routes: $0.routes.map { route in routeCopy(route, record: SendManifestRecord(familyID: family.id, role: route.record.role == .rest ? .rpc : .rest, scheme: route.record.scheme, host: route.record.host, port: route.record.port, path: route.record.path)) }) : $0 },
                 valid.map { $0.familyID == family.id ? SendFamilyCapability(familyID: $0.familyID, manifestRevision: $0.manifestRevision, routes: $0.routes.map { route in routeCopy(route, record: SendManifestRecord(familyID: family.id, role: route.record.role, scheme: route.record.scheme, host: "wrong.example", port: route.record.port, path: route.record.path)) }) : $0 }
             ]
-            XCTAssertEqual(canonical.routes.count, 10)
+            XCTAssertEqual(canonical.routes.count, 5)
             for capabilities in mutations {
                 let provider = ThorNodeSendPreflightProvider(node: ThorNodeSendClient(transport: MatrixSendTransport(account: Data(), recipient: Data(), network: Data())), leaseProvider: { lease }, capabilities: capabilities)
                 do {
@@ -229,14 +229,8 @@ private final class MatrixSendTransport: ISendTransport, @unchecked Sendable {
         } else if components.path.contains("spendable_balances") {
             let denom = components.queryItems?.first(where: { $0.name == "denom" })?.value ?? "rune"
             route = "spendable"; body = Data("{\"balance\":{\"denom\":\"\(denom)\",\"amount\":\"\(denom == "rune" ? "1000" : "500")\"}}".utf8); headers = restHeaders
-        } else if components.path.contains("/mimir/key/") {
-            let key = components.path.split(separator: "/").last.map(String.init) ?? ""
-            route = ["HaltChainGlobal": "mimir-halt-chain-global", "NodePauseChainGlobal": "mimir-node-pause-chain-global", "HaltTHORChain": "mimir-halt-thorchain", "SolvencyHaltTHORChain": "mimir-solvency-halt-thorchain"][key]!
-            body = Data("-1".utf8); headers = restHeaders
-        } else if components.path.hasSuffix("/params") {
-            route = "auth-params"; body = Data(#"{"params":{"max_memo_characters":"256","tx_sig_limit":"7","tx_size_cost_per_byte":"10","sig_verify_cost_ed25519":"590","sig_verify_cost_secp256k1":"1000"}}"#.utf8); headers = restHeaders
         } else {
-            route = "node-version"; body = Data(#"{"current":"3.19.3","next":"3.19.3","next_since_height":"0","querier":"3.19.0"}"#.utf8); headers = restHeaders
+            route = "mimir"; body = Data(#"{"HALTCHAINGLOBAL":-1,"NODEPAUSECHAINGLOBAL":-1,"HALTTHORCHAIN":-1}"#.utf8); headers = restHeaders
         }
         routeNames.append(route)
         if route == blockedRoute {

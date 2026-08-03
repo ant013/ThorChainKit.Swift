@@ -56,8 +56,15 @@ final class PendingTransactionManager: @unchecked Sendable {
     }
 
     private static func project(_ record: SendJournalRecord, network: Network) -> PendingTransaction? {
-        guard let transactionID = TransactionID(hash: record.transactionID.hash),
-              let recipient = try? Address(record.recipient, network: network) else { return nil }
+        guard let transactionID = TransactionID(hash: record.transactionID.hash) else { return nil }
+        // A deposit has no recipient; only a non-empty one has to parse.
+        let recipient: Address?
+        if record.recipient.isEmpty {
+            recipient = nil
+        } else {
+            guard let parsed = try? Address(record.recipient, network: network) else { return nil }
+            recipient = parsed
+        }
         let state: PendingTransaction.State = record.state == .checkTxAccepted ? .checkTxAccepted : .unknown
         let availability: PendingTransaction.RetryAvailability
         switch record.state {

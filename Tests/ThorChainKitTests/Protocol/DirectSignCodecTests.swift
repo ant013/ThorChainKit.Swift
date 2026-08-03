@@ -9,18 +9,18 @@ final class DirectSignCodecTests: XCTestCase {
     private let sender = "thor1w508d6qejxtdg4y5r3zarvary0c5xw7ku6wp68"
     private let recipient = "thor1tgxm5jw6hrlvslrd6lqpk4jwuu4g29dxytrean"
     private let publicKey = Data(hex: "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798")
-    private let signature = Data(hex: "23103daa64330d051da3bfa85ea7c8af9080edf19b19a306403303634b0992a32cc1b9061b2e76cd245edb2976bb437bc6636dfb23deae31e38508c5478dae45")
+    private let signature = Data(hex: "e7b6b1d9d3029bc3dd1635a4a866ffe8b376f8a6f5260e08770397d1ab9824db40b78f5a0564a219757745155c80b225acc043ee700796130b4d0119fc9f1011")
 
     func testOfficialScalarOneVectorMatchesEverySignedByteAndHash() throws {
         let snapshot = try makeSnapshot()
         let payload = try makePayload(snapshot: snapshot)
 
         XCTAssertEqual(payload.signDocBytes.count, 193)
-        XCTAssertEqual(payload.digest.hex, "1ff56dd4c3627af0cee040965178f50c8d7c854e909d7b54aedbd1b7bf110b68")
+        XCTAssertEqual(payload.digest.hex, "09f9e241b6ad35055da5129322f7e564690f57c479d9df705debb0d54242569c")
 
         let signed = try DirectSignCodec.makeTxRaw(payload: payload, compactSignature: signature)
-        XCTAssertEqual(signed.txRaw.hex, "0a530a510a0e2f74797065732e4d736753656e64123f0a14751e76e8199196d454941c45d1b3a323f1433bd612145a0dba49dab8fec87c6dd7c01b564ee72a8515a61a110a0472756e65120931303030303030303012590a500a460a1f2f636f736d6f732e63727970746f2e736563703235366b312e5075624b657912230a210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179812040a0208011801120510c08db7011a4023103daa64330d051da3bfa85ea7c8af9080edf19b19a306403303634b0992a32cc1b9061b2e76cd245edb2976bb437bc6636dfb23deae31e38508c5478dae45")
-        XCTAssertEqual(signed.transactionID.hash, "3685BF7AD0C65889B763D4B6D1F1EDEEC96E9B63B63F8DB992D00757EB5F136E")
+        XCTAssertEqual(signed.txRaw.hex, "0a530a510a0e2f74797065732e4d736753656e64123f0a14751e76e8199196d454941c45d1b3a323f1433bd612145a0dba49dab8fec87c6dd7c01b564ee72a8515a61a110a0472756e65120931303030303030303012590a500a460a1f2f636f736d6f732e63727970746f2e736563703235366b312e5075624b657912230a210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179812040a0208011801120510809bee021a40e7b6b1d9d3029bc3dd1635a4a866ffe8b376f8a6f5260e08770397d1ab9824db40b78f5a0564a219757745155c80b225acc043ee700796130b4d0119fc9f1011")
+        XCTAssertEqual(signed.transactionID.hash, "805C61ACBF4F6C210D1B98B9E2690222566F621074CA3FE82BCC46FEC4E3863A")
 
         let decodedRaw = try Cosmos_Tx_V1beta1_TxRaw(serializedBytes: signed.txRaw)
         let decodedBody = try Cosmos_Tx_V1beta1_TxBody(serializedBytes: decodedRaw.bodyBytes)
@@ -94,7 +94,7 @@ final class DirectSignCodecTests: XCTestCase {
         let legacyPublicKey = Data(hex: "023e4b76861289ad4528b33c2fd21b3a5160cd37b3294234914e21efb6ed4a452b")
         let payload = try makePayload(sender: legacySender, publicKey: legacyPublicKey)
         XCTAssertEqual(payload.signDocBytes.count, 193)
-        XCTAssertEqual(payload.digest.hex, "83a508ff301fc5cf7ab5126d861e7bac8dd1ebc5691df4842d6b2ac84dd3668f")
+        XCTAssertEqual(payload.digest.hex, "0c03bcd0c0e3dee7b26a762cbd5a636a9858f09260a3b781117067c30e63c312")
     }
 
     func testStaticSignatureIsVerifiedOnlyByIndependentTestOracle() throws {
@@ -198,8 +198,6 @@ final class DirectSignCodecTests: XCTestCase {
             denom: denom,
             mimir: MimirSnapshot(haltChainGlobal: -1, nodePauseChainGlobal: -1, haltTHORChain: -1, solvencyHaltTHORChain: -1),
             memoMaximumBytes: 256,
-            nodeVersion: "3.19.3",
-            querierVersion: "3.19.3",
             accountPublicKey: "/cosmos.crypto.secp256k1.PubKey",
             accountPublicKeyData: publicKey ?? self.publicKey
         )

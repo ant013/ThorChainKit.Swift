@@ -39,7 +39,8 @@ struct QuoteAuthorityRecord: Equatable, Hashable, Sendable {
 }
 
 public struct SendQuote: Sendable, CustomDebugStringConvertible, CustomReflectable {
-    public let recipient: Address
+    // Nil for a deposit: it addresses the chain, not an account.
+    public let recipient: Address?
     public var amount: BigUInt { magnitude(amountMagnitude) }
     public let isMaximum: Bool
     public var nativeFee: BigUInt { magnitude(nativeFeeMagnitude) }
@@ -55,7 +56,7 @@ public struct SendQuote: Sendable, CustomDebugStringConvertible, CustomReflectab
     private let sender: String
 
     internal init(
-        recipient: Address,
+        recipient: Address?,
         amountMagnitude: Data,
         isMaximum: Bool,
         nativeFeeMagnitude: Data,
@@ -93,7 +94,7 @@ public struct SendQuote: Sendable, CustomDebugStringConvertible, CustomReflectab
             && amountValue + feeValue == totalDebitValue
             && !sender.isEmpty
             && !snapshot.providerFamilyID.isEmpty
-            && snapshot.recipient == recipient.raw
+            && snapshot.recipient == (recipient?.raw ?? "")
             && snapshot.sender == sender
             && snapshot.expiresAt == expiresAt
             && snapshot.requestedAmountIsMaximum == isMaximum
@@ -123,12 +124,12 @@ public struct SendQuote: Sendable, CustomDebugStringConvertible, CustomReflectab
     }
 
     public var debugDescription: String {
-        "SendQuote(recipient: \(recipient.raw), amount: \(amount), isMaximum: \(isMaximum), nativeFee: \(nativeFee), totalDebit: \(totalDebit), memo: \(memo ?? "nil"), acceptedHeight: \(acceptedHeight), expiresAt: \(expiresAt.timeIntervalSince1970))"
+        "SendQuote(recipient: \(recipient?.raw ?? "-"), amount: \(amount), isMaximum: \(isMaximum), nativeFee: \(nativeFee), totalDebit: \(totalDebit), memo: \(memo ?? "nil"), acceptedHeight: \(acceptedHeight), expiresAt: \(expiresAt.timeIntervalSince1970))"
     }
 
     public var customMirror: Mirror {
         Mirror(self, children: [
-            "recipient": recipient.raw,
+            "recipient": recipient?.raw ?? "-",
             "amount": amount,
             "isMaximum": isMaximum,
             "nativeFee": nativeFee,

@@ -50,7 +50,7 @@ final class SendJournal: @unchecked Sendable {
     func insertBroadcasting(
         transaction: SignedTransaction,
         senderPayload: Data,
-        recipientPayload: Data,
+        recipientPayload: Data?,
         sender: String,
         recipient: String,
         amount: Data,
@@ -64,7 +64,7 @@ final class SendJournal: @unchecked Sendable {
         reservationOwnerToken: Data,
         generation: UInt64 = 1
     ) throws {
-        guard !senderPayload.isEmpty, !recipientPayload.isEmpty,
+        guard !senderPayload.isEmpty, recipientPayload.map({ !$0.isEmpty }) ?? true,
               !transaction.txRaw.isEmpty, !reservationOwnerToken.isEmpty,
               generation > 0, accountNumber <= UInt64(Int64.max),
               sequence <= UInt64(Int64.max), quoteHeight > 0 else {

@@ -46,7 +46,7 @@ final class TransactionStorage {
                 table.column("local_hash", .text).notNull()
                 table.column("signed_tx_raw", .blob).notNull()
                 table.column("sender_payload", .blob).notNull()
-                table.column("recipient_payload", .blob).notNull()
+                table.column("recipient_payload", .blob)
                 table.column("sender", .text).notNull()
                 table.column("recipient", .text).notNull()
                 table.column("amount", .text).notNull()

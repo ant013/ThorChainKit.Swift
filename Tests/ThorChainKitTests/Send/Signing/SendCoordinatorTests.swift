@@ -1,3 +1,4 @@
+import BigInt
 import Foundation
 import XCTest
 @testable import ThorChainKit
@@ -15,7 +16,7 @@ final class SendCoordinatorTests: XCTestCase {
             sender: sender.raw, recipient: recipient.raw, accountNumber: 1, sequence: 2,
             amount: 100, nativeFee: 2, spendableRune: 102,
             mimir: MimirSnapshot(haltChainGlobal: -1, nodePauseChainGlobal: -1, haltTHORChain: -1, solvencyHaltTHORChain: -1),
-            memoMaximumBytes: 256, nodeVersion: "3.19.3", querierVersion: "3.19.0",
+            memoMaximumBytes: 256,
             accountPublicKey: "/cosmos.crypto.secp256k1.PubKey", accountPublicKeyData: publicKey
         )
         let runtime = SendRuntime(address: sender, persistenceNamespace: "coordinator-expiry")
@@ -32,6 +33,33 @@ final class SendCoordinatorTests: XCTestCase {
         XCTAssertEqual(result.failure, .quoteExpired)
     }
 
+    func testAQuoteWithoutARecipientIsSignedAsADeposit() async throws {
+        let sender = try sendOtherAddress()
+        let publicKey = Data(hex: "02a9ac9f7a97da41559e1684011b6a9b0b9c0445297d5f51dea0897fd4a39c31c7")
+        let snapshot = try SendSnapshot(
+            familyID: "rorcual-mainnet", chainID: "thorchain-1", height: 12,
+            sender: sender.raw, recipient: "", accountNumber: 1, sequence: 2,
+            amount: 100, nativeFee: 2, spendableRune: 102,
+            mimir: MimirSnapshot(haltChainGlobal: -1, nodePauseChainGlobal: -1, haltTHORChain: -1, solvencyHaltTHORChain: -1),
+            memoMaximumBytes: 256,
+            accountPublicKey: "/cosmos.crypto.secp256k1.PubKey", accountPublicKeyData: publicKey
+        )
+        let runtime = SendRuntime(address: sender, persistenceNamespace: "coordinator-deposit")
+        await runtime.activate(generation: 1)
+        let quote = try await runtime.issuePreflightQuote(
+            request: SendQuoteRequest(sender: sender, recipient: nil, amount: .exact(snapshot.amount), memo: "=:BTC.BTC:bc1"),
+            snapshot: snapshot
+        )
+
+        let payload = try DirectSignCodec.makeDepositSignPayload(
+            context: snapshot.depositContext, asset: .rune, amount: quote.amount, memo: "=:BTC.BTC:bc1", publicKey: publicKey
+        )
+        let body = try Cosmos_Tx_V1beta1_TxBody(serializedBytes: payload.bodyBytes)
+
+        XCTAssertNil(quote.recipient)
+        XCTAssertEqual(body.messages[0].typeURL, "/types.MsgDeposit")
+    }
+
     func testDenomReachesTheSigningPayloadFromTheSnapshot() async throws {
         // The coordinator builds the payload from the snapshot; if it ever stopped
         // carrying the denom, a token send would be signed as RUNE. No test drives
@@ -45,7 +73,7 @@ final class SendCoordinatorTests: XCTestCase {
             sender: sender.raw, recipient: recipient.raw, accountNumber: 1, sequence: 2,
             amount: 100, nativeFee: 2, spendable: 100, spendableRune: 102, denom: tcy,
             mimir: MimirSnapshot(haltChainGlobal: -1, nodePauseChainGlobal: -1, haltTHORChain: -1, solvencyHaltTHORChain: -1),
-            memoMaximumBytes: 256, nodeVersion: "3.19.3", querierVersion: "3.19.0",
+            memoMaximumBytes: 256,
             accountPublicKey: "/cosmos.crypto.secp256k1.PubKey", accountPublicKeyData: publicKey
         )
         let runtime = SendRuntime(address: sender, persistenceNamespace: "coordinator-denom")
@@ -75,7 +103,7 @@ final class SendCoordinatorTests: XCTestCase {
             sender: sender.raw, recipient: recipient.raw, accountNumber: 1, sequence: 2,
             amount: 100, nativeFee: 2, spendableRune: 102,
             mimir: MimirSnapshot(haltChainGlobal: -1, nodePauseChainGlobal: -1, haltTHORChain: -1, solvencyHaltTHORChain: -1),
-            memoMaximumBytes: 256, nodeVersion: "3.19.3", querierVersion: "3.19.0",
+            memoMaximumBytes: 256,
             accountPublicKey: "/cosmos.crypto.secp256k1.PubKey", accountPublicKeyData: publicKey
         )
         let runtime = SendRuntime(address: sender, persistenceNamespace: "coordinator-ordering")
@@ -190,8 +218,6 @@ final class SendCoordinatorTests: XCTestCase {
             spendableRune: 102,
             mimir: MimirSnapshot(haltChainGlobal: -1, nodePauseChainGlobal: -1, haltTHORChain: -1, solvencyHaltTHORChain: -1),
             memoMaximumBytes: 256,
-            nodeVersion: "3.19.3",
-            querierVersion: "3.19.0",
             accountPublicKey: "/cosmos.crypto.secp256k1.PubKey",
             accountPublicKeyData: publicKey
         )
@@ -231,7 +257,7 @@ final class SendCoordinatorTests: XCTestCase {
             sender: sender.raw, recipient: recipient.raw, accountNumber: 1, sequence: 2,
             amount: 100, nativeFee: 2, spendableRune: 102,
             mimir: MimirSnapshot(haltChainGlobal: -1, nodePauseChainGlobal: -1, haltTHORChain: -1, solvencyHaltTHORChain: -1),
-            memoMaximumBytes: 256, nodeVersion: "3.19.3", querierVersion: "3.19.0",
+            memoMaximumBytes: 256,
             accountPublicKey: "/cosmos.crypto.secp256k1.PubKey", accountPublicKeyData: publicKey
         )
         let runtime = SendRuntime(address: sender, persistenceNamespace: namespace)
@@ -252,7 +278,7 @@ final class SendCoordinatorTests: XCTestCase {
             sender: sender, recipient: recipient, accountNumber: 123_456, sequence: 1,
             amount: 100_000_000, nativeFee: 0, spendableRune: 100_000_000,
             mimir: MimirSnapshot(haltChainGlobal: -1, nodePauseChainGlobal: -1, haltTHORChain: -1, solvencyHaltTHORChain: -1),
-            memoMaximumBytes: 256, nodeVersion: "3.19.3", querierVersion: "3.19.3",
+            memoMaximumBytes: 256,
             accountPublicKey: "/cosmos.crypto.secp256k1.PubKey", accountPublicKeyData: publicKey
         )
         let runtime = SendRuntime(address: try Address(sender, network: .mainnet), persistenceNamespace: namespace)
@@ -316,6 +342,8 @@ private final class CoordinatorH2Provider: ISendPreflightProvider, @unchecked Se
         lock.lock(); defer { lock.unlock() }
         return snapshotsIssued
     }
+
+    func estimateFee() async throws -> BigUInt { 2 }
 
     func lease(minimumHeight: Int64?) async throws -> EndpointLease {
         withLock { leasesIssued += 1 }
@@ -461,8 +489,6 @@ private func coordinatorChanged(_ snapshot: SendSnapshot, height: Int64? = nil, 
         spendableRune: snapshot.spendableRune,
         mimir: snapshot.mimir,
         memoMaximumBytes: snapshot.memoMaximumBytes,
-        nodeVersion: snapshot.nodeVersion,
-        querierVersion: snapshot.querierVersion,
         recipientClassification: snapshot.recipientClassification,
         policyRevision: snapshot.policyRevision,
         accountPublicKey: snapshot.accountPublicKey,

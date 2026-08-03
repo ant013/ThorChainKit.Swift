@@ -6,7 +6,7 @@ struct PendingTransaction: Sendable, CustomDebugStringConvertible, CustomReflect
     enum RetryAvailability: Sendable { case available, inFlight, sequenceAdvanced, providerInconsistent, notApplicable }
 
     let transactionId: TransactionID
-    let recipient: Address
+    let recipient: Address?
     var amount: BigUInt { magnitude(amountMagnitude) }
     var nativeFee: BigUInt { magnitude(nativeFeeMagnitude) }
     let memo: String?
@@ -19,7 +19,7 @@ struct PendingTransaction: Sendable, CustomDebugStringConvertible, CustomReflect
 
     internal init(
         transactionId: TransactionID,
-        recipient: Address,
+        recipient: Address?,
         amountMagnitude: Data,
         nativeFeeMagnitude: Data,
         memo: String?,
@@ -42,13 +42,13 @@ struct PendingTransaction: Sendable, CustomDebugStringConvertible, CustomReflect
     }
 
     var debugDescription: String {
-        "PendingTransaction(transactionId: \(transactionId.hash), recipient: \(recipient.raw), amount: \(amount), nativeFee: \(nativeFee), memo: \(memo ?? "nil"), createdAt: \(createdAt.timeIntervalSince1970))"
+        "PendingTransaction(transactionId: \(transactionId.hash), recipient: \(recipient?.raw ?? "nil"), amount: \(amount), nativeFee: \(nativeFee), memo: \(memo ?? "nil"), createdAt: \(createdAt.timeIntervalSince1970))"
     }
 
     var customMirror: Mirror {
         Mirror(self, children: [
             "transactionId": transactionId.hash,
-            "recipient": recipient.raw,
+            "recipient": recipient?.raw as Any,
             "amount": amount,
             "nativeFee": nativeFee,
             "memo": memo as Any,

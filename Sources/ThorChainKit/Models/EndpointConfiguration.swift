@@ -18,7 +18,7 @@ public struct EndpointConfiguration: Sendable {
         families: [EndpointFamilyDescriptor],
         midgardURLs: [URL] = [],
         clientId: String? = nil,
-        requestTimeout: TimeInterval = 15,
+        requestTimeout: TimeInterval = 60,
         policy: EndpointPolicy = .default
     ) throws {
         guard !families.isEmpty else {

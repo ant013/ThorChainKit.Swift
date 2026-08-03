@@ -57,7 +57,20 @@ actor SendCoordinator {
             reservationAcquired = true
 
             let prepared = PreparedQuote(quote: quote, snapshot: h1)
-            let payload = try DirectSignCodec.makeSignPayload(snapshot: h1, quote: prepared, publicKey: publicKey)
+            // No recipient means a deposit: the memo is the instruction, not a note.
+            let payload: SignPayload
+            if quote.recipient == nil {
+                guard let memo = quote.memo else { throw SendError.operationUnavailable }
+                payload = try DirectSignCodec.makeDepositSignPayload(
+                    context: h1.depositContext,
+                    asset: try Denom.asset(for: h1.denom.rawValue),
+                    amount: quote.amount,
+                    memo: memo,
+                    publicKey: publicKey
+                )
+            } else {
+                payload = try DirectSignCodec.makeSignPayload(snapshot: h1, quote: prepared, publicKey: publicKey)
+            }
             guard await runtime.beginSignerFence(sender) else { throw SendError.sendInProgress }
             signerFenceAcquired = true
             let signerResult = await runSigner(
@@ -90,7 +103,7 @@ actor SendCoordinator {
                 accountGate: operationHold.accountGate,
                 sender: h1.sender,
                 recipient: h1.recipient,
-                recipientPayload: try Address(h1.recipient, network: network).payload,
+                recipientPayload: h1.recipient.isEmpty ? nil : try Address(h1.recipient, network: network).payload,
                 amount: SendMagnitude(h1.amount).data,
                 denom: h1.denom,
                 quotedNativeFee: SendMagnitude(h1.nativeFee).data,

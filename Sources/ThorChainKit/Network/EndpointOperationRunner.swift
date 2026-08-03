@@ -20,12 +20,14 @@ struct SystemEndpointOperationClock: IEndpointOperationClock {
 }
 
 final class EndpointOperationRunner: @unchecked Sendable {
-    private let deadline: TimeInterval
+    // A nil deadline leaves the wait to the transport, as the Android kit does. Only the
+    // broadcast path needs its own bound, to decide when an outcome is unknown.
+    private let deadline: TimeInterval?
     private let clock: any IEndpointOperationClock
     private let orphanCounter: OrphanCounter
 
     init(
-        deadline: TimeInterval = 15,
+        deadline: TimeInterval? = nil,
         maximumOrphanedOperations: Int = 8,
         maximumOrphanedOperationsPerFamily: Int? = nil,
         clock: any IEndpointOperationClock = SystemEndpointOperationClock()
@@ -42,9 +44,13 @@ final class EndpointOperationRunner: @unchecked Sendable {
     ) async throws -> T {
         guard let ticket = orphanCounter.start(familyID: familyID) else { throw EndpointOperationError.orphanCapReached }
         let cancellation = CancellationSignal()
-        let deadlineNanos = UInt64(max(0, deadline) * 1_000_000_000)
-        let (absoluteDeadline, overflow) = clock.now.addingReportingOverflow(deadlineNanos)
-        let deadline = overflow ? UInt64.max : absoluteDeadline
+        let deadline: UInt64
+        if let configured = self.deadline {
+            let (absolute, overflow) = clock.now.addingReportingOverflow(UInt64(max(0, configured) * 1_000_000_000))
+            deadline = overflow ? UInt64.max : absolute
+        } else {
+            deadline = UInt64.max
+        }
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<T, Error>) in
                 let gate = CompletionGate<T>(continuation)

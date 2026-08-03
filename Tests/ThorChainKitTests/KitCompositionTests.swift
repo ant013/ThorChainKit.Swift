@@ -128,8 +128,6 @@ final class KitCompositionTests: XCTestCase {
             spendableRune: 102,
             mimir: MimirSnapshot(haltChainGlobal: -1, nodePauseChainGlobal: -1, haltTHORChain: -1, solvencyHaltTHORChain: -1),
             memoMaximumBytes: 256,
-            nodeVersion: "3.19.3",
-            querierVersion: "3.19.0",
             accountPublicKey: "/cosmos.crypto.secp256k1.PubKey",
             accountPublicKeyData: signer.compressedPublicKey
         )

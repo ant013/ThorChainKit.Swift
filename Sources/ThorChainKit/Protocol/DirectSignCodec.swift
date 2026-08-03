@@ -31,7 +31,8 @@ enum DirectSignCodec {
     private static let msgSendTypeURL = "/types.MsgSend"
     private static let msgDepositTypeURL = "/types.MsgDeposit"
     private static let publicKeyTypeURL = "/cosmos.crypto.secp256k1.PubKey"
-    private static let gasLimit: UInt64 = 3_000_000
+    // As in the Android kit.
+    private static let gasLimit: UInt64 = 6_000_000
     // A deposit executes chain logic rather than moving coins, so it needs far more gas.
     // Mirrors the Android kit, which pairs 6_000_000 for a send with 600_000_000 here.
     private static let depositGasLimit: UInt64 = 600_000_000

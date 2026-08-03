@@ -18,31 +18,30 @@ final class EndpointManifestTests: XCTestCase {
         XCTAssertFalse(HeightProof.body(expected: 10, actual: nil).isExact)
     }
 
-    func testCapabilityManifestIsExactlyThreeFamiliesAndTenReadOnlyRoutes() {
+    func testCapabilityManifestIsExactlyThreeFamiliesAndFiveReadOnlyRoutes() {
         let capabilities = NativeRuneEndpointRegistry.capabilities()
         XCTAssertEqual(capabilities.count, 3)
         XCTAssertEqual(capabilities.map(\.familyID), NativeRuneEndpointRegistry.familyIDs)
         for capability in capabilities {
-            XCTAssertEqual(capability.routes.count, 10)
+            XCTAssertEqual(capability.routes.count, 5)
+            XCTAssertEqual(Set(capability.routes.map(\.route)), ["account", "spendable", "network-fee", "mimir", "recipient-account"])
             XCTAssertEqual(capability.status, .unrun)
             XCTAssertFalse(capability.isSendCapable)
             XCTAssertTrue(capability.routes.allSatisfy { $0.capabilityStatus == .unrun })
             XCTAssertTrue(capability.routes.allSatisfy { !$0.schemaRevision.isEmpty })
             XCTAssertTrue(capability.routes.allSatisfy { !$0.path.isEmpty && !$0.supportedNodeRevision.isEmpty })
-            XCTAssertEqual(capability.routes.filter { $0.queryKey != nil }.count, 4)
-            XCTAssertEqual(Set(capability.routes.compactMap(\.queryKey)), ["HaltChainGlobal", "NodePauseChainGlobal", "HaltTHORChain", "SolvencyHaltTHORChain"])
+            // The whole mimir map comes back in one response, so no route pins a key.
+            XCTAssertTrue(capability.routes.allSatisfy { $0.queryKey == nil })
             let spendable = capability.routes.first { $0.route == "spendable" }!
             XCTAssertEqual(spendable.path, "/cosmos/bank/v1beta1/spendable_balances/{address}/by_denom")
             XCTAssertEqual(spendable.queryParameterName, "denom")
             // The denom is caller-supplied, so the manifest pins the name and not the value.
             XCTAssertNil(spendable.queryParameterValue)
             XCTAssertNil(spendable.historicalHeightParameter)
-            XCTAssertNil(capability.routes.first { $0.route == "auth-params" }?.historicalHeightParameter)
-            XCTAssertEqual(capability.routes.filter { $0.route.hasPrefix("mimir-") || $0.route == "node-version" }.count, 5)
-            XCTAssertTrue(capability.routes.filter { $0.route.hasPrefix("mimir-") || $0.route == "node-version" }.allSatisfy { $0.historicalHeightParameter == "height" })
+            let mimir = capability.routes.first { $0.route == "mimir" }!
+            XCTAssertEqual(mimir.path, "/thorchain/mimir")
+            XCTAssertEqual(mimir.historicalHeightParameter, "height")
             XCTAssertEqual(capability.routes.first { $0.route == "network-fee" }?.proofMode, .cometABCI)
-            XCTAssertEqual(capability.routes.first { $0.route == "node-version" }?.path, "/thorchain/version")
-            XCTAssertTrue(capability.routes.filter { $0.route.hasPrefix("mimir-") }.allSatisfy { $0.path == "/thorchain/mimir/key/{key}" })
         }
     }
 
@@ -53,17 +52,12 @@ final class EndpointManifestTests: XCTestCase {
     }
 
     func testEveryFamilyPinsEveryRouteToOneProofAndEncoding() {
-        let expectedRoutes = Set([
-            "account", "spendable", "network-fee",
-            "mimir-halt-chain-global", "mimir-node-pause-chain-global",
-            "mimir-halt-thorchain", "mimir-solvency-halt-thorchain",
-            "auth-params", "node-version", "recipient-account"
-        ])
+        let expectedRoutes = Set(["account", "spendable", "network-fee", "mimir", "recipient-account"])
         for family in NativeRuneEndpointRegistry.capabilities() {
             XCTAssertEqual(Set(family.routes.map(\.route)), expectedRoutes)
             XCTAssertEqual(family.routes.filter { $0.proofMode == .cometABCI }.count, 3)
             XCTAssertEqual(family.routes.filter { $0.proofMode == .bodyHeight }.count, 0)
-            XCTAssertEqual(family.routes.filter { $0.proofMode == .restHeader }.count, 7)
+            XCTAssertEqual(family.routes.filter { $0.proofMode == .restHeader }.count, 2)
             XCTAssertTrue(family.routes.allSatisfy { $0.requestEncoding == ($0.proofMode == .cometABCI ? .protobufABCI : .jsonREST) })
         }
     }

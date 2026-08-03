@@ -4,22 +4,20 @@ import BigInt
 
 struct SendPolicy: Equatable, Sendable {
     let memoMaximumBytes: Int
-    let operationDeadline: TimeInterval
     let revision: String
 
-    static let standard = SendPolicy(uncheckedMemoMaximumBytes: 256, operationDeadline: 15, revision: "s2-02-v1")
+    static let standard = SendPolicy(uncheckedMemoMaximumBytes: 256, revision: "s2-02-v1")
 
-    init(memoMaximumBytes: Int = 256, operationDeadline: TimeInterval = 15, revision: String = "s2-02-v1") throws {
-        guard memoMaximumBytes > 0, operationDeadline.isFinite, operationDeadline > 0, !revision.isEmpty else {
-            throw SendError.policyUnavailableLogged()
+    init(memoMaximumBytes: Int = 256, revision: String = "s2-02-v1") throws {
+        guard memoMaximumBytes > 0, !revision.isEmpty else {
+            throw SendError.policyUnavailable
         }
         self.memoMaximumBytes = memoMaximumBytes
-        self.operationDeadline = operationDeadline
         self.revision = revision
     }
 
-    private init(uncheckedMemoMaximumBytes: Int, operationDeadline: TimeInterval, revision: String) {
-        memoMaximumBytes = uncheckedMemoMaximumBytes; self.operationDeadline = operationDeadline; self.revision = revision
+    private init(uncheckedMemoMaximumBytes: Int, revision: String) {
+        memoMaximumBytes = uncheckedMemoMaximumBytes; self.revision = revision
     }
 
     func validate(memo: String?, maximumBytes: Int? = nil) throws {
@@ -77,7 +75,7 @@ enum HaltEvaluator {
         guard height > 0,
               [mimir.haltChainGlobal, mimir.nodePauseChainGlobal, mimir.haltTHORChain, mimir.solvencyHaltTHORChain]
                 .allSatisfy({ $0 >= -1 })
-        else { throw SendError.policyUnavailableLogged() }
+        else { throw SendError.policyUnavailable }
 
         let halted = (mimir.haltChainGlobal > 0 && mimir.haltChainGlobal <= height)
             || (mimir.nodePauseChainGlobal > 0 && mimir.nodePauseChainGlobal >= height)
@@ -88,7 +86,6 @@ enum HaltEvaluator {
 }
 
 struct ForbiddenModuleAddressSet: Sendable, Equatable {
-    static let supportedVersions: Set<String> = ["3.19.0", "3.19.1", "3.19.2", "3.19.3"]
     static let sourceTags = ["v3.19.0@5f2141c3", "v3.19.1@59a3e925", "v3.19.2@c6fa8caa", "v3.19.3@52e66ad9"]
     static let sourceFileSHA256 = "72ce4607cfcd45e1546e9c12d79afaeeb897946d0c9f3df31c14b8e05a3a98cf"
     static let pinnedModuleVectors: [(String, String)] = [
@@ -105,10 +102,7 @@ struct ForbiddenModuleAddressSet: Sendable, Equatable {
     let revision = "thorchain-3.19-module-addresses-v1"
     private let addresses: Set<String>
 
-    init(current: String, querier: String, network: Network = .mainnet) throws {
-        guard Self.supportedVersions.contains(current), Self.supportedVersions.contains(querier) else {
-            throw SendError.policyUnavailableLogged()
-        }
+    init(network: Network = .mainnet) throws {
         let names = Self.pinnedModuleVectors.map { $0.0 }
         var values = Set<String>()
         for name in names {

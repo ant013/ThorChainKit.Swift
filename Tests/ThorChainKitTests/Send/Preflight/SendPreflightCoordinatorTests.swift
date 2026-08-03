@@ -141,8 +141,6 @@ private func changed(
         nativeFee: BigUInt? = nil,
         mimir: MimirSnapshot? = nil,
         memoMaximumBytes: Int? = nil,
-        nodeVersion: String? = nil,
-        querierVersion: String? = nil,
         recipientClassification: RecipientAccountClassification? = nil,
     policyRevision: String? = nil,
     restEndpoint: String? = nil,
@@ -154,8 +152,8 @@ private func changed(
         sender: snapshot.sender, recipient: snapshot.recipient, accountNumber: accountNumber ?? snapshot.accountNumber,
         sequence: sequence ?? snapshot.sequence, amount: snapshot.amount, nativeFee: nativeFee ?? snapshot.nativeFee,
         spendableRune: spendableRune ?? snapshot.spendableRune, mimir: mimir ?? snapshot.mimir,
-        memoMaximumBytes: memoMaximumBytes ?? snapshot.memoMaximumBytes, nodeVersion: nodeVersion ?? snapshot.nodeVersion,
-        querierVersion: querierVersion ?? snapshot.querierVersion, recipientClassification: recipientClassification ?? snapshot.recipientClassification,
+        memoMaximumBytes: memoMaximumBytes ?? snapshot.memoMaximumBytes,
+        recipientClassification: recipientClassification ?? snapshot.recipientClassification,
         policyRevision: policyRevision ?? snapshot.policyRevision, accountPublicKey: accountPublicKey ?? snapshot.accountPublicKey,
         accountPublicKeyData: accountPublicKeyData ?? snapshot.accountPublicKeyData, restEndpoint: restEndpoint ?? snapshot.restEndpoint,
         rpcEndpoint: rpcEndpoint ?? snapshot.rpcEndpoint, manifestRevision: manifestRevision ?? snapshot.manifestRevision
@@ -174,6 +172,8 @@ private final class ScriptedSendProvider: ISendPreflightProvider, @unchecked Sen
     init(leases: [EndpointLease], snapshots: [SendSnapshot], finalRouteID: String? = "recipient-account", runtime: SendRuntime? = nil) {
         self.leases = leases; self.snapshots = snapshots; self.finalRouteID = finalRouteID; self.runtime = runtime
     }
+
+    func estimateFee() async throws -> BigUInt { 2 }
 
     func lease(minimumHeight: Int64?) async throws -> EndpointLease {
         let lease = try withLock {
@@ -215,6 +215,8 @@ private struct DelayedSendProvider: ISendPreflightProvider {
     let runtime: SendRuntime?
 
     init(lease: EndpointLease, snapshot: SendSnapshot, runtime: SendRuntime? = nil) { leaseValue = lease; snapshotValue = snapshot; self.runtime = runtime }
+
+    func estimateFee() async throws -> BigUInt { 2 }
 
     func lease(minimumHeight: Int64?) async throws -> EndpointLease {
         try await Task.sleep(nanoseconds: 50_000_000)

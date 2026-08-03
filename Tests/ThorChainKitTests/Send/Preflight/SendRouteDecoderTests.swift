@@ -45,34 +45,15 @@ final class SendRouteDecoderTests: XCTestCase {
         }
     }
 
-    func testMimirBoundsAndExactShape() throws {
-        XCTAssertEqual(try SendRouteDecoders.mimir(Data("-1".utf8)), -1)
-        XCTAssertEqual(try SendRouteDecoders.mimir(Data("9223372036854775807".utf8)), Int64.max)
-        for body in ["", "-2", #"{"value":1}"#, "\"bad\"", "9223372036854775808"] {
+    func testMimirMapRejectsAnythingButWholeNumbers() throws {
+        let body = #"{"HALTCHAINGLOBAL":0,"NODEPAUSECHAINGLOBAL":26195469,"HALTTHORCHAIN":-1}"#
+        let values = try SendRouteDecoders.mimir(Data(body.utf8))
+        XCTAssertEqual(values["HALTCHAINGLOBAL"], 0)
+        XCTAssertEqual(values["NODEPAUSECHAINGLOBAL"], 26_195_469)
+        XCTAssertEqual(values["HALTTHORCHAIN"], -1)
+        for body in ["", "{}", "-1", #"{"HALTTHORCHAIN":-2}"#, #"{"HALTTHORCHAIN":"0"}"#, #"{"HALTTHORCHAIN":1.5}"#] {
             XCTAssertThrowsError(try SendRouteDecoders.mimir(Data(body.utf8)))
         }
     }
 
-    func testAuthAndVersionRequireExactTypedFields() throws {
-        let auth = #"{"params":{"max_memo_characters":"256","tx_sig_limit":"7","tx_size_cost_per_byte":"10","sig_verify_cost_ed25519":"590","sig_verify_cost_secp256k1":"1000"}}"#
-        XCTAssertEqual(try SendRouteDecoders.authMaximum(Data(auth.utf8)), 256)
-        let version = #"{"current":"3.19.3","next":"3.19.3","next_since_height":"0","querier":"3.19.0"}"#
-        XCTAssertEqual(try SendRouteDecoders.version(Data(version.utf8)).current, "3.19.3")
-        for body in [
-            #"{"params":{"max_memo_characters":"0","tx_sig_limit":"7","tx_size_cost_per_byte":"10","sig_verify_cost_ed25519":"590","sig_verify_cost_secp256k1":"1000"}}"#,
-            #"{"params":{"max_memo_characters":"-1","tx_sig_limit":"7","tx_size_cost_per_byte":"10","sig_verify_cost_ed25519":"590","sig_verify_cost_secp256k1":"1000"}}"#,
-            #"{"params":{"max_memo_characters":"18446744073709551616","tx_sig_limit":"7","tx_size_cost_per_byte":"10","sig_verify_cost_ed25519":"590","sig_verify_cost_secp256k1":"1000"}}"#,
-            #"{"params":{"max_memo_characters":"256","tx_sig_limit":"7"}}"#,
-        ] {
-            XCTAssertThrowsError(try SendRouteDecoders.authMaximum(Data(body.utf8)))
-        }
-        for body in [
-            #"{"current":"3.19.3","next":"3.19.3","next_since_height":"0"}"#,
-            #"{"current":"","next":"3.19.3","next_since_height":"0","querier":"3.19.0"}"#,
-            #"{"current":"3.19.3","next":"3.19.3","next_since_height":"9223372036854775808","querier":"3.19.0"}"#,
-            #"{"current":"3.19.3","next":"3.19.3","next_since_height":"0","querier":"","extra":true}"#
-        ] {
-            XCTAssertThrowsError(try SendRouteDecoders.version(Data(body.utf8)))
-        }
-    }
 }
