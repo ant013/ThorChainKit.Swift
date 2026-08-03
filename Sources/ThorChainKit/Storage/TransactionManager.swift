@@ -76,7 +76,9 @@ final class TransactionManager: @unchecked Sendable {
                     status: "failed",
                     memo: transaction.memo,
                     incoming: transaction.incoming,
-                    outgoing: transaction.outgoing
+                    outgoing: transaction.outgoing,
+                    // The fee was charged whether or not the transaction was accepted.
+                    fee: transaction.fee
                 )
                 changed = !(try repository.save([failed], in: db)).isEmpty || changed
             }
@@ -90,6 +92,9 @@ final class TransactionManager: @unchecked Sendable {
         let amount = BigUInt(record.amount)
         guard record.state != .rejected, amount > 0 else { return nil }
         let nanoseconds = Int64(record.createdAt.timeIntervalSince1970 * 1_000_000_000)
+        // Midgard notation, because the record that replaces this one will use it. A bare
+        // bank denom like "tcy" would never match its own confirmation.
+        let asset = (try? Denom.asset(for: record.denom.rawValue))?.description ?? Asset.rune.description
         return Transaction(
             transactionId: record.transactionID,
             blockHeight: 0,
@@ -98,8 +103,12 @@ final class TransactionManager: @unchecked Sendable {
             type: "send",
             status: "pending",
             memo: record.memo,
-            incoming: [CoinTransfer(address: record.sender, asset: "THOR.RUNE", amount: amount)],
-            outgoing: [CoinTransfer(address: record.recipient, asset: "THOR.RUNE", amount: amount)]
+            // Midgard notation, matching the record that will replace this one once the
+            // action appears: `in` is the sending side, `out` the receiving side.
+            incoming: [CoinTransfer(address: record.sender, asset: asset, amount: amount)],
+            outgoing: [CoinTransfer(address: record.recipient, asset: asset, amount: amount)],
+            // Quoted at preflight and charged in RUNE whatever was sent.
+            fee: record.quotedNativeFee.isEmpty ? nil : BigUInt(record.quotedNativeFee)
         )
     }
 }

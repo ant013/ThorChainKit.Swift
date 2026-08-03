@@ -1,18 +1,6 @@
 import BigInt
 import Foundation
 
-public enum QuoteChange: String, Hashable, Sendable {
-    case providerIdentity, heightRollback, accountNumber, sequence, accountPublicKey
-    case balance, nativeFee, haltStatus, memoPolicy, recipientPolicy
-}
-
-public struct QuoteChanges: Equatable, Sendable {
-    public let values: Set<QuoteChange>
-    internal init?(validating values: Set<QuoteChange>) {
-        guard !values.isEmpty else { return nil }
-        self.values = values
-    }
-}
 
 public enum RetryBlockedReason: String, Hashable, Sendable {
     case sequenceAdvanced, providerInconsistent
@@ -55,7 +43,7 @@ public enum SendError: Error, Equatable, Sendable, LocalizedError, CustomStringC
     case memoTooLong(maxUTF8Bytes: Int)
     case chainHalted, accountUnavailable, insufficientBalance, providerUnavailable
     case heightUnproven, policyUnavailable, kitNotStarted, operationUnavailable
-    case quoteExpired, quoteGenerationInvalidated, quoteChanged(QuoteChanges)
+    case quoteExpired, quoteGenerationInvalidated
     case quoteAlreadyConsumed, quoteOwnershipMismatch, signerAddressMismatch
     case invalidPublicKey, signerCancelled, signerFailed, invalidSignature
     case sendInProgress, storageUnavailable, broadcastRejected(BroadcastRejection)
@@ -89,7 +77,6 @@ public enum SendError: Error, Equatable, Sendable, LocalizedError, CustomStringC
         case .operationUnavailable: return "operationUnavailable"
         case .quoteExpired: return "quoteExpired"
         case .quoteGenerationInvalidated: return "quoteGenerationInvalidated"
-        case let .quoteChanged(changes): return "quoteChanged(\(changes.values.map(\.rawValue).sorted().joined(separator: ",")))"
         case .quoteAlreadyConsumed: return "quoteAlreadyConsumed"
         case .quoteOwnershipMismatch: return "quoteOwnershipMismatch"
         case .signerAddressMismatch: return "signerAddressMismatch"
@@ -110,4 +97,12 @@ public enum SendError: Error, Equatable, Sendable, LocalizedError, CustomStringC
 
 private func magnitude(_ data: Data) -> BigUInt {
     data.isEmpty ? 0 : BigUInt(data)
+}
+
+// TEMPORARY send-path instrumentation. Remove once the policyUnavailable source is found.
+extension SendError {
+    static func policyUnavailableLogged(_ file: String = #fileID, _ line: Int = #line, note: String = "") -> SendError {
+        print("[THOR] policyUnavailable @ \(file):\(line) \(note)")
+        return .policyUnavailable
+    }
 }

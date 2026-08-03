@@ -23,7 +23,7 @@ private final class PublicBoundarySigner: ISigner, @unchecked Sendable {
     let compressedPublicKey = Data(repeating: 0, count: 33)
     private(set) var callCount = 0
 
-    func sign(_ request: SigningRequest) async throws -> Data {
+    func sign(digest: Data) async throws -> Data {
         callCount += 1
         return Data()
     }

@@ -21,11 +21,13 @@ final class SendSnapshotTests: XCTestCase {
             policyRevision: base.policyRevision, accountPublicKey: "/cosmos.crypto.secp256k1.PubKey", accountPublicKeyData: Data([2] + Array(repeating: 1, count: 32))
         )
         XCTAssertNotEqual(base.digest, withKey.digest)
-        XCTAssertEqual(withKey.digestHex, "44e0b701017418f997f3d0792810e907dedc1446310241361d6b090a5f844e7b")
+        XCTAssertEqual(withKey.digestHex, "3d73e3368f3431b3013cb95bcebf510e1bf537bfc771182d729a2b431ca41a42")
     }
 
     func testDigestMatchesTheApprovedFixedVector() throws {
-        XCTAssertEqual(try SendSnapshot.fixture(height: 42).digestHex, "ff5807737661ff49c0aa00a760ec82bceae2a61ebe25b071450ef2148e708761")
+        // Re-approved when the digest began binding the denom and the amount's own
+        // spendable balance, so a TCY quote can no longer match a RUNE snapshot.
+        XCTAssertEqual(try SendSnapshot.fixture(height: 42).digestHex, "daadbe8f89434522f1a8e3d60dc3bedfdef4068b4194023954bc82ca9bb524ae")
     }
 
     func testPublicKeyStateRejectsImpossibleAndUncompressedValues() throws {

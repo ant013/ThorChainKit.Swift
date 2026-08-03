@@ -255,14 +255,14 @@ actor TransactionSender {
 
     func bindFamily(_ attempt: SendPreflightAttempt, familyID: String) throws -> SendPreflightAttempt {
         try guardPreflight(attempt)
-        guard !familyID.isEmpty else { throw SendError.policyUnavailable }
+        guard !familyID.isEmpty else { throw SendError.policyUnavailableLogged() }
         preflightAttempts[attempt.attemptID]?.familyID = familyID
         return SendPreflightAttempt(clientID: attempt.clientID, generation: attempt.generation, attemptID: attempt.attemptID, familyID: familyID, routeID: attempt.routeID)
     }
 
     func bindRoute(_ attempt: SendPreflightAttempt, routeID: String) throws -> SendPreflightAttempt {
         try guardPreflight(attempt)
-        guard !routeID.isEmpty else { throw SendError.policyUnavailable }
+        guard !routeID.isEmpty else { throw SendError.policyUnavailableLogged() }
         preflightAttempts[attempt.attemptID]?.routeID = routeID
         return SendPreflightAttempt(clientID: attempt.clientID, generation: attempt.generation, attemptID: attempt.attemptID, familyID: attempt.familyID, routeID: routeID)
     }
@@ -273,8 +273,8 @@ actor TransactionSender {
               attempt.clientID == quoteStore.clientID,
               activeGeneration == attempt.generation, admissionState.isActive(generation: attempt.generation)
         else { throw SendError.kitNotStarted }
-        if let familyID, current.familyID != familyID { throw SendError.policyUnavailable }
-        if let routeID, current.routeID != routeID { throw SendError.policyUnavailable }
+        if let familyID, current.familyID != familyID { throw SendError.policyUnavailableLogged() }
+        if let routeID, current.routeID != routeID { throw SendError.policyUnavailableLogged() }
     }
 
     func finishPreflight(_ attempt: SendPreflightAttempt) {
@@ -342,6 +342,7 @@ actor TransactionSender {
                 sender: handoff.sender,
                 recipient: handoff.recipient,
                 amount: handoff.amount,
+                denom: handoff.denom,
                 quotedNativeFee: handoff.quotedNativeFee,
                 memo: handoff.memo,
                 accountNumber: handoff.accountNumber,

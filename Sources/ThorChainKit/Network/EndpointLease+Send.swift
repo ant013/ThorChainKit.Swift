@@ -92,7 +92,9 @@ enum NativeRuneEndpointRegistry {
             let familyRecords = records().filter { $0.familyID == familyID }
             let definitions: [(String, String, SendRequestEncoding, SendResponseDecoder, HeightProofMode, SendEndpointRole, String?, String?, String?, String?)] = [
                 ("account", "/cosmos.auth.v1beta1.Query/Account", .protobufABCI, .accountQueryAny, .cometABCI, .rpc, nil, nil, nil, nil),
-                ("spendable-rune", "/cosmos/bank/v1beta1/spendable_balances/{address}/by_denom", .jsonREST, .spendableBalance, .restHeader, .rest, nil, nil, "denom", "rune"),
+                // The denom is supplied per call, not pinned: one route serves RUNE and
+                // every THORChain asset. A nil value keeps manifest verification exact.
+                ("spendable", "/cosmos/bank/v1beta1/spendable_balances/{address}/by_denom", .jsonREST, .spendableBalance, .restHeader, .rest, nil, nil, "denom", nil),
                 ("network-fee", "/types.Query/Network", .protobufABCI, .network, .cometABCI, .rpc, nil, nil, nil, nil),
                 ("mimir-halt-chain-global", "/thorchain/mimir/key/{key}", .jsonREST, .mimir, .restHeader, .rest, "height", "HaltChainGlobal", nil, nil),
                 ("mimir-node-pause-chain-global", "/thorchain/mimir/key/{key}", .jsonREST, .mimir, .restHeader, .rest, "height", "NodePauseChainGlobal", nil, nil),
@@ -106,7 +108,7 @@ enum NativeRuneEndpointRegistry {
                 let record = familyRecords.first { $0.role == role }!
                 return SendManifestRoute(record: record, route: name, path: path, requestEncoding: encoding, decoder: decoder, proofMode: proofMode, schemaRevision: "s2-02-v1", historicalHeightParameter: historicalHeightParameter, queryKey: queryKey, queryParameterName: queryParameterName, queryParameterValue: queryParameterValue, capabilityStatus: .unrun)
             }
-            return SendFamilyCapability(familyID: familyID, manifestRevision: "s2-02-manifest-v1", routes: routes)
+            return SendFamilyCapability(familyID: familyID, manifestRevision: "s2-03-manifest-v1", routes: routes)
         }
     }
 

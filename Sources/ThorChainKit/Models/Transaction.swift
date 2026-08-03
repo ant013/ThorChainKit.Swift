@@ -30,6 +30,9 @@ public struct Transaction: Equatable, Sendable {
     public let memo: String?
     public let incoming: [CoinTransfer]
     public let outgoing: [CoinTransfer]
+    /// Network fee in RUNE base units. Always RUNE whatever asset was sent, so it
+    /// needs no denomination of its own. Nil when the provider did not report one.
+    public let fee: BigUInt?
 
     public var isPending: Bool { status == "pending" }
     /// Midgard currently documents `success` and `refund` as finalized action
@@ -46,7 +49,8 @@ public struct Transaction: Equatable, Sendable {
         status: String,
         memo: String?,
         incoming: [CoinTransfer],
-        outgoing: [CoinTransfer]
+        outgoing: [CoinTransfer],
+        fee: BigUInt? = nil
     ) {
         self.transactionId = transactionId
         self.blockHeight = blockHeight
@@ -57,6 +61,7 @@ public struct Transaction: Equatable, Sendable {
         self.memo = memo
         self.incoming = incoming
         self.outgoing = outgoing
+        self.fee = fee
     }
 }
 

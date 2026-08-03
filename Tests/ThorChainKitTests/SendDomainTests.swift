@@ -14,13 +14,6 @@ final class SendDomainTests: XCTestCase {
         XCTAssertNil(SendAmount.maximum.exactAmount)
     }
 
-    func testQuoteChangesRejectsEmptyValues() {
-        XCTAssertNil(QuoteChanges(validating: []))
-        XCTAssertEqual(
-            QuoteChanges(validating: [.sequence, .balance])?.values,
-            [.sequence, .balance]
-        )
-    }
 
     func testErrorDebugProjectionDoesNotExposeSensitiveText() {
         let error = SendError.broadcastRejected(

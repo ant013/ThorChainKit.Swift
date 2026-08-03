@@ -128,8 +128,7 @@ public extension Kit {
                         }
                     )
                 },
-                runtime: transactionSender,
-                freshLeaseProvider: { familyID in try await pool.freshLease(familyID: familyID) }
+                runtime: transactionSender
             )
         )
         return Kit(
@@ -274,8 +273,7 @@ public extension Kit {
                         }
                     )
                 },
-                runtime: transactionSender,
-                freshLeaseProvider: { familyID in try await pool.freshLease(familyID: familyID) }
+                runtime: transactionSender
             )
         )
         return Kit(

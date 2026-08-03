@@ -4,6 +4,43 @@ import SwiftProtobuf
 @testable import ThorChainKit
 
 final class ThorNodeSendPreflightProviderTests: XCTestCase {
+    func testTokenSendReadsBothBalancesAndStillEndsOnRecipientAccount() async throws {
+        let sender = "thor1x0jkvqdh2hlpeztd5zyyk70n3efx6mhudkmnn2"
+        let recipient = "thor1tgxm5jw6hrlvslrd6lqpk4jwuu4g29dxytrean"
+        var account = Cosmos_Auth_V1beta1_BaseAccount(); account.address = sender; account.accountNumber = 7; account.sequence = 9
+        var accountResponse = Cosmos_Auth_V1beta1_QueryAccountResponse(); accountResponse.account.typeURL = "/cosmos.auth.v1beta1.BaseAccount"; accountResponse.account.value = try account.serializedData()
+        var recipientResponse = Cosmos_Auth_V1beta1_QueryAccountResponse(); recipientResponse.account.typeURL = "/cosmos.auth.v1beta1.BaseAccount"; var recipientAccount = account; recipientAccount.address = recipient; recipientResponse.account.value = try recipientAccount.serializedData()
+        var network = Types_QueryNetworkResponse(); network.nativeTxFeeRune = "7"
+
+        let family = try XCTUnwrap(NativeRuneEndpointRegistry.families().first)
+        let lease = EndpointLease(family: family, verifiedChainId: "thorchain-1", cosmosReadHeight: 42, cometReferenceHeight: 42, poolGeneration: 1)
+        let transport = MatrixSendTransport(account: try accountResponse.serializedData(), recipient: try recipientResponse.serializedData(), network: try network.serializedData())
+        let capabilities = NativeRuneEndpointRegistry.capabilities().map { capability in
+            SendFamilyCapability(familyID: capability.familyID, manifestRevision: capability.manifestRevision, routes: capability.routes.map { route in
+                SendManifestRoute(record: route.record, route: route.route, path: route.path, requestEncoding: route.requestEncoding, decoder: route.decoder, proofMode: route.proofMode, schemaRevision: route.schemaRevision, supportedNodeRevision: route.supportedNodeRevision, historicalHeightParameter: route.historicalHeightParameter, queryKey: route.queryKey, queryParameterName: route.queryParameterName, queryParameterValue: route.queryParameterValue, capabilityStatus: .pass)
+            })
+        }
+        let provider = ThorNodeSendPreflightProvider(node: ThorNodeSendClient(transport: transport), leaseProvider: { lease }, capabilities: capabilities)
+        let request = SendQuoteRequest(
+            sender: try Address(sender, network: .mainnet), recipient: try Address(recipient, network: .mainnet),
+            amount: .exact(100), memo: nil, denom: try Denom(rawValue: "tcy")
+        )
+
+        let snapshot = try await provider.snapshot(request: request, lease: lease, height: 42, policy: .standard, attempt: SendPreflightAttempt(clientID: UUID(), generation: 1, attemptID: UUID(), familyID: family.id, routeID: nil))
+
+        // The amount comes from the token balance, the fee from RUNE.
+        XCTAssertEqual(snapshot.spendable, 500)
+        XCTAssertEqual(snapshot.spendableRune, 1_000)
+        XCTAssertEqual(snapshot.denom.rawValue, "tcy")
+        // Both balances are read, and recipient-account stays last: the preflight binds
+        // the attempt to that route, so slipping another read in after it fails closed.
+        XCTAssertEqual(transport.routeNames, ["account", "spendable", "spendable", "network-fee", "mimir-halt-chain-global", "mimir-node-pause-chain-global", "mimir-halt-thorchain", "mimir-solvency-halt-thorchain", "auth-params", "node-version", "recipient-account"])
+        XCTAssertEqual(transport.routeNames.last, "recipient-account")
+
+        let denoms = transport.requests.compactMap { URLComponents(url: $0.url!, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "denom" })?.value }
+        XCTAssertEqual(denoms, ["tcy", "rune"])
+    }
+
     func testSendManifestRejectsUnregisteredFixtureFamily() throws {
         let registered = try XCTUnwrap(NativeRuneEndpointRegistry.families().first { $0.id == "rorcual-mainnet" })
         let route = try XCTUnwrap(NativeRuneEndpointRegistry.capabilities().first { $0.familyID == registered.id }?.routes.first)
@@ -40,7 +77,7 @@ final class ThorNodeSendPreflightProviderTests: XCTestCase {
         XCTAssertEqual(snapshot.sequence, 9)
         XCTAssertEqual(snapshot.nativeFee, 7)
         XCTAssertEqual(snapshot.spendableRune, 1_000)
-        XCTAssertEqual(transport.routeNames, ["account", "spendable-rune", "network-fee", "mimir-halt-chain-global", "mimir-node-pause-chain-global", "mimir-halt-thorchain", "mimir-solvency-halt-thorchain", "auth-params", "node-version", "recipient-account"])
+        XCTAssertEqual(transport.routeNames, ["account", "spendable", "network-fee", "mimir-halt-chain-global", "mimir-node-pause-chain-global", "mimir-halt-thorchain", "mimir-solvency-halt-thorchain", "auth-params", "node-version", "recipient-account"])
         XCTAssertEqual(transport.requests.count, 10)
         XCTAssertFalse(transport.bulkModuleAccountsCalled, "the broken bulk ModuleAccounts route is a regression counterexample")
         for request in transport.requests {
@@ -190,7 +227,8 @@ private final class MatrixSendTransport: ISendTransport, @unchecked Sendable {
             body = try comet(value: route == "network-fee" ? network : route == "recipient-account" ? recipient : account)
             headers = ["Content-Type": "application/json"]
         } else if components.path.contains("spendable_balances") {
-            route = "spendable-rune"; body = Data(#"{"balance":{"denom":"rune","amount":"1000"}}"#.utf8); headers = restHeaders
+            let denom = components.queryItems?.first(where: { $0.name == "denom" })?.value ?? "rune"
+            route = "spendable"; body = Data("{\"balance\":{\"denom\":\"\(denom)\",\"amount\":\"\(denom == "rune" ? "1000" : "500")\"}}".utf8); headers = restHeaders
         } else if components.path.contains("/mimir/key/") {
             let key = components.path.split(separator: "/").last.map(String.init) ?? ""
             route = ["HaltChainGlobal": "mimir-halt-chain-global", "NodePauseChainGlobal": "mimir-node-pause-chain-global", "HaltTHORChain": "mimir-halt-thorchain", "SolvencyHaltTHORChain": "mimir-solvency-halt-thorchain"][key]!
@@ -212,7 +250,7 @@ private final class MatrixSendTransport: ISendTransport, @unchecked Sendable {
         return (body, HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: headers)!)
     }
 
-    private var restHeaders: [String: String] { ["Content-Type": "application/json", "x-cosmos-block-height": "42"] }
+    private var restHeaders: [String: String] { ["Content-Type": "application/json", "Grpc-Metadata-X-Cosmos-Block-Height": "42"] }
 
     private func comet(value: Data) throws -> Data {
         let encoded = value.base64EncodedString()

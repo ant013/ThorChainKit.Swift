@@ -13,14 +13,12 @@ public final class Kit {
     private let transactionSyncer: TransactionSyncer?
     let preflight: SendPreflightCoordinator?
     private let accountInfoManager: AccountInfoManager
-    private let pendingTransactionsSubject: CurrentValueSubject<[PendingTransaction], Never>
-    private let pendingTransactionsStatusSubject: CurrentValueSubject<PendingTransactionsStatus, Never>
     private var pendingCancellables = Set<AnyCancellable>()
     private let lifecycleLock = NSLock()
     private var activeGeneration: UInt64?
     let persistenceNamespace: String
 
-    init(address: Address, syncer: Syncer, accountInfoManager: AccountInfoManager, transactionSender: TransactionSender, pendingTransactionManager: PendingTransactionManager?, transactionManager: TransactionManager? = nil, transactionSyncer: TransactionSyncer? = nil, preflight: SendPreflightCoordinator?, persistenceNamespace: String, pendingTransactionsSubject: CurrentValueSubject<[PendingTransaction], Never> = CurrentValueSubject([]), pendingTransactionsStatusSubject: CurrentValueSubject<PendingTransactionsStatus, Never> = CurrentValueSubject(.degraded)) {
+    init(address: Address, syncer: Syncer, accountInfoManager: AccountInfoManager, transactionSender: TransactionSender, pendingTransactionManager: PendingTransactionManager?, transactionManager: TransactionManager? = nil, transactionSyncer: TransactionSyncer? = nil, preflight: SendPreflightCoordinator?, persistenceNamespace: String) {
         self.address = address
         network = address.network
         self.syncer = syncer
@@ -31,15 +29,11 @@ public final class Kit {
         self.transactionSyncer = transactionSyncer
         self.preflight = preflight
         self.persistenceNamespace = persistenceNamespace
-        self.pendingTransactionsSubject = pendingTransactionsSubject
-        self.pendingTransactionsStatusSubject = pendingTransactionsStatusSubject
-        if let pendingTransactionManager {
-            _ = pendingTransactionManager.refresh()
-            self.pendingTransactionsSubject.send(pendingTransactionManager.snapshot)
-            self.pendingTransactionsStatusSubject.send(pendingTransactionManager.status)
-            pendingTransactionManager.publisher.sink { [weak self] in self?.pendingTransactionsSubject.send($0) }.store(in: &pendingCancellables)
-            pendingTransactionManager.statusPublisher.sink { [weak self] in self?.pendingTransactionsStatusSubject.send($0) }.store(in: &pendingCancellables)
-        }
+        // The journal stays internal: Cosmos broadcast leaves an unresolved window, so a
+        // local record is needed. It is not a second public transaction type — unconfirmed
+        // sends reach the app through TransactionManager as ordinary pending transactions,
+        // the way TronKit does it.
+        _ = pendingTransactionManager?.refresh()
     }
 
     public var lastBlockHeight: Int64? { syncer.lastBlockHeight }
@@ -62,10 +56,6 @@ public final class Kit {
     }
 
     public var accountExists: Bool { accountState?.exists ?? false }
-    public var pendingTransactions: [PendingTransaction] { pendingTransactionsSubject.value }
-    public var pendingTransactionsPublisher: AnyPublisher<[PendingTransaction], Never> { pendingTransactionsSubject.eraseToAnyPublisher() }
-    public var pendingTransactionsStatus: PendingTransactionsStatus { pendingTransactionsStatusSubject.value }
-    public var pendingTransactionsStatusPublisher: AnyPublisher<PendingTransactionsStatus, Never> { pendingTransactionsStatusSubject.eraseToAnyPublisher() }
     public var transactionsSyncState: TransactionSyncState { transactionSyncer?.state ?? .notSynced(error: .notStarted) }
     public var transactionsSyncStatePublisher: AnyPublisher<TransactionSyncState, Never> {
         transactionSyncer?.statePublisher ?? Just(.notSynced(error: .notStarted)).eraseToAnyPublisher()

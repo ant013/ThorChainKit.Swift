@@ -12,17 +12,21 @@ final class ThorNodeSendClientTests: XCTestCase {
     }
 
     func testRESTHeaderProofUsesHeaderHeightFromTheResponse() async throws {
-        let transport = ScriptedSendTransport(data: Data(#"{"account_number":"1"}"#.utf8), headers: ["Content-Type": "application/json", "x-cosmos-block-height": "42"])
+        let transport = ScriptedSendTransport(data: Data(#"{"account_number":"1"}"#.utf8), headers: ["Content-Type": "application/json", "Grpc-Metadata-X-Cosmos-Block-Height": "42"])
         let result = try await ThorNodeSendClient(transport: transport).read(route: route(.restHeader), using: try lease(), height: 42)
         XCTAssertEqual(result.value, Data(#"{"account_number":"1"}"#.utf8))
         XCTAssertEqual(result.proof, .restHeader(expected: 42, actual: 42))
         XCTAssertEqual(transport.requests.first?.value(forHTTPHeaderField: "x-cosmos-block-height"), "42")
     }
 
-    func testRESTHeaderProofAcceptsMissingResponseHeightHeader() async throws {
-        let transport = ScriptedSendTransport(data: Data(#"{"account_number":"1"}"#.utf8), headers: ["Content-Type": "application/json"])
-        let result = try await ThorNodeSendClient(transport: transport).read(route: route(.restHeader), using: try lease(), height: 42)
-        XCTAssertEqual(result.proof, .restHeader(expected: 42, actual: 42))
+    func testRESTHeaderProofIsDisabledAndAcceptsAnyResponseHeight() async throws {
+        // Deliberate: providers do not send the height header, so the check was removed
+        // rather than left half-enforced. See audit finding 0.2 for what this gives up.
+        for headers in [["Content-Type": "application/json"], ["Content-Type": "application/json", "Grpc-Metadata-X-Cosmos-Block-Height": "41"]] {
+            let transport = ScriptedSendTransport(data: Data(#"{"account_number":"1"}"#.utf8), headers: headers)
+            let result = try await ThorNodeSendClient(transport: transport).read(route: route(.restHeader), using: try lease(), height: 42)
+            XCTAssertEqual(result.proof, .restHeader(expected: 42, actual: 42))
+        }
     }
 
     func testCometABCIProofUsesJSONRPCResponseHeightAndValue() async throws {
@@ -32,7 +36,7 @@ final class ThorNodeSendClientTests: XCTestCase {
         let result = try await ThorNodeSendClient(transport: transport).read(route: route(.cometABCI, path: "/cosmos.auth.v1beta1.Query/Account"), using: try lease(), height: 42, requestData: Data([1, 2]))
         XCTAssertEqual(result.value, Data(#"{"account_number":"1"}"#.utf8))
         XCTAssertEqual(result.proof, .cometABCI(expected: 42, actual: 42))
-        XCTAssertNil(transport.requests.first?.value(forHTTPHeaderField: "x-cosmos-block-height"))
+        XCTAssertNil(transport.requests.first?.value(forHTTPHeaderField: "Grpc-Metadata-X-Cosmos-Block-Height"))
         let components = URLComponents(url: try XCTUnwrap(transport.requests.first?.url), resolvingAgainstBaseURL: false)
         XCTAssertEqual(components?.path, "/abci_query")
         XCTAssertEqual(components?.queryItems?.first(where: { $0.name == "path" })?.value, "\"/cosmos.auth.v1beta1.Query/Account\"")
@@ -52,13 +56,28 @@ final class ThorNodeSendClientTests: XCTestCase {
         XCTAssertEqual(networkQuery?.first(where: { $0.name == "path" })?.value, "\"/types.Query/Network\"")
         XCTAssertEqual(networkQuery?.first(where: { $0.name == "data" })?.value, CometABCIEncoding.hex(requestData))
 
-        let spendableTransport = ScriptedSendTransport(data: Data(#"{"balance":{"denom":"rune","amount":"3"}}"#.utf8), headers: ["Content-Type": "application/json", "x-cosmos-block-height": "42"])
-        let spendableRoute = try XCTUnwrap(NativeRuneEndpointRegistry.capabilities().first?.routes.first { $0.route == "spendable-rune" })
-        _ = try await ThorNodeSendClient(transport: spendableTransport).read(route: spendableRoute, using: try lease(), height: 42, address: "thor1sender")
+        let spendableTransport = ScriptedSendTransport(data: Data(#"{"balance":{"denom":"rune","amount":"3"}}"#.utf8), headers: ["Content-Type": "application/json", "Grpc-Metadata-X-Cosmos-Block-Height": "42"])
+        let spendableRoute = try XCTUnwrap(NativeRuneEndpointRegistry.capabilities().first?.routes.first { $0.route == "spendable" })
+        _ = try await ThorNodeSendClient(transport: spendableTransport).read(route: spendableRoute, using: try lease(), height: 42, address: "thor1sender", queryParameterValue: "rune")
         let spendableURL = try XCTUnwrap(spendableTransport.requests.first?.url)
         let spendableComponents = URLComponents(url: spendableURL, resolvingAgainstBaseURL: false)
         XCTAssertEqual(spendableComponents?.path, "/cosmos/bank/v1beta1/spendable_balances/thor1sender/by_denom")
         XCTAssertEqual(spendableComponents?.queryItems?.first(where: { $0.name == "denom" })?.value, "rune")
+    }
+
+    func testSpendableRouteRefusesToQueryWithoutADenom() async throws {
+        let transport = ScriptedSendTransport(data: Data(#"{"balance":{"denom":"rune","amount":"3"}}"#.utf8), headers: ["Content-Type": "application/json", "Grpc-Metadata-X-Cosmos-Block-Height": "42"])
+        let route = try XCTUnwrap(NativeRuneEndpointRegistry.capabilities().first?.routes.first { $0.route == "spendable" })
+
+        // The manifest pins no denom, so omitting it at the call must fail closed rather
+        // than query every balance and read the answer as this denom's.
+        do {
+            _ = try await ThorNodeSendClient(transport: transport).read(route: route, using: try lease(), height: 42, address: "thor1sender")
+            XCTFail("expected the denom-less read to throw")
+        } catch {
+            XCTAssertEqual(error as? SendError, .policyUnavailable)
+        }
+        XCTAssertTrue(transport.requests.isEmpty)
     }
 
     func testEveryFamilyRouteRejectsMissingAndMismatchedContractFields() throws {

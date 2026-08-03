@@ -11,7 +11,7 @@ struct SendPolicy: Equatable, Sendable {
 
     init(memoMaximumBytes: Int = 256, operationDeadline: TimeInterval = 15, revision: String = "s2-02-v1") throws {
         guard memoMaximumBytes > 0, operationDeadline.isFinite, operationDeadline > 0, !revision.isEmpty else {
-            throw SendError.policyUnavailable
+            throw SendError.policyUnavailableLogged()
         }
         self.memoMaximumBytes = memoMaximumBytes
         self.operationDeadline = operationDeadline
@@ -31,20 +31,29 @@ struct SendPolicy: Equatable, Sendable {
         }
     }
 
-    func resolve(amount: SendAmount, spendableRune: BigUInt, nativeFee: BigUInt) throws -> BigUInt {
+    /// `spendable` funds the amount, `spendableRune` funds the fee. They are the same
+    /// balance when sending RUNE and two different ones otherwise, which is why the
+    /// two are checked separately rather than against a single total.
+    func resolve(amount: SendAmount, spendable: BigUInt, spendableRune: BigUInt, nativeFee: BigUInt, feeSharesBalance: Bool) throws -> BigUInt {
         guard spendableRune >= nativeFee else { throw SendError.insufficientBalance }
+        // Only a RUNE send has the fee competing with the amount for the same coins.
+        // Taken from the denom, not from comparing the two balances: they can be equal
+        // by coincidence, and that must not silently shrink the maximum.
+        // BigUInt underflow traps rather than throwing, and the caller's guarantee that
+        // the two balances are the same one when the fee shares them is not expressible here.
+        guard !feeSharesBalance || spendable >= nativeFee else { throw SendError.insufficientBalance }
+        let headroom = feeSharesBalance ? spendable - nativeFee : spendable
         let resolved: BigUInt
         if let exact = amount.exactAmount {
             guard exact > 0 else { throw SendError.invalidAmount }
             resolved = exact
         } else {
-            guard spendableRune > nativeFee else { throw SendError.insufficientBalance }
-            resolved = spendableRune - nativeFee
+            guard headroom > 0 else { throw SendError.insufficientBalance }
+            resolved = headroom
         }
-        guard resolved > 0, resolved <= spendableRune - nativeFee else {
+        guard resolved > 0, resolved <= headroom else {
             throw SendError.insufficientBalance
         }
-        guard resolved + nativeFee <= spendableRune else { throw SendError.insufficientBalance }
         return resolved
     }
 }
@@ -68,7 +77,7 @@ enum HaltEvaluator {
         guard height > 0,
               [mimir.haltChainGlobal, mimir.nodePauseChainGlobal, mimir.haltTHORChain, mimir.solvencyHaltTHORChain]
                 .allSatisfy({ $0 >= -1 })
-        else { throw SendError.policyUnavailable }
+        else { throw SendError.policyUnavailableLogged() }
 
         let halted = (mimir.haltChainGlobal > 0 && mimir.haltChainGlobal <= height)
             || (mimir.nodePauseChainGlobal > 0 && mimir.nodePauseChainGlobal >= height)
@@ -98,7 +107,7 @@ struct ForbiddenModuleAddressSet: Sendable, Equatable {
 
     init(current: String, querier: String, network: Network = .mainnet) throws {
         guard Self.supportedVersions.contains(current), Self.supportedVersions.contains(querier) else {
-            throw SendError.policyUnavailable
+            throw SendError.policyUnavailableLogged()
         }
         let names = Self.pinnedModuleVectors.map { $0.0 }
         var values = Set<String>()

@@ -15,6 +15,8 @@ struct SendJournalRecord: Sendable, Equatable {
     let sender: String
     let recipient: String
     let amount: Data
+    // What was sent. The fee is always RUNE, so this names only the amount's asset.
+    let denom: Denom
     let quotedNativeFee: Data
     let memo: String?
     let accountNumber: UInt64
@@ -52,6 +54,7 @@ final class SendJournal: @unchecked Sendable {
         sender: String,
         recipient: String,
         amount: Data,
+        denom: Denom,
         quotedNativeFee: Data,
         memo: String?,
         accountNumber: UInt64,
@@ -73,13 +76,13 @@ final class SendJournal: @unchecked Sendable {
                 sql: """
                 INSERT INTO send_journal
                 (persistence_namespace, local_hash, signed_tx_raw, sender_payload, recipient_payload,
-                 sender, recipient, amount, quoted_native_fee, memo, account_number, sequence,
+                 sender, recipient, amount, denom, quoted_native_fee, memo, account_number, sequence,
                  provider_family_id, quote_height, state, broadcast_generation, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     persistenceNamespace, transaction.transactionID.hash, transaction.txRaw,
-                    senderPayload, recipientPayload, sender, recipient, amount,
+                    senderPayload, recipientPayload, sender, recipient, amount, denom.rawValue,
                     quotedNativeFee, memo, String(accountNumber), String(sequence),
                     providerFamilyID, String(quoteHeight), SendJournalState.broadcasting.rawValue,
                     Int64(generation), timestamp, timestamp
@@ -268,7 +271,14 @@ final class SendJournal: @unchecked Sendable {
         let diagnostic = rawDiagnostic.flatMap(BroadcastDiagnostic.init(rawValue:))
         return SendJournalRecord(
             persistenceNamespace: persistenceNamespace, transactionID: transactionID, signedTxRaw: raw,
-            sender: sender, recipient: recipient, amount: amount, quotedNativeFee: fee,
+            sender: sender, recipient: recipient, amount: amount,
+            denom: try {
+                // Every neighbouring field throws on unreadable data; defaulting to RUNE
+                // here would turn a stored TCY send into a displayed RUNE send.
+                guard let raw: String = row["denom"] else { throw SendError.storageUnavailable }
+                return try Denom(rawValue: raw)
+            }(),
+            quotedNativeFee: fee,
             memo: row["memo"], accountNumber: accountNumber, sequence: sequence,
             providerFamilyID: family, quoteHeight: height, state: state,
             broadcastGeneration: UInt64(generationValue), retryBlockedReason: reason,

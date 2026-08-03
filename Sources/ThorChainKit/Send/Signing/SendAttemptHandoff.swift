@@ -7,6 +7,8 @@ struct SendAttemptHandoff: Sendable {
     let recipient: String
     let recipientPayload: Data
     let amount: Data
+    // Carried from the snapshot so the journal records what was actually sent.
+    let denom: Denom
     let quotedNativeFee: Data
     let memo: String?
     let accountNumber: UInt64

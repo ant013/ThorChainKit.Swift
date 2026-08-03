@@ -37,7 +37,6 @@ enum DirectSignCodec {
         guard prepared.snapshot == snapshot,
               quote.hasConsistentAuthorityProjection,
               quote.preflightContext == snapshot,
-              !quote.isMaximum,
               quote.amount > 0,
               quote.internalAuthorityRecord.snapshot.sender == snapshot.sender,
               quote.internalAuthorityRecord.snapshot.recipient == snapshot.recipient,
@@ -53,7 +52,7 @@ enum DirectSignCodec {
 
         let sender = try addressPayload(snapshot.sender)
         let recipient = try addressPayload(snapshot.recipient)
-        let message = try msgSend(sender: sender, recipient: recipient, amount: quote.amount)
+        let message = try msgSend(sender: sender, recipient: recipient, amount: quote.amount, denom: snapshot.denom)
         let anyMessage = SwiftProtobuf.Google_Protobuf_Any.with {
             $0.typeURL = msgSendTypeURL
             $0.value = message
@@ -116,12 +115,12 @@ enum DirectSignCodec {
         return TransactionID(hash: hash)!
     }
 
-    private static func msgSend(sender: Data, recipient: Data, amount: BigUInt) throws -> Data {
+    private static func msgSend(sender: Data, recipient: Data, amount: BigUInt, denom: Denom) throws -> Data {
         var message = Types_MsgSend()
         message.fromAddress = sender
         message.toAddress = recipient
         var coin = Cosmos_Base_V1beta1_Coin()
-        coin.denom = "rune"
+        coin.denom = denom.rawValue
         coin.amount = String(amount)
         message.amount = [coin]
         return try message.serializedData()

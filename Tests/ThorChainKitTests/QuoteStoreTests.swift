@@ -3,6 +3,26 @@ import XCTest
 @testable import ThorChainKit
 
 final class QuoteStoreTests: XCTestCase {
+    func testWallClockExpiryMatchesTheMonotonicDeadline() throws {
+        // Two clocks describe the same lifetime: the monotonic one gates consume(), the
+        // wall clock becomes quote.expiresAt and is the only barrier before broadcast.
+        // Nothing else ties them together, so a change to one must change the other.
+        let issuedAt = Date()
+        let quote = try QuoteStore(clock: TestSendClock()).issue(
+            sender: try sendTestAddress(),
+            recipient: try sendOtherAddress(),
+            amountMagnitude: SendMagnitude(3).data,
+            isMaximum: false,
+            nativeFeeMagnitude: SendMagnitude(1).data,
+            totalDebitMagnitude: SendMagnitude(4).data,
+            memo: nil,
+            acceptedHeight: 12,
+            generation: 1
+        )
+
+        XCTAssertEqual(quote.expiresAt.timeIntervalSince(issuedAt), 120, accuracy: 2)
+    }
+
     func testConsumeIsAtomicAndOneUse() throws {
         let clock = TestSendClock()
         let store = QuoteStore(clock: clock)
@@ -35,16 +55,16 @@ final class QuoteStoreTests: XCTestCase {
         )
     }
 
-    func testExpiryUsesTenSecondExclusiveBoundary() throws {
+    func testExpiryUsesTheQuoteLifetimeAsAnExclusiveBoundary() throws {
         let clock = TestSendClock()
         let store = QuoteStore(clock: clock)
         let quote = try issueTestQuote(in: store, clock: clock)
 
-        clock.now += 9_999_999_999
+        clock.now += 119_999_999_999
         XCTAssertNoThrow(try store.consume(quote, activeGeneration: 7))
 
         let second = try issueTestQuote(in: store, clock: clock, generation: 8)
-        clock.now += 10_000_000_000
+        clock.now += 120_000_000_000
         XCTAssertThrowsError(try store.consume(second, activeGeneration: 8)) { error in
             XCTAssertEqual(error as? SendError, .quoteExpired)
         }
@@ -321,7 +341,7 @@ final class QuoteStoreTests: XCTestCase {
 
         store.invalidate(generation: 3)
         XCTAssertFalse(store.isEmpty())
-        clock.now += 9_999_999_999
+        clock.now += 119_999_999_999
         XCTAssertFalse(store.isEmpty())
         clock.now += 1
         XCTAssertTrue(store.isEmpty())
@@ -337,7 +357,7 @@ final class QuoteStoreTests: XCTestCase {
 
         XCTAssertNoThrow(try store.consume(quote, activeGeneration: 7))
         XCTAssertFalse(store.isEmpty())
-        clock.now += 10_000_000_000 - 1
+        clock.now += 120_000_000_000 - 1
         XCTAssertFalse(store.isEmpty())
         clock.now += 1
         XCTAssertTrue(store.isEmpty())

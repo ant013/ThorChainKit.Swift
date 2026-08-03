@@ -22,7 +22,7 @@ final class TransactionRepository: @unchecked Sendable {
     func transactions(hash: String? = nil, descending: Bool = true, limit: Int? = nil) throws -> [Transaction] {
         guard limit.map({ $0 > 0 }) ?? true else { return [] }
         return try storage.read { db in
-            var sql = "SELECT tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing FROM transactions WHERE persistence_namespace = ?"
+            var sql = "SELECT tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing, fee FROM transactions WHERE persistence_namespace = ?"
             var arguments: [any DatabaseValueConvertible] = [persistenceNamespace]
             if let hash,
                let cursor = try Row.fetchOne(
@@ -52,7 +52,7 @@ final class TransactionRepository: @unchecked Sendable {
         try storage.read { db in
             try Row.fetchAll(
                 db,
-                sql: "SELECT tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing FROM transactions WHERE persistence_namespace = ? AND status = ? ORDER BY timestamp DESC, tx_hash DESC",
+                sql: "SELECT tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing, fee FROM transactions WHERE persistence_namespace = ? AND status = ? ORDER BY timestamp DESC, tx_hash DESC",
                 arguments: [persistenceNamespace, "pending"]
             ).map(Self.transaction)
         }
@@ -71,7 +71,7 @@ final class TransactionRepository: @unchecked Sendable {
         for transaction in transactions {
             if let existing = try Row.fetchOne(
                 db,
-                sql: "SELECT tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing FROM transactions WHERE persistence_namespace = ? AND tx_hash = ?",
+                sql: "SELECT tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing, fee FROM transactions WHERE persistence_namespace = ? AND tx_hash = ?",
                 arguments: [persistenceNamespace, transaction.transactionId.hash]
             ),
                 let persisted = try? Self.transaction(existing),
@@ -82,8 +82,8 @@ final class TransactionRepository: @unchecked Sendable {
             try db.execute(
                     sql: """
                     INSERT INTO transactions
-                    (persistence_namespace, tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing, processed)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                    (persistence_namespace, tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing, fee, processed)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
                     ON CONFLICT(persistence_namespace, tx_hash) DO UPDATE SET
                         block_height = excluded.block_height,
                         timestamp = excluded.timestamp,
@@ -92,6 +92,7 @@ final class TransactionRepository: @unchecked Sendable {
                         memo = excluded.memo,
                         incoming = excluded.incoming,
                         outgoing = excluded.outgoing,
+                        fee = excluded.fee,
                         processed = 0
                     """,
                     arguments: [
@@ -104,6 +105,7 @@ final class TransactionRepository: @unchecked Sendable {
                         transaction.memo,
                         try Self.transferData(transaction.incoming),
                         try Self.transferData(transaction.outgoing),
+                        transaction.fee.map(String.init),
                     ]
             )
             changed.append(transaction)
@@ -117,8 +119,8 @@ final class TransactionRepository: @unchecked Sendable {
             try db.execute(
                 sql: """
                 INSERT INTO transactions
-                (persistence_namespace, tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing, processed)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                (persistence_namespace, tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing, fee, processed)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
                 ON CONFLICT(persistence_namespace, tx_hash) DO NOTHING
                 """,
                 arguments: [
@@ -131,6 +133,7 @@ final class TransactionRepository: @unchecked Sendable {
                     transaction.memo,
                     try Self.transferData(transaction.incoming),
                     try Self.transferData(transaction.outgoing),
+                    transaction.fee.map(String.init),
                 ]
             )
             if db.changesCount == 1 { inserted.append(transaction) }
@@ -147,7 +150,7 @@ final class TransactionRepository: @unchecked Sendable {
     func unprocessedTransactions(in db: Database) throws -> [Transaction] {
         try Row.fetchAll(
             db,
-            sql: "SELECT tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing FROM transactions WHERE persistence_namespace = ? AND processed = 0",
+            sql: "SELECT tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing, fee FROM transactions WHERE persistence_namespace = ? AND processed = 0",
             arguments: [persistenceNamespace]
         ).map(Self.transaction)
     }
@@ -155,7 +158,7 @@ final class TransactionRepository: @unchecked Sendable {
     func pendingTransaction(transactionID: TransactionID, in db: Database) throws -> Transaction? {
         try Row.fetchOne(
             db,
-            sql: "SELECT tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing FROM transactions WHERE persistence_namespace = ? AND tx_hash = ? AND status = ?",
+            sql: "SELECT tx_hash, block_height, timestamp, type, status, memo, incoming, outgoing, fee FROM transactions WHERE persistence_namespace = ? AND tx_hash = ? AND status = ?",
             arguments: [persistenceNamespace, transactionID.hash, "pending"]
         ).map(Self.transaction)
     }
@@ -225,6 +228,7 @@ final class TransactionRepository: @unchecked Sendable {
         else {
             throw StorageError.invalid
         }
+        let feeRaw: String? = row["fee"]
         return Transaction(
             transactionId: transactionId,
             blockHeight: height,
@@ -234,7 +238,8 @@ final class TransactionRepository: @unchecked Sendable {
             status: status,
             memo: row["memo"],
             incoming: try transfers(incoming),
-            outgoing: try transfers(outgoing)
+            outgoing: try transfers(outgoing),
+            fee: feeRaw.flatMap { BigUInt($0) }
         )
     }
 

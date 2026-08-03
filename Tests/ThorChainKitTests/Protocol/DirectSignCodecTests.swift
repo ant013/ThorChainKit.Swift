@@ -104,13 +104,40 @@ final class DirectSignCodecTests: XCTestCase {
         XCTAssertTrue(key.ecdsa.isValidSignature(parsedSignature, for: SHA256.hash(data: payload.signDocBytes)))
     }
 
-    func testCodecRejectsMaximumMemoOverflowAndMalformedPublicKeyFraming() throws {
+    func testCodecSignsAMaximumRequestBecauseItsAmountIsAlreadyResolved() throws {
         let snapshot = try makeSnapshot()
-        XCTAssertThrowsError(try makePayload(snapshot: snapshot, isMaximum: true))
+
+        // `isMaximum` records how the user asked, not an unresolved amount: SendPolicy
+        // resolved it into a concrete number before the quote existed. Refusing here
+        // stranded every "send all", which for a token is the normal case — the fee is
+        // charged in RUNE and does not reduce the token balance.
+        let maximum = try makePayload(snapshot: snapshot, isMaximum: true)
+        let exact = try makePayload(snapshot: snapshot, isMaximum: false)
+        XCTAssertEqual(maximum.signDocBytes, exact.signDocBytes)
+    }
+
+    func testCodecRejectsMemoOverflowAndMalformedPublicKeyFraming() throws {
+        let snapshot = try makeSnapshot()
         XCTAssertThrowsError(try makePayload(snapshot: snapshot, memo: String(repeating: "a", count: 257)))
         for malformedKey in [Data(repeating: 2, count: 32), Data([4] + Array(repeating: UInt8(0), count: 32))] {
             XCTAssertThrowsError(try makePayload(snapshot: snapshot, publicKey: malformedKey))
         }
+    }
+
+    func testSignedTransactionCarriesTheSnapshotDenomNotRune() throws {
+        // The whole point of the denom work: a TCY send must put "tcy" in the coin.
+        // Hardcoding "rune" here would move the wrong asset in the amount computed
+        // from the TCY balance, and until this test existed nothing caught it.
+        let tcy = try Denom(rawValue: "tcy")
+        let payload = try makePayload(snapshot: try makeSnapshot(denom: tcy))
+        let runePayload = try makePayload(snapshot: try makeSnapshot())
+
+        let body = try Cosmos_Tx_V1beta1_TxBody(serializedBytes: payload.bodyBytes)
+        let message = try Types_MsgSend(serializedBytes: body.messages[0].value)
+
+        XCTAssertEqual(message.amount.first?.denom, "tcy")
+        XCTAssertEqual(message.amount.first?.amount, "100000000")
+        XCTAssertNotEqual(payload.signDocBytes, runePayload.signDocBytes)
     }
 
     private func makePayload(snapshot: SendSnapshot, publicKey: Data? = nil, isMaximum: Bool = false, memo: String? = nil) throws -> SignPayload {
@@ -127,7 +154,7 @@ final class DirectSignCodecTests: XCTestCase {
         return try makePayload(snapshot: snapshot, publicKey: publicKey)
     }
 
-    private func makeSnapshot(sender: String = "thor1w508d6qejxtdg4y5r3zarvary0c5xw7ku6wp68", publicKey: Data? = nil) throws -> SendSnapshot {
+    private func makeSnapshot(sender: String = "thor1w508d6qejxtdg4y5r3zarvary0c5xw7ku6wp68", publicKey: Data? = nil, denom: Denom = .rune) throws -> SendSnapshot {
         try SendSnapshot(
             familyID: "thorchain-mainnet",
             chainID: "thorchain-1",
@@ -139,6 +166,7 @@ final class DirectSignCodecTests: XCTestCase {
             amount: BigUInt(100_000_000),
             nativeFee: 0,
             spendableRune: BigUInt(100_000_000),
+            denom: denom,
             mimir: MimirSnapshot(haltChainGlobal: -1, nodePauseChainGlobal: -1, haltTHORChain: -1, solvencyHaltTHORChain: -1),
             memoMaximumBytes: 256,
             nodeVersion: "3.19.3",

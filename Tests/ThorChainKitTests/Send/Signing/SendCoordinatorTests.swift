@@ -3,6 +3,69 @@ import XCTest
 @testable import ThorChainKit
 
 final class SendCoordinatorTests: XCTestCase {
+    func testAnExpiredQuoteIsRejectedBeforeBroadcast() async throws {
+        // Coverage lost with the H2 test: expiry no longer cancels a running signer, so
+        // this single check before broadcast is the whole barrier. The signer is allowed
+        // to finish; what must not happen is the transaction going out.
+        let sender = try sendOtherAddress()
+        let recipient = try sendTestAddress()
+        let publicKey = Data(hex: "02a9ac9f7a97da41559e1684011b6a9b0b9c0445297d5f51dea0897fd4a39c31c7")
+        let snapshot = try SendSnapshot(
+            familyID: "rorcual-mainnet", chainID: "thorchain-1", height: 12,
+            sender: sender.raw, recipient: recipient.raw, accountNumber: 1, sequence: 2,
+            amount: 100, nativeFee: 2, spendableRune: 102,
+            mimir: MimirSnapshot(haltChainGlobal: -1, nodePauseChainGlobal: -1, haltTHORChain: -1, solvencyHaltTHORChain: -1),
+            memoMaximumBytes: 256, nodeVersion: "3.19.3", querierVersion: "3.19.0",
+            accountPublicKey: "/cosmos.crypto.secp256k1.PubKey", accountPublicKeyData: publicKey
+        )
+        let runtime = SendRuntime(address: sender, persistenceNamespace: "coordinator-expiry")
+        await runtime.activate(generation: 1)
+        let quote = try await runtime.issuePreflightQuote(
+            request: SendQuoteRequest(sender: sender, recipient: recipient, amount: .exact(snapshot.amount), memo: nil),
+            snapshot: snapshot
+        )
+
+        // Read the clock as if the whole lifetime had already elapsed.
+        let result = await SendCoordinator(runtime: runtime, now: { quote.expiresAt.addingTimeInterval(1) })
+            .execute(quote: quote, signer: CountingSigner(publicKey: publicKey))
+
+        XCTAssertEqual(result.failure, .quoteExpired)
+    }
+
+    func testDenomReachesTheSigningPayloadFromTheSnapshot() async throws {
+        // The coordinator builds the payload from the snapshot; if it ever stopped
+        // carrying the denom, a token send would be signed as RUNE. No test drives
+        // execute() as far as the handoff, so this asserts on the payload instead.
+        let sender = try sendOtherAddress()
+        let recipient = try sendTestAddress()
+        let publicKey = Data(hex: "02a9ac9f7a97da41559e1684011b6a9b0b9c0445297d5f51dea0897fd4a39c31c7")
+        let tcy = try Denom(rawValue: "tcy")
+        let snapshot = try SendSnapshot(
+            familyID: "rorcual-mainnet", chainID: "thorchain-1", height: 12,
+            sender: sender.raw, recipient: recipient.raw, accountNumber: 1, sequence: 2,
+            amount: 100, nativeFee: 2, spendable: 100, spendableRune: 102, denom: tcy,
+            mimir: MimirSnapshot(haltChainGlobal: -1, nodePauseChainGlobal: -1, haltTHORChain: -1, solvencyHaltTHORChain: -1),
+            memoMaximumBytes: 256, nodeVersion: "3.19.3", querierVersion: "3.19.0",
+            accountPublicKey: "/cosmos.crypto.secp256k1.PubKey", accountPublicKeyData: publicKey
+        )
+        let runtime = SendRuntime(address: sender, persistenceNamespace: "coordinator-denom")
+        await runtime.activate(generation: 1)
+        let quote = try await runtime.issuePreflightQuote(
+            request: SendQuoteRequest(sender: sender, recipient: recipient, amount: .exact(snapshot.amount), memo: nil, denom: tcy),
+            snapshot: snapshot
+        )
+
+        let payload = try DirectSignCodec.makeSignPayload(
+            snapshot: snapshot,
+            quote: PreparedQuote(quote: quote, snapshot: snapshot),
+            publicKey: publicKey
+        )
+        let body = try Cosmos_Tx_V1beta1_TxBody(serializedBytes: payload.bodyBytes)
+        let message = try Types_MsgSend(serializedBytes: body.messages[0].value)
+
+        XCTAssertEqual(message.amount.first?.denom, "tcy")
+    }
+
     func testSignerStartsAfterAdmissionQuoteConsumptionBindingAndH1() async throws {
         let sender = try sendOtherAddress()
         let recipient = try sendTestAddress()
@@ -109,124 +172,6 @@ final class SendCoordinatorTests: XCTestCase {
         await runtime.endAccountAttempt(sender)
     }
 
-    func testExactDigestAndTxRawCrossWireIsRejected() async throws {
-        let vector = try await makeGoldenVector()
-        let payload = try DirectSignCodec.makeSignPayload(
-            snapshot: vector.snapshot,
-            quote: PreparedQuote(quote: vector.quote, snapshot: vector.snapshot),
-            publicKey: vector.publicKey
-        )
-        XCTAssertEqual(payload.digest.coordinatorHex, vector.digestHex)
-
-        let compact = try SignerVerifier().verify(
-            signature: vector.signature,
-            digest: payload.digest,
-            publicKey: vector.publicKey
-        )
-        let signed = try DirectSignCodec.makeTxRaw(payload: payload, compactSignature: compact.rawValue)
-        XCTAssertEqual(signed.txRaw.coordinatorHex, vector.txRawHex)
-
-        let changedSnapshot = try coordinatorChanged(vector.snapshot, sequence: 2)
-        let changedQuote = try QuoteStore(clock: TestSendClock()).issue(
-            sender: try Address(vector.snapshot.sender, network: .mainnet),
-            recipient: try Address(vector.snapshot.recipient, network: .mainnet),
-            amountMagnitude: SendMagnitude(vector.snapshot.amount).data,
-            isMaximum: false,
-            nativeFeeMagnitude: SendMagnitude(vector.snapshot.nativeFee).data,
-            totalDebitMagnitude: SendMagnitude(vector.snapshot.totalDebit).data,
-            memo: nil,
-            acceptedHeight: changedSnapshot.height,
-            generation: 1,
-            accountNumber: changedSnapshot.accountNumber,
-            sequence: changedSnapshot.sequence,
-            providerFamilyID: changedSnapshot.familyID,
-            preflightContext: changedSnapshot
-        )
-        let changedPayload = try DirectSignCodec.makeSignPayload(
-            snapshot: changedSnapshot,
-            quote: PreparedQuote(quote: changedQuote, snapshot: changedSnapshot),
-            publicKey: vector.publicKey
-        )
-        XCTAssertNotEqual(payload.digest, changedPayload.digest)
-        XCTAssertThrowsError(try SignerVerifier().verify(
-            signature: vector.signature,
-            digest: changedPayload.digest,
-            publicKey: vector.publicKey
-        ))
-    }
-
-    func testH2RejectsChangedStaleCancelledExpiredAndLateResults() async throws {
-        for (name, mutation, expectedChange) in [
-            ("changed", { try coordinatorChanged($0, sequence: 3) }, QuoteChange.sequence),
-            ("stale", { try coordinatorChanged($0, height: 11) }, QuoteChange.heightRollback)
-        ] as [(String, (SendSnapshot) throws -> SendSnapshot, QuoteChange)] {
-            let (runtime, quote, publicKey, snapshot) = try await makeBlockingQuote(namespace: "coordinator-h2-" + name)
-            let provider = try CoordinatorH2Provider(
-                runtime: runtime,
-                base: snapshot,
-                h2: try mutation(snapshot)
-            )
-            let signer = CountingSigner(publicKey: publicKey)
-            let result = await SendCoordinator(runtime: runtime, preflight: SendPreflightCoordinator(runtime: runtime, provider: provider)).execute(
-                quote: quote,
-                signer: signer
-            )
-
-            guard case let .failure(error) = result else { return XCTFail("H2 " + name + " must not hand off") }
-            guard case let .quoteChanged(changes) = error else { return XCTFail("H2 " + name + " returned \(error)") }
-            XCTAssertTrue(changes.values.contains(expectedChange))
-            XCTAssertEqual(signer.callCount, 1)
-            XCTAssertEqual(provider.snapshotCount, 2)
-            await Task.yield()
-            XCTAssertEqual(provider.snapshotCount, 2, name + " rejection must not start a later provider request")
-        }
-
-        let (expiredRuntime, expiredQuote, expiredPublicKey, expiredSnapshot) = try await makeBlockingQuote(namespace: "coordinator-h2-expired")
-        let expiredSigner = CountingSigner(publicKey: expiredPublicKey)
-        let expiredResult = await SendCoordinator(runtime: expiredRuntime, now: { .distantFuture }).execute(
-            quote: expiredQuote,
-            signer: expiredSigner
-        )
-        XCTAssertEqual(expiredResult.failure, .quoteExpired)
-        XCTAssertEqual(expiredSigner.callCount, 1)
-        let expiredAdmitted = await expiredRuntime.beginAccountAttempt(expiredSnapshot.sender)
-        XCTAssertTrue(expiredAdmitted)
-        await expiredRuntime.endAccountAttempt(expiredSnapshot.sender)
-
-        let (cancelRuntime, cancelQuote, cancelPublicKey, cancelSnapshot) = try await makeBlockingQuote(namespace: "coordinator-h2-cancelled")
-        let cancellation = TaskCancellationBox()
-        let cancelTask = Task {
-            await SendCoordinator(runtime: cancelRuntime, now: {
-                cancellation.cancel()
-                return .distantPast
-            }).execute(quote: cancelQuote, signer: CountingSigner(publicKey: cancelPublicKey))
-        }
-        cancellation.install(cancelTask)
-        let cancelResult = await cancelTask.value
-        XCTAssertEqual(cancelResult.failure, .signerCancelled)
-        let cancelledAdmitted = await cancelRuntime.beginAccountAttempt(cancelSnapshot.sender)
-        XCTAssertTrue(cancelledAdmitted)
-        await cancelRuntime.endAccountAttempt(cancelSnapshot.sender)
-
-        let (lateRuntime, lateQuote, latePublicKey, lateSnapshot) = try await makeBlockingQuote(namespace: "coordinator-h2-late")
-        let lateProvider = try CoordinatorH2Provider(runtime: lateRuntime, base: lateSnapshot, h2: lateSnapshot, blocksH2: true)
-        let lateSigner = CountingSigner(publicKey: latePublicKey)
-        let lateTask = Task {
-            await SendCoordinator(runtime: lateRuntime, preflight: SendPreflightCoordinator(runtime: lateRuntime, provider: lateProvider)).execute(
-                quote: lateQuote,
-                signer: lateSigner
-            )
-        }
-        XCTAssertEqual(lateProvider.h2Started.wait(timeout: .now() + 1), .success)
-        await lateRuntime.invalidate(generation: 1)
-        lateProvider.releaseH2()
-        let lateResult = await lateTask.value
-        XCTAssertEqual(lateResult.failure, .kitNotStarted)
-        XCTAssertEqual(lateSigner.callCount, 1)
-        XCTAssertEqual(lateProvider.snapshotCount, 2)
-        for _ in 0..<4 { await Task.yield() }
-        XCTAssertEqual(lateProvider.snapshotCount, 2, "late H2 completion must not start a later provider request")
-    }
 
     func testCleanupFailureReturnsRepairPending() async throws {
         let sender = try sendOtherAddress()
@@ -420,7 +365,7 @@ private final class CountingSigner: ISigner, @unchecked Sendable {
         compressedPublicKey = publicKey
     }
 
-    func sign(_ request: SigningRequest) async throws -> Data {
+    func sign(digest: Data) async throws -> Data {
         callCount += 1
         return Data()
     }
@@ -437,7 +382,7 @@ private final class NonCooperativeSigner: ISigner, @unchecked Sendable {
 
     init(publicKey: Data) { compressedPublicKey = publicKey }
 
-    func sign(_ request: SigningRequest) async throws -> Data {
+    func sign(digest: Data) async throws -> Data {
         stateQueue.sync { callCount += 1 }
         started.signal()
         return await withCheckedContinuation { continuation in

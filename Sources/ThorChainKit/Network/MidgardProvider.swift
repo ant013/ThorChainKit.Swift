@@ -201,6 +201,11 @@ indirect enum MidgardJSONValue: Decodable, Sendable {
         return value
     }
 
+    var array: [MidgardJSONValue]? {
+        guard case let .array(value) = self else { return nil }
+        return value
+    }
+
     var string: String? {
         guard case let .string(value) = self else { return nil }
         return value

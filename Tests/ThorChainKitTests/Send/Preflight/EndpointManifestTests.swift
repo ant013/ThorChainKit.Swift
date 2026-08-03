@@ -31,10 +31,11 @@ final class EndpointManifestTests: XCTestCase {
             XCTAssertTrue(capability.routes.allSatisfy { !$0.path.isEmpty && !$0.supportedNodeRevision.isEmpty })
             XCTAssertEqual(capability.routes.filter { $0.queryKey != nil }.count, 4)
             XCTAssertEqual(Set(capability.routes.compactMap(\.queryKey)), ["HaltChainGlobal", "NodePauseChainGlobal", "HaltTHORChain", "SolvencyHaltTHORChain"])
-            let spendable = capability.routes.first { $0.route == "spendable-rune" }!
+            let spendable = capability.routes.first { $0.route == "spendable" }!
             XCTAssertEqual(spendable.path, "/cosmos/bank/v1beta1/spendable_balances/{address}/by_denom")
             XCTAssertEqual(spendable.queryParameterName, "denom")
-            XCTAssertEqual(spendable.queryParameterValue, "rune")
+            // The denom is caller-supplied, so the manifest pins the name and not the value.
+            XCTAssertNil(spendable.queryParameterValue)
             XCTAssertNil(spendable.historicalHeightParameter)
             XCTAssertNil(capability.routes.first { $0.route == "auth-params" }?.historicalHeightParameter)
             XCTAssertEqual(capability.routes.filter { $0.route.hasPrefix("mimir-") || $0.route == "node-version" }.count, 5)
@@ -53,7 +54,7 @@ final class EndpointManifestTests: XCTestCase {
 
     func testEveryFamilyPinsEveryRouteToOneProofAndEncoding() {
         let expectedRoutes = Set([
-            "account", "spendable-rune", "network-fee",
+            "account", "spendable", "network-fee",
             "mimir-halt-chain-global", "mimir-node-pause-chain-global",
             "mimir-halt-thorchain", "mimir-solvency-halt-thorchain",
             "auth-params", "node-version", "recipient-account"

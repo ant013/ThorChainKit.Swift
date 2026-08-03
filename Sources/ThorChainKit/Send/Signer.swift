@@ -11,7 +11,7 @@ import HsCryptoKit
 /// a protocol rather than collapsing into the concrete type.
 public protocol ISigner: Sendable {
     var compressedPublicKey: Data { get }
-    func sign(_ request: SigningRequest) async throws -> Data
+    func sign(digest: Data) async throws -> Data
 }
 
 public final class Signer: ISigner, @unchecked Sendable {
@@ -23,8 +23,8 @@ public final class Signer: ISigner, @unchecked Sendable {
         compressedPublicKey = Crypto.publicKey(privateKey: privateKey, compressed: true)
     }
 
-    public func sign(_ request: SigningRequest) async throws -> Data {
-        try Self.sign(digest: request.digest, privateKey: privateKey)
+    public func sign(digest: Data) async throws -> Data {
+        try Self.sign(digest: digest, privateKey: privateKey)
     }
 }
 

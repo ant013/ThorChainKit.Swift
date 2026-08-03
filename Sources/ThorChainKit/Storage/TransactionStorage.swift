@@ -50,6 +50,7 @@ final class TransactionStorage {
                 table.column("sender", .text).notNull()
                 table.column("recipient", .text).notNull()
                 table.column("amount", .text).notNull()
+                table.column("denom", .text).notNull().defaults(to: "rune")
                 table.column("quoted_native_fee", .text).notNull()
                 table.column("memo", .text)
                 table.column("account_number", .text).notNull()
@@ -79,6 +80,7 @@ final class TransactionStorage {
                 table.column("memo", .text)
                 table.column("incoming", .blob).notNull()
                 table.column("outgoing", .blob).notNull()
+                table.column("fee", .text)
                 table.column("processed", .boolean).notNull().defaults(to: false)
                 table.primaryKey(["persistence_namespace", "tx_hash"])
             }

@@ -2,20 +2,17 @@ import Foundation
 
 actor SendCoordinator {
     private let runtime: TransactionSender
-    private let preflight: SendPreflightCoordinator?
     private let persistenceNamespace: String
     private let network: Network
     private let now: @Sendable () -> Date
 
     init(
         runtime: TransactionSender,
-        preflight: SendPreflightCoordinator? = nil,
         persistenceNamespace: String = "",
         network: Network = .mainnet,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.runtime = runtime
-        self.preflight = preflight
         self.persistenceNamespace = persistenceNamespace
         self.network = network
         self.now = now
@@ -52,14 +49,7 @@ actor SendCoordinator {
         do {
             try await runtime.consumeQuote(quote)
             let publicKey = signer.compressedPublicKey
-            let h1: SendSnapshot
-            if let preflight, let context = quote.preflightContext {
-                h1 = try await preflight.revalidate(PreparedQuote(quote: quote, snapshot: context)).snapshot
-            } else if let context = quote.preflightContext {
-                h1 = context
-            } else {
-                throw SendError.operationUnavailable
-            }
+            guard let h1 = quote.preflightContext else { throw SendError.operationUnavailable }
             try bind(publicKey: publicKey, snapshot: h1)
             guard try await runtime.acquireReservation(sender: sender, sequence: h1.sequence, ownerToken: ownerToken) else {
                 throw SendError.sendInProgress
@@ -67,12 +57,12 @@ actor SendCoordinator {
             reservationAcquired = true
 
             let prepared = PreparedQuote(quote: quote, snapshot: h1)
-            let (request, payload) = try SigningRequestFactory().make(snapshot: h1, prepared: prepared, publicKey: publicKey)
+            let payload = try DirectSignCodec.makeSignPayload(snapshot: h1, quote: prepared, publicKey: publicKey)
             guard await runtime.beginSignerFence(sender) else { throw SendError.sendInProgress }
             signerFenceAcquired = true
             let signerResult = await runSigner(
                 signer,
-                request: request,
+                digest: payload.digest,
                 sender: sender,
                 expiresAt: quote.expiresAt
             )
@@ -88,22 +78,6 @@ actor SendCoordinator {
             case let .failure(error): throw error
             }
 
-            let h2: SendSnapshot
-            if let preflight, let context = quote.preflightContext {
-                h2 = try await preflight.revalidate(PreparedQuote(quote: quote, snapshot: context)).snapshot
-            } else {
-                h2 = h1
-            }
-            guard h2.sender == h1.sender,
-                  h2.recipient == h1.recipient,
-                  h2.accountNumber == h1.accountNumber,
-                  h2.sequence == h1.sequence,
-                  h2.familyID == h1.familyID,
-                  h2.chainID == h1.chainID,
-                  h2.amount == h1.amount,
-                  h2.nativeFee == h1.nativeFee
-            else { throw SendError.quoteChanged(QuoteChanges(validating: [.sequence])!) }
-            try bind(publicKey: publicKey, snapshot: h2)
             try Task.checkCancellation()
             guard quote.expiresAt > now() else { throw SendError.quoteExpired }
             try Task.checkCancellation()
@@ -118,6 +92,7 @@ actor SendCoordinator {
                 recipient: h1.recipient,
                 recipientPayload: try Address(h1.recipient, network: network).payload,
                 amount: SendMagnitude(h1.amount).data,
+                denom: h1.denom,
                 quotedNativeFee: SendMagnitude(h1.nativeFee).data,
                 memo: quote.memo,
                 accountNumber: h1.accountNumber,
@@ -134,7 +109,6 @@ actor SendCoordinator {
         } catch let error as SignerRaceFailure {
             switch error {
             case .signerCancelled: result = .failure(.signerCancelled)
-            case .quoteExpired: result = .failure(.quoteExpired)
             case .signerFailed: result = .failure(.signerFailed)
             }
         } catch let error as SendError {
@@ -159,20 +133,16 @@ actor SendCoordinator {
 
     private func runSigner(
         _ signer: any ISigner,
-        request: SigningRequest,
+        digest: Data,
         sender: String,
         expiresAt: Date
     ) async -> SignerRaceResult {
-        let operation = SignerOperation(signer: signer, request: request, runtime: runtime, sender: sender)
+        // Expiry deliberately does NOT cancel a signer that has already started: the
+        // user is mid-Face-ID and cannot be blamed for how long authentication takes.
+        // The quote is still checked once before broadcast, which is the barrier that
+        // matters — it cannot interrupt work already under way.
+        let operation = SignerOperation(signer: signer, digest: digest, runtime: runtime, sender: sender)
         operation.start()
-        let expiryTask = Task { [operation] in
-            let remaining = max(0, expiresAt.timeIntervalSinceNow)
-            do {
-                try await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
-                operation.cancel(.quoteExpired)
-            } catch {}
-        }
-        defer { expiryTask.cancel() }
         return await withTaskCancellationHandler(operation: {
             await operation.wait()
         }, onCancel: {
@@ -240,7 +210,6 @@ actor SendCoordinator {
 
 private enum SignerRaceFailure: Error, Sendable {
     case signerCancelled
-    case quoteExpired
     case signerFailed
 }
 
@@ -256,7 +225,7 @@ private struct SignerRaceResult: Sendable {
 
 private final class SignerOperation: @unchecked Sendable {
     private let signer: any ISigner
-    private let request: SigningRequest
+    private let digest: Data
     private let runtime: TransactionSender
     private let sender: String
     private let lock = NSLock()
@@ -264,9 +233,9 @@ private final class SignerOperation: @unchecked Sendable {
     private var result: SignerRaceResult?
     private var waiter: CheckedContinuation<SignerRaceResult, Never>?
 
-    init(signer: any ISigner, request: SigningRequest, runtime: TransactionSender, sender: String) {
+    init(signer: any ISigner, digest: Data, runtime: TransactionSender, sender: String) {
         self.signer = signer
-        self.request = request
+        self.digest = digest
         self.runtime = runtime
         self.sender = sender
     }
@@ -274,7 +243,7 @@ private final class SignerOperation: @unchecked Sendable {
     func start() {
         let task = Task { [self] in
             do {
-                complete(.success(try await signer.sign(request)))
+                complete(.success(try await signer.sign(digest: digest)))
             } catch is CancellationError {
                 complete(.failure(.signerCancelled))
             } catch {

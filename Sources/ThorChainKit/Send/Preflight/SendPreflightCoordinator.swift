@@ -18,9 +18,12 @@ struct SendQuoteRequest: Sendable {
     let recipient: Address
     let amount: SendAmount
     let memo: String?
+    // What is being sent. The network fee is always charged in RUNE, so a non-RUNE
+    // denom draws the amount and the fee from two different balances.
+    let denom: Denom
 
-    init(sender: Address, recipient: Address, amount: SendAmount, memo: String? = nil) {
-        self.sender = sender; self.recipient = recipient; self.amount = amount; self.memo = memo
+    init(sender: Address, recipient: Address, amount: SendAmount, memo: String? = nil, denom: Denom = .rune) {
+        self.sender = sender; self.recipient = recipient; self.amount = amount; self.memo = memo; self.denom = denom
     }
 }
 
@@ -36,17 +39,11 @@ struct SendSnapshotResult: Sendable {
 
 protocol ISendPreflightProvider: Sendable {
     func lease(minimumHeight: Int64?) async throws -> EndpointLease
-    func lease(minimumHeight: Int64?, familyID: String) async throws -> EndpointLease
     func snapshot(request: SendQuoteRequest, lease: EndpointLease, height: Int64, policy: SendPolicy, attempt: SendPreflightAttempt) async throws -> SendSnapshot
     func snapshotResult(request: SendQuoteRequest, lease: EndpointLease, height: Int64, policy: SendPolicy, attempt: SendPreflightAttempt) async throws -> SendSnapshotResult
 }
 
 extension ISendPreflightProvider {
-    func lease(minimumHeight: Int64?, familyID: String) async throws -> EndpointLease {
-        let lease = try await lease(minimumHeight: minimumHeight)
-        guard lease.family.id == familyID else { throw SendError.quoteChanged(QuoteChanges(validating: [.providerIdentity])!) }
-        return lease
-    }
 
 }
 
@@ -79,7 +76,6 @@ final class SendPreflightCoordinator: @unchecked Sendable {
     private let provider: any ISendPreflightProvider
     private let policy: SendPolicy
     private let runner: EndpointOperationRunner
-    private let validationState = SendValidationState()
 
     init(runtime: TransactionSender, provider: any ISendPreflightProvider, policy: SendPolicy? = nil) {
         self.runtime = runtime; self.provider = provider; self.policy = policy ?? .standard
@@ -126,77 +122,6 @@ final class SendPreflightCoordinator: @unchecked Sendable {
             throw error
         }
     }
-
-    func revalidate(_ prepared: PreparedQuote) async throws -> RevalidationResult {
-        guard prepared.quote.expiresAt > Date() else { throw SendError.quoteExpired }
-        guard let storedContext = prepared.quote.preflightContext,
-              prepared.quote.hasConsistentAuthorityProjection,
-              storedContext == prepared.snapshot else { throw SendError.operationUnavailable }
-        var activeAttempt: SendPreflightAttempt?
-        do {
-        var attempt = try await runtime.beginPreflight()
-        activeAttempt = attempt
-        let generation = attempt.generation
-        let priorHeight = await validationState.height(for: storedContext.digest) ?? prepared.snapshot.height
-        let lease = try await runner.run(lifecycle: { !self.runtime.isAdmissionActive(generation: generation) }) { try await self.provider.lease(minimumHeight: priorHeight, familyID: prepared.snapshot.familyID) }
-        attempt = try await runtime.bindFamily(attempt, familyID: lease.family.id)
-        guard lease.family.id == prepared.snapshot.familyID, lease.commonReadHeight >= priorHeight else {
-            throw SendError.quoteChanged(QuoteChanges(validating: [.providerIdentity, .heightRollback])!)
-        }
-        let sender: Address
-        do { sender = try Address(prepared.snapshot.sender, network: .mainnet) }
-        catch { throw SendError.providerUnavailable }
-        let request = SendQuoteRequest(sender: sender, recipient: prepared.quote.recipient, amount: .exact(prepared.snapshot.amount), memo: prepared.quote.memo)
-        let snapshotAttempt = attempt
-        let result = try await runner.run(familyID: lease.family.id, lifecycle: { !self.runtime.isAdmissionActive(generation: generation) }) { try await self.provider.snapshotResult(request: request, lease: lease, height: lease.commonReadHeight, policy: self.policy, attempt: snapshotAttempt) }
-        guard result.attempt.routeID == "recipient-account",
-              result.attempt.clientID == attempt.clientID,
-              result.attempt.generation == attempt.generation,
-              result.attempt.attemptID == attempt.attemptID,
-              result.attempt.familyID == attempt.familyID else { throw SendError.policyUnavailable }
-        attempt = result.attempt
-        activeAttempt = attempt
-        try await runtime.guardPreflight(attempt, familyID: lease.family.id, routeID: "recipient-account")
-        let fresh = result.snapshot
-        guard fresh.height >= priorHeight else { throw SendError.quoteChanged(QuoteChanges(validating: [.heightRollback])!) }
-        var changes = Set<QuoteChange>()
-        if fresh.familyID != prepared.snapshot.familyID || fresh.chainID != prepared.snapshot.chainID || fresh.restEndpoint != prepared.snapshot.restEndpoint || fresh.rpcEndpoint != prepared.snapshot.rpcEndpoint || fresh.manifestRevision != prepared.snapshot.manifestRevision { changes.insert(.providerIdentity) }
-        if fresh.height < prepared.snapshot.height { changes.insert(.heightRollback) }
-        if fresh.accountNumber != prepared.snapshot.accountNumber { changes.insert(.accountNumber) }
-        if fresh.sequence != prepared.snapshot.sequence { changes.insert(.sequence) }
-        if fresh.accountPublicKey != prepared.snapshot.accountPublicKey || fresh.accountPublicKeyData != prepared.snapshot.accountPublicKeyData { changes.insert(.accountPublicKey) }
-        if fresh.spendableRune < prepared.quote.totalDebit { changes.insert(.balance) }
-        if fresh.nativeFee != prepared.snapshot.nativeFee { changes.insert(.nativeFee) }
-        if fresh.mimir != prepared.snapshot.mimir { changes.insert(.haltStatus) }
-        if fresh.memoMaximumBytes != prepared.snapshot.memoMaximumBytes { changes.insert(.memoPolicy) }
-        if fresh.nodeVersion != prepared.snapshot.nodeVersion || fresh.querierVersion != prepared.snapshot.querierVersion || fresh.recipientClassification != prepared.snapshot.recipientClassification || fresh.policyRevision != prepared.snapshot.policyRevision { changes.insert(.recipientPolicy) }
-        if let result = QuoteChanges(validating: changes) { throw SendError.quoteChanged(result) }
-        await validationState.record(digest: prepared.snapshot.digest, height: fresh.height)
-        await runtime.finishPreflight(attempt)
-        return RevalidationResult(snapshot: fresh, quote: prepared.quote)
-        } catch {
-            if let activeAttempt { await runtime.finishPreflight(activeAttempt) }
-            if let error = error as? EndpointOperationError, error == .lifecycleInvalidated { throw SendError.kitNotStarted }
-            throw error
-        }
-    }
-
-    func revalidate(_ quote: SendQuote) async throws -> RevalidationResult {
-        guard let context = quote.preflightContext else { throw SendError.operationUnavailable }
-        return try await revalidate(PreparedQuote(quote: quote, snapshot: context))
-    }
-}
-
-struct RevalidationResult: Sendable {
-    let snapshot: SendSnapshot
-    let quote: SendQuote
-}
-
-private actor SendValidationState {
-    private var acceptedHeights = [Data: Int64]()
-
-    func height(for digest: Data) -> Int64? { acceptedHeights[digest] }
-    func record(digest: Data, height: Int64) { acceptedHeights[digest] = height }
 }
 
 struct ThorNodeSendPreflightProvider: ISendPreflightProvider {
@@ -205,10 +130,9 @@ struct ThorNodeSendPreflightProvider: ISendPreflightProvider {
     let capabilities: [SendFamilyCapability]
     let runtime: TransactionSender?
     let runner: EndpointOperationRunner
-    let freshLeaseProvider: (@Sendable (String) async throws -> EndpointLease)?
 
-    init(node: ThorNodeSendClient, leaseProvider: @escaping @Sendable () async throws -> EndpointLease, capabilities: [SendFamilyCapability] = NativeRuneEndpointRegistry.capabilities(), runtime: TransactionSender? = nil, operationDeadline: TimeInterval = 15, freshLeaseProvider: (@Sendable (String) async throws -> EndpointLease)? = nil) {
-        self.node = node; self.leaseProvider = leaseProvider; self.capabilities = capabilities; self.runtime = runtime; runner = EndpointOperationRunner(deadline: operationDeadline); self.freshLeaseProvider = freshLeaseProvider
+    init(node: ThorNodeSendClient, leaseProvider: @escaping @Sendable () async throws -> EndpointLease, capabilities: [SendFamilyCapability] = NativeRuneEndpointRegistry.capabilities(), runtime: TransactionSender? = nil, operationDeadline: TimeInterval = 15) {
+        self.node = node; self.leaseProvider = leaseProvider; self.capabilities = capabilities; self.runtime = runtime; runner = EndpointOperationRunner(deadline: operationDeadline)
     }
 
     func lease(minimumHeight: Int64?) async throws -> EndpointLease {
@@ -221,24 +145,6 @@ struct ThorNodeSendPreflightProvider: ISendPreflightProvider {
         return lease
     }
 
-    func lease(minimumHeight: Int64?, familyID: String) async throws -> EndpointLease {
-        let lease: EndpointLease
-        if let freshLeaseProvider {
-            lease = try await freshLeaseProvider(familyID)
-        } else {
-            lease = try await leaseProvider()
-        }
-        guard lease.family.id == familyID,
-              NativeRuneEndpointRegistry.familyIDs.contains(lease.family.id),
-              minimumHeight.map({ lease.commonReadHeight >= $0 }) ?? true,
-              capabilities.first(where: { $0.familyID == lease.family.id }).map({ capability in
-                  capability.manifestRevision == NativeRuneEndpointRegistry.capabilities().first(where: { $0.familyID == lease.family.id })?.manifestRevision
-                      && capability.isSendCapable
-                      && capability.routes.allSatisfy({ NativeRuneEndpointRegistry.matches($0, family: lease.family) })
-              }) == true
-        else { throw SendError.policyUnavailable }
-        return lease
-    }
 
     func snapshot(request: SendQuoteRequest, lease: EndpointLease, height: Int64, policy: SendPolicy, attempt: SendPreflightAttempt) async throws -> SendSnapshot {
         try await snapshotResult(request: request, lease: lease, height: height, policy: policy, attempt: attempt).snapshot
@@ -253,14 +159,14 @@ struct ThorNodeSendPreflightProvider: ISendPreflightProvider {
             return route
         }
         var routeAttempt = attempt
-        func read(_ name: String, address: String? = nil, requestData: Data = Data()) async throws -> SendRouteResponse {
+        func read(_ name: String, address: String? = nil, requestData: Data = Data(), queryParameterValue: String? = nil) async throws -> SendRouteResponse {
             if let runtime { routeAttempt = try await runtime.bindRoute(routeAttempt, routeID: name); try await runtime.guardPreflight(routeAttempt, familyID: lease.family.id, routeID: name) }
             let lifecycleGeneration = routeAttempt.generation
             let response = try await runner.run(familyID: lease.family.id, lifecycle: {
                 if let runtime { return !runtime.isAdmissionActive(generation: lifecycleGeneration) }
                 return false
             }) {
-                try await self.node.read(route: route(name), using: lease, height: height, address: address, requestData: requestData)
+                try await self.node.read(route: route(name), using: lease, height: height, address: address, requestData: requestData, queryParameterValue: queryParameterValue)
             }
             if let runtime { try await runtime.guardPreflight(routeAttempt, familyID: lease.family.id, routeID: name) }
             return response
@@ -269,7 +175,13 @@ struct ThorNodeSendPreflightProvider: ISendPreflightProvider {
         let recipientRequest = try CosmosQueryCodec.accountRequest(address: request.recipient.raw)
         let networkRequest = try CosmosQueryCodec.networkRequest(height: height)
         let account = try await read("account", address: request.sender.raw, requestData: accountRequest)
-        let balance = try await read("spendable-rune", address: request.sender.raw, requestData: try CosmosQueryCodec.spendableRequest(address: request.sender.raw))
+        let balance = try await read("spendable", address: request.sender.raw, requestData: try CosmosQueryCodec.spendableRequest(address: request.sender.raw, denom: request.denom.rawValue), queryParameterValue: request.denom.rawValue)
+        // The fee is charged in RUNE, so a token send needs the RUNE balance too. It is
+        // read here rather than later because the preflight requires recipient-account to
+        // be the last route touched.
+        let runeBalance = request.denom == .rune
+            ? nil
+            : try await read("spendable", address: request.sender.raw, requestData: try CosmosQueryCodec.spendableRequest(address: request.sender.raw, denom: Denom.rune.rawValue), queryParameterValue: Denom.rune.rawValue)
         let fee = try await read("network-fee", requestData: networkRequest)
         let mimirRoutes = [
             ("mimir-halt-chain-global", "HaltChainGlobal"),
@@ -291,8 +203,16 @@ struct ThorNodeSendPreflightProvider: ISendPreflightProvider {
               accountValue.address == request.sender.raw else {
             throw SendError.accountUnavailable
         }
-        let balanceValue = try SendRouteDecoders.balance(balance.value)
+        let balanceValue = try SendRouteDecoders.balance(balance.value, expecting: request.denom.rawValue)
         guard let spendable = BigUInt(balanceValue.amount) else { throw SendError.insufficientBalance }
+        let spendableRune: BigUInt
+        if let runeBalance {
+            let runeValue = try SendRouteDecoders.balance(runeBalance.value, expecting: Denom.rune.rawValue)
+            guard let value = BigUInt(runeValue.amount) else { throw SendError.insufficientBalance }
+            spendableRune = value
+        } else {
+            spendableRune = spendable
+        }
         let nativeFee = try SendRouteDecoders.networkFee(fee.value)
         let mimirSnapshot = MimirSnapshot(
             haltChainGlobal: try Self.mimirValue(mimirValues, key: "HaltChainGlobal"),
@@ -307,9 +227,9 @@ struct ThorNodeSendPreflightProvider: ISendPreflightProvider {
         let recipientPayload = try CosmosQueryCodec.decodeAccountPayload(recipient.value)
         let recipientResponse = RecipientAccountResponse(height: height, code: recipient.code, codespace: recipient.codespace, type: recipientPayload?.typeURL, address: recipientPayload?.address, value: recipient.value)
         let classification = try RecipientAccountClassifier.classify(recipientResponse, expectedHeight: height, recipient: request.recipient.raw, forbidden: forbidden)
-        let amount = try policy.resolve(amount: request.amount, spendableRune: spendable, nativeFee: nativeFee)
+        let amount = try policy.resolve(amount: request.amount, spendable: spendable, spendableRune: spendableRune, nativeFee: nativeFee, feeSharesBalance: request.denom == .rune)
         try policy.validate(memo: request.memo)
-        return SendSnapshotResult(snapshot: try SendSnapshot(familyID: lease.family.id, chainID: lease.verifiedChainId, height: height, sender: request.sender.raw, recipient: request.recipient.raw, accountNumber: accountValue.accountNumber, sequence: accountValue.sequence, amount: amount, nativeFee: nativeFee, spendableRune: spendable, mimir: mimirSnapshot, memoMaximumBytes: memoMaximum, nodeVersion: version.current, querierVersion: version.querier, recipientClassification: classification, policyRevision: forbidden.revision, accountPublicKey: accountValue.publicKeyTypeURL, accountPublicKeyData: accountValue.publicKeyData, restEndpoint: lease.family.cosmosRestURL.absoluteString, rpcEndpoint: lease.family.cometBftURL.absoluteString, manifestRevision: capability?.manifestRevision ?? ""), attempt: routeAttempt)
+        return SendSnapshotResult(snapshot: try SendSnapshot(familyID: lease.family.id, chainID: lease.verifiedChainId, height: height, sender: request.sender.raw, recipient: request.recipient.raw, accountNumber: accountValue.accountNumber, sequence: accountValue.sequence, amount: amount, nativeFee: nativeFee, spendable: spendable, spendableRune: spendableRune, denom: request.denom, mimir: mimirSnapshot, memoMaximumBytes: memoMaximum, nodeVersion: version.current, querierVersion: version.querier, recipientClassification: classification, policyRevision: forbidden.revision, accountPublicKey: accountValue.publicKeyTypeURL, accountPublicKeyData: accountValue.publicKeyData, restEndpoint: lease.family.cosmosRestURL.absoluteString, rpcEndpoint: lease.family.cometBftURL.absoluteString, manifestRevision: capability?.manifestRevision ?? ""), attempt: routeAttempt)
     }
 
     private static func mimirValue(_ values: [String: Int64], key: String) throws -> Int64 {
@@ -319,10 +239,10 @@ struct ThorNodeSendPreflightProvider: ISendPreflightProvider {
 }
 
 enum SendRouteDecoders {
-    static func balance(_ data: Data) throws -> (denom: String, amount: String) {
+    static func balance(_ data: Data, expecting expected: String) throws -> (denom: String, amount: String) {
         let envelope = try exactObject(data, keys: ["balance"])
         guard let balance = envelope["balance"] as? [String: Any], Set(balance.keys) == ["denom", "amount"],
-              let denom = balance["denom"] as? String, denom == "rune",
+              let denom = balance["denom"] as? String, denom == expected,
               let amount = canonicalUnsigned(balance["amount"]) else { throw SendError.insufficientBalance }
         return (denom, amount)
     }

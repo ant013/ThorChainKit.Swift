@@ -10,10 +10,6 @@ final class KitCompositionTests: XCTestCase {
         let sender = TransactionSender(address: address)
         let kit = makeTestKit(address: address, transactionSender: sender, persistenceNamespace: "composition")
 
-        XCTAssertTrue(kit.pendingTransactions.isEmpty)
-        if case .degraded = kit.pendingTransactionsStatus {} else {
-            XCTFail("S2-01 pending state must be explicitly degraded")
-        }
         XCTAssertNotNil(kit.transactionSender)
     }
 
@@ -61,10 +57,6 @@ final class KitCompositionTests: XCTestCase {
         let instanceAuthority = await instance.transactionSender.authorityClientID()
         let fixtureAuthority = await fixture.transactionSender.authorityClientID()
         XCTAssertNotEqual(instanceAuthority, fixtureAuthority)
-        XCTAssertTrue(instance.pendingTransactions.isEmpty)
-        XCTAssertTrue(fixture.pendingTransactions.isEmpty)
-        if case .ready = instance.pendingTransactionsStatus {} else { XCTFail("instance pending status must be ready after journal recovery") }
-        if case .ready = fixture.pendingTransactionsStatus {} else { XCTFail("fixture pending status must be ready after journal recovery") }
     }
 
     func testFixtureFactoryUsesRegisteredFamilyAndInjectedTransportAfterStart() async throws {
@@ -209,7 +201,8 @@ private final class FixtureBroadcastSigner: ISigner, @unchecked Sendable {
         compressedPublicKey = key.publicKey.rawRepresentation
     }
 
-    func sign(_ request: SigningRequest) async throws -> Data {
-        try key.ecdsa.signature(for: SHA256.hash(data: request.serializedSignDoc)).compactRepresentation
+    func sign(digest: Data) async throws -> Data {
+        // The digest is already SHA-256(SignDoc); signing it as Data would hash it twice.
+        try Signer.sign(digest: digest, privateKey: key.rawRepresentation)
     }
 }

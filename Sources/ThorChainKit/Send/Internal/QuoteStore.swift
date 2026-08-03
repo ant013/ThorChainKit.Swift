@@ -50,8 +50,11 @@ final class QuoteStore: Sendable {
                   amount + fee == totalDebit,
                   !providerFamilyID.isEmpty
             else { throw SendError.operationUnavailable }
-            let deadlineDate = Date().addingTimeInterval(10)
-            let (deadline, overflow) = clock.now.addingReportingOverflow(10_000_000_000)
+            // Must outlive reading the confirmation screen plus biometric auth. Ten
+            // seconds raced them: the clock starts when preflight finishes, so by the
+            // time the user taps Send the quote is already several seconds old.
+            let deadlineDate = Date().addingTimeInterval(120)
+            let (deadline, overflow) = clock.now.addingReportingOverflow(120_000_000_000)
             guard !overflow else { throw SendError.operationUnavailable }
             for _ in 0..<8 {
                 let token = Data((0..<32).map { _ in UInt8.random(in: .min ... .max, using: &random) })

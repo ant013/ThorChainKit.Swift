@@ -1,18 +1,18 @@
 import BigInt
 import Foundation
 
-public struct PendingTransaction: Sendable, CustomDebugStringConvertible, CustomReflectable {
-    public enum State: Sendable { case checkTxAccepted, unknown }
-    public enum RetryAvailability: Sendable { case available, inFlight, sequenceAdvanced, providerInconsistent, notApplicable }
+struct PendingTransaction: Sendable, CustomDebugStringConvertible, CustomReflectable {
+    enum State: Sendable { case checkTxAccepted, unknown }
+    enum RetryAvailability: Sendable { case available, inFlight, sequenceAdvanced, providerInconsistent, notApplicable }
 
-    public let transactionId: TransactionID
-    public let recipient: Address
-    public var amount: BigUInt { magnitude(amountMagnitude) }
-    public var nativeFee: BigUInt { magnitude(nativeFeeMagnitude) }
-    public let memo: String?
-    public let state: State
-    public let retryAvailability: RetryAvailability
-    public let createdAt: Date
+    let transactionId: TransactionID
+    let recipient: Address
+    var amount: BigUInt { magnitude(amountMagnitude) }
+    var nativeFee: BigUInt { magnitude(nativeFeeMagnitude) }
+    let memo: String?
+    let state: State
+    let retryAvailability: RetryAvailability
+    let createdAt: Date
 
     private let amountMagnitude: Data
     private let nativeFeeMagnitude: Data
@@ -41,11 +41,11 @@ public struct PendingTransaction: Sendable, CustomDebugStringConvertible, Custom
         self.createdAt = createdAt
     }
 
-    public var debugDescription: String {
+    var debugDescription: String {
         "PendingTransaction(transactionId: \(transactionId.hash), recipient: \(recipient.raw), amount: \(amount), nativeFee: \(nativeFee), memo: \(memo ?? "nil"), createdAt: \(createdAt.timeIntervalSince1970))"
     }
 
-    public var customMirror: Mirror {
+    var customMirror: Mirror {
         Mirror(self, children: [
             "transactionId": transactionId.hash,
             "recipient": recipient.raw,
@@ -66,7 +66,7 @@ public struct PendingTransaction: Sendable, CustomDebugStringConvertible, Custom
     }
 }
 
-public enum PendingTransactionsStatus: Sendable { case ready, degraded }
+enum PendingTransactionsStatus: Sendable { case ready, degraded }
 
 private func magnitude(_ data: Data) -> BigUInt {
     data.isEmpty ? 0 : BigUInt(data)

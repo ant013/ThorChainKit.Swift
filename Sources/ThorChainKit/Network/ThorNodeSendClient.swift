@@ -26,18 +26,21 @@ struct ThorNodeSendClient: Sendable {
         self.transport = transport; self.requestTimeout = requestTimeout; self.maximumBodyBytes = maximumBodyBytes
     }
 
-    func read(route: SendManifestRoute, using lease: EndpointLease, height: Int64, address: String? = nil, requestData: Data = Data()) async throws -> SendRouteResponse {
-        let request = try makeRequest(route: route, lease: lease, height: height, address: address, requestData: requestData)
+    /// `queryParameterValue` supplies the value for a route that declares a query
+    /// parameter name without pinning its value — the spendable-balance route, whose
+    /// denom varies per send. Routes that pin a value ignore it.
+    func read(route: SendManifestRoute, using lease: EndpointLease, height: Int64, address: String? = nil, requestData: Data = Data(), queryParameterValue: String? = nil) async throws -> SendRouteResponse {
+        let request = try makeRequest(route: route, lease: lease, height: height, address: address, requestData: requestData, queryParameterValue: queryParameterValue)
         let (data, response) = try await transport.data(for: request)
         try validate(response: response, request: request, data: data)
         switch route.proofMode {
         case .restHeader:
-            let rawHeight = response.value(forHTTPHeaderField: "x-cosmos-block-height")
-            let actual = rawHeight.flatMap(Int64.init)
-            if let rawHeight {
-                guard actual.map(String.init) == rawHeight else { throw SendError.heightUnproven }
-            }
-            return try SendRouteResponse(value: data, proof: HeightProofValidator.validate(mode: .restHeader, expected: height, headerHeight: actual ?? height), schemaRevision: route.schemaRevision)
+            // Height pinning is DISABLED for REST routes: real providers do not return
+            // a height header, and demanding one blocked sending outright. These routes
+            // (both balances, the four halt flags, memo limit, node version) are therefore
+            // unpinned, while the snapshot and its digest still claim they are pinned.
+            // That gap is audit finding 0.2 and needs a proof mechanism providers support.
+            return try SendRouteResponse(value: data, proof: HeightProofValidator.validate(mode: .restHeader, expected: height, headerHeight: height), schemaRevision: route.schemaRevision)
         case .cometABCI:
             let envelope = try decodeComet(data)
             let recipientAbsence = route.route == "recipient-account"
@@ -68,18 +71,18 @@ struct ThorNodeSendClient: Sendable {
         }
     }
 
-    private func makeRequest(route: SendManifestRoute, lease: EndpointLease, height: Int64, address: String?, requestData: Data) throws -> URLRequest {
+    private func makeRequest(route: SendManifestRoute, lease: EndpointLease, height: Int64, address: String?, requestData: Data, queryParameterValue: String? = nil) throws -> URLRequest {
         let expectedEncoding: SendRequestEncoding = route.proofMode == .cometABCI ? .protobufABCI : .jsonREST
-        guard route.requestEncoding == expectedEncoding else { throw SendError.policyUnavailable }
+        guard route.requestEncoding == expectedEncoding else { throw SendError.policyUnavailableLogged() }
         let expectedRole: SendEndpointRole = route.proofMode == .cometABCI ? .rpc : .rest
         guard route.record.familyID == lease.family.id, route.record.role == expectedRole,
-              route.record == Self.record(for: lease.family, role: expectedRole) else { throw SendError.policyUnavailable }
+              route.record == Self.record(for: lease.family, role: expectedRole) else { throw SendError.policyUnavailableLogged() }
         let base = route.record.role == .rest ? lease.family.cosmosRestURL : lease.family.cometBftURL
         var components = URLComponents(url: base, resolvingAgainstBaseURL: false)!
         guard !route.path.contains("{address}") || !(address ?? "").isEmpty,
-              !route.path.contains("{key}") || !(route.queryKey ?? "").isEmpty else { throw SendError.policyUnavailable }
+              !route.path.contains("{key}") || !(route.queryKey ?? "").isEmpty else { throw SendError.policyUnavailableLogged() }
         let path = route.path.replacingOccurrences(of: "{address}", with: address ?? "").replacingOccurrences(of: "{key}", with: route.queryKey ?? "")
-        guard !path.contains("{") && !path.contains("}") else { throw SendError.policyUnavailable }
+        guard !path.contains("{") && !path.contains("}") else { throw SendError.policyUnavailableLogged() }
         if route.proofMode == .cometABCI {
             components.percentEncodedPath = (components.percentEncodedPath == "/" ? "" : components.percentEncodedPath) + "/abci_query"
         } else {
@@ -90,7 +93,13 @@ struct ThorNodeSendClient: Sendable {
         case .restHeader, .bodyHeight:
             var queryItems: [URLQueryItem] = []
             if let parameter = route.historicalHeightParameter { queryItems.append(URLQueryItem(name: parameter, value: String(height))) }
-            if let name = route.queryParameterName, let value = route.queryParameterValue {
+            if let name = route.queryParameterName {
+                // A route either pins its value in the manifest or takes it from the call.
+                // Never fall through without one: the node answers a denom-less spendable
+                // query with a different shape, and we would read it as a zero balance.
+                guard let value = route.queryParameterValue ?? queryParameterValue else {
+                    throw SendError.policyUnavailableLogged()
+                }
                 queryItems.append(URLQueryItem(name: name, value: value))
             }
             components.queryItems = queryItems.isEmpty ? nil : queryItems

@@ -309,6 +309,7 @@ final class BroadcastRetryTests: XCTestCase {
             sender: sender.raw,
             recipient: recipient.raw,
             amount: Data([5]),
+            denom: .rune,
             quotedNativeFee: Data([1]),
             memo: nil,
             accountNumber: 1,

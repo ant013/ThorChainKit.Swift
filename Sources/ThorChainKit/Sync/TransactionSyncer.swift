@@ -190,7 +190,7 @@ final class TransactionSyncer: @unchecked Sendable {
         return refreshed
     }
 
-    private static func transaction(_ action: MidgardAction) throws -> Transaction? {
+    static func transaction(_ action: MidgardAction) throws -> Transaction? {
         guard let incoming = action.incoming, let outgoing = action.outgoing else {
             throw MidgardProviderError.invalidResponse
         }
@@ -214,7 +214,8 @@ final class TransactionSyncer: @unchecked Sendable {
             status: status,
             memo: memo(action.metadata),
             incoming: try transfers(incoming),
-            outgoing: try transfers(outgoing)
+            outgoing: try transfers(outgoing),
+            fee: networkFee(action.metadata)
         )
     }
 
@@ -236,6 +237,16 @@ final class TransactionSyncer: @unchecked Sendable {
 
     private static func memo(_ metadata: MidgardJSONValue?) -> String? {
         metadata?.object?.values.compactMap { $0.object?["memo"]?.string }.first
+    }
+
+    /// Only the amount is taken. Midgard labels a send's `networkFees` entry with the
+    /// asset that moved — a TCY send reports `asset: "TCY"` — but the charge is the
+    /// native fee in RUNE: the same amount appears whatever was sent. Trusting that
+    /// label would show "0.2 TCY" as the fee for a 0.01 TCY transfer.
+    private static func networkFee(_ metadata: MidgardJSONValue?) -> BigUInt? {
+        let fees = metadata?.object?.values.compactMap { $0.object?["networkFees"]?.array }.first
+        guard let entry = fees?.first, let raw = entry.object?["amount"]?.string else { return nil }
+        return BigUInt(raw)
     }
 
     private func commit(recent: RecentSyncResult, cursor: TransactionSyncCursor, syncID: UUID) throws {

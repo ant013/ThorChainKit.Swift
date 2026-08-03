@@ -1,3 +1,4 @@
+import BigInt
 import Combine
 import Foundation
 import XCTest
@@ -78,6 +79,54 @@ final class TransactionHistoryTests: XCTestCase {
         try manager.save(transactions: [transaction(id: fixture.transactionID, status: "success")])
         XCTAssertTrue(try fixture.journal.pendingRecords().isEmpty)
         XCTAssertEqual(manager.transactions().first?.status, "success")
+    }
+
+    func testMidgardNetworkFeeIsTakenAsRuneWhateverAssetItClaims() throws {
+        // Verbatim from a real mainnet action: 0.01 TCY was sent and Midgard labels the
+        // fee `asset: "TCY"`, while the charge is the native RUNE fee — the identical
+        // 20000000 shows up on RUNE sends too. Trusting the label would render the fee
+        // as 0.2 TCY on a 0.01 TCY transfer, twenty times the amount moved.
+        let json = Data(#"""
+        {"date":"1785736558923059878","height":"27272536","type":"send","status":"success",
+        "in":[{"address":"thor13wvcnffnln7s8g3y2wzvvukfj4y8zxe98z65ld","txID":"71113A65E42AB49C11E2B62BCDE319A5BB66B6FCAA574ECDCB38C70B50D0886F","coins":[{"amount":"1000000","asset":"TCY"}]}],
+        "out":[{"address":"thor1nyvskcndxfxne0hqwceselq55anayg7a9tes5h","txID":"71113A65E42AB49C11E2B62BCDE319A5BB66B6FCAA574ECDCB38C70B50D0886F","coins":[{"amount":"1000000","asset":"TCY"}]}],
+        "metadata":{"send":{"code":"0","memo":"Ere","reason":"","networkFees":[{"amount":"20000000","asset":"TCY"}]}}}
+        """#.utf8)
+
+        let action = try JSONDecoder().decode(MidgardAction.self, from: json)
+        let transaction = try XCTUnwrap(TransactionSyncer.transaction(action))
+
+        XCTAssertEqual(transaction.fee, 20_000_000)
+        XCTAssertEqual(transaction.memo, "Ere")
+        XCTAssertEqual(transaction.incoming.first?.asset, "TCY")
+    }
+
+    func testFeeSurvivesStorageAndIsOverwrittenOnConflict() throws {
+        // The fixture never set a fee before, so the column round-trip and the
+        // ON CONFLICT branch that updates it were both unreachable from tests.
+        let fixture = try journalFixture(insertJournal: false)
+        let repository = TransactionRepository(storage: fixture.storage, persistenceNamespace: fixture.namespace)
+        let id = fixture.transactionID
+
+        _ = try repository.save([transaction(id: id, status: "success", fee: 20_000_000)])
+        XCTAssertEqual(try repository.transactions().first?.fee, 20_000_000)
+
+        _ = try repository.save([transaction(id: id, status: "success", fee: 30_000_000)])
+        XCTAssertEqual(try repository.transactions().first?.fee, 30_000_000)
+    }
+
+    func testJournalRoundTripsTheDenomAndFeeItWasGiven() throws {
+        // Both used to be unrepresentable: the column did not exist and the local
+        // projection hardcoded THOR.RUNE with no fee. The fixture wrote only .rune and
+        // an empty fee, so neither branch was ever reached from a test.
+        let fixture = try journalFixture(insertJournal: false)
+        let tcy = try Denom(rawValue: "tcy")
+        try fixture.insertBroadcasting(denom: tcy, quotedNativeFee: SendMagnitude(BigUInt(2_000_000)).data)
+
+        let record = try XCTUnwrap(try fixture.journal.record(for: fixture.transactionID))
+
+        XCTAssertEqual(record.denom, tcy)
+        XCTAssertEqual(BigUInt(record.quotedNativeFee), 2_000_000)
     }
 
     func testStoredTransactionPreservesItsDate() throws {
@@ -414,7 +463,7 @@ final class TransactionHistoryTests: XCTestCase {
         return fixture
     }
 
-    private func transaction(id: TransactionID, status: String, timestamp: TimeInterval = 123) -> Transaction {
+    private func transaction(id: TransactionID, status: String, timestamp: TimeInterval = 123, fee: BigUInt? = nil) -> Transaction {
         Transaction(
             transactionId: id,
             blockHeight: 123,
@@ -423,7 +472,8 @@ final class TransactionHistoryTests: XCTestCase {
             status: status,
             memo: "memo",
             incoming: [CoinTransfer(address: "sender", asset: "THOR.RUNE", amount: 42)],
-            outgoing: [CoinTransfer(address: "recipient", asset: "THOR.RUNE", amount: 42)]
+            outgoing: [CoinTransfer(address: "recipient", asset: "THOR.RUNE", amount: 42)],
+            fee: fee
         )
     }
 
@@ -463,7 +513,7 @@ private struct JournalFixture {
     let recipient: Address
     let owner: Data
 
-    func insertBroadcasting() throws {
+    func insertBroadcasting(denom: Denom = .rune, quotedNativeFee: Data = Data()) throws {
         let reservations = SequenceReservationStore(storage: storage)
         XCTAssertTrue(try reservations.acquire(SequenceReservationKey(persistenceNamespace: namespace, senderPayload: sender.payload, sequence: 7), ownerToken: owner))
         try journal.insertBroadcasting(
@@ -473,7 +523,8 @@ private struct JournalFixture {
             sender: sender.raw,
             recipient: recipient.raw,
             amount: Data([42]),
-            quotedNativeFee: Data(),
+            denom: denom,
+            quotedNativeFee: quotedNativeFee,
             memo: "memo",
             accountNumber: 1,
             sequence: 7,
