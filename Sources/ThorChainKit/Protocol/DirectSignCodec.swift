@@ -29,8 +29,12 @@ struct SignedTransaction: Sendable, CustomDebugStringConvertible, CustomReflecta
 
 enum DirectSignCodec {
     private static let msgSendTypeURL = "/types.MsgSend"
+    private static let msgDepositTypeURL = "/types.MsgDeposit"
     private static let publicKeyTypeURL = "/cosmos.crypto.secp256k1.PubKey"
     private static let gasLimit: UInt64 = 3_000_000
+    // A deposit executes chain logic rather than moving coins, so it needs far more gas.
+    // Mirrors the Android kit, which pairs 6_000_000 for a send with 600_000_000 here.
+    private static let depositGasLimit: UInt64 = 600_000_000
 
     static func makeSignPayload(snapshot: SendSnapshot, quote prepared: PreparedQuote, publicKey: Data) throws -> SignPayload {
         let quote = prepared.quote
@@ -53,13 +57,30 @@ enum DirectSignCodec {
         let sender = try addressPayload(snapshot.sender)
         let recipient = try addressPayload(snapshot.recipient)
         let message = try msgSend(sender: sender, recipient: recipient, amount: quote.amount, denom: snapshot.denom)
+        return try assemble(message: message, typeURL: msgSendTypeURL, memo: quote.memo ?? "", gasLimit: gasLimit, context: snapshot.depositContext, publicKey: publicKey)
+    }
+
+    /// A deposit has no recipient: it addresses the chain itself, and its instruction
+    /// lives in the message memo rather than the transaction body.
+    static func makeDepositSignPayload(context: DepositContext, asset: Asset, amount: BigUInt, memo: String, publicKey: Data) throws -> SignPayload {
+        guard amount > 0, !memo.isEmpty,
+              publicKey.count == 33, publicKey.first == 2 || publicKey.first == 3
+        else { throw SendError.operationUnavailable }
+
+        let signer = try addressPayload(context.sender)
+        let message = try msgDeposit(asset: asset, amount: amount, memo: memo, signer: signer)
+        // TxBody.memo stays empty — the deposit carries its own.
+        return try assemble(message: message, typeURL: msgDepositTypeURL, memo: "", gasLimit: depositGasLimit, context: context, publicKey: publicKey)
+    }
+
+    private static func assemble(message: Data, typeURL: String, memo: String, gasLimit: UInt64, context: DepositContext, publicKey: Data) throws -> SignPayload {
         let anyMessage = SwiftProtobuf.Google_Protobuf_Any.with {
-            $0.typeURL = msgSendTypeURL
+            $0.typeURL = typeURL
             $0.value = message
         }
         let body = Cosmos_Tx_V1beta1_TxBody.with {
             $0.messages = [anyMessage]
-            $0.memo = quote.memo ?? ""
+            $0.memo = memo
         }
         let bodyBytes = try body.serializedData()
 
@@ -75,7 +96,7 @@ enum DirectSignCodec {
         let signerInfo = Cosmos_Tx_V1beta1_SignerInfo.with {
             $0.publicKey = publicKeyAny
             $0.modeInfo = modeInfo
-            $0.sequence = snapshot.sequence
+            $0.sequence = context.sequence
         }
         let fee = Cosmos_Tx_V1beta1_Fee.with { $0.gasLimit = gasLimit }
         let authInfo = Cosmos_Tx_V1beta1_AuthInfo.with {
@@ -86,8 +107,8 @@ enum DirectSignCodec {
         let signDoc = Cosmos_Tx_V1beta1_SignDoc.with {
             $0.bodyBytes = bodyBytes
             $0.authInfoBytes = authInfoBytes
-            $0.chainID = snapshot.chainID
-            $0.accountNumber = snapshot.accountNumber
+            $0.chainID = context.chainID
+            $0.accountNumber = context.accountNumber
         }
         let signDocBytes = try signDoc.serializedData()
         return SignPayload(
@@ -123,6 +144,28 @@ enum DirectSignCodec {
         coin.denom = denom.rawValue
         coin.amount = String(amount)
         message.amount = [coin]
+        return try message.serializedData()
+    }
+
+    private static func msgDeposit(asset: Asset, amount: BigUInt, memo: String, signer: Data) throws -> Data {
+        var coin = Common_Coin()
+        coin.asset = Common_Asset.with {
+            $0.chain = asset.chain
+            $0.symbol = asset.symbol
+            $0.ticker = asset.ticker
+            $0.synth = asset.synth
+            $0.trade = asset.trade
+            $0.secured = asset.secured
+        }
+        coin.amount = String(amount)
+        // THORChain reads a deposit amount in the asset's own base units; the field is
+        // informational and the Android kit leaves it at zero.
+        coin.decimals = 0
+        var message = Types_MsgDeposit()
+        message.coins = [coin]
+        message.memo = memo
+        // Raw 20-byte account payload, not bech32 — same as MsgSend's addresses.
+        message.signer = signer
         return try message.serializedData()
     }
 

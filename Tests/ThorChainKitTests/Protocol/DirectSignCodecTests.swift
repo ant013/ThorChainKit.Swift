@@ -124,6 +124,35 @@ final class DirectSignCodecTests: XCTestCase {
         }
     }
 
+    func testDepositPutsItsMemoInTheMessageAndLeavesTheBodyMemoEmpty() throws {
+        // Three details that are easy to get wrong and invisible until a swap silently
+        // does nothing: the instruction lives in the message, not the transaction body;
+        // the signer is the raw 20-byte payload; the asset flags travel with the coin.
+        let snapshot = try makeSnapshot()
+        let asset = Asset(chain: "THOR", symbol: "TCY", ticker: "TCY")
+
+        let payload = try DirectSignCodec.makeDepositSignPayload(
+            context: snapshot.depositContext, asset: asset, amount: 100_000_000, memo: "=:BTC.BTC:bc1...", publicKey: publicKey
+        )
+
+        let body = try Cosmos_Tx_V1beta1_TxBody(serializedBytes: payload.bodyBytes)
+        XCTAssertEqual(body.memo, "")
+        XCTAssertEqual(body.messages[0].typeURL, "/types.MsgDeposit")
+
+        let message = try Types_MsgDeposit(serializedBytes: body.messages[0].value)
+        XCTAssertEqual(message.memo, "=:BTC.BTC:bc1...")
+        XCTAssertEqual(message.signer.count, 20)
+        XCTAssertEqual(message.coins.first?.amount, "100000000")
+        XCTAssertEqual(message.coins.first?.asset.chain, "THOR")
+        XCTAssertEqual(message.coins.first?.asset.ticker, "TCY")
+    }
+
+    func testDepositRefusesAnEmptyMemoBecauseItIsTheInstruction() throws {
+        XCTAssertThrowsError(try DirectSignCodec.makeDepositSignPayload(
+            context: try makeSnapshot().depositContext, asset: .rune, amount: 1, memo: "", publicKey: publicKey
+        ))
+    }
+
     func testSignedTransactionCarriesTheSnapshotDenomNotRune() throws {
         // The whole point of the denom work: a TCY send must put "tcy" in the coin.
         // Hardcoding "rune" here would move the wrong asset in the amount computed

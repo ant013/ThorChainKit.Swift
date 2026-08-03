@@ -1,3 +1,18 @@
+/// What signing needs regardless of the message: a deposit addresses the chain and has
+/// no recipient, so it cannot carry a send snapshot.
+struct DepositContext: Sendable, Equatable {
+    let sender: String
+    let chainID: String
+    let accountNumber: UInt64
+    let sequence: UInt64
+}
+
+extension SendSnapshot {
+    var depositContext: DepositContext {
+        DepositContext(sender: sender, chainID: chainID, accountNumber: accountNumber, sequence: sequence)
+    }
+}
+
 import BigInt
 import CryptoKit
 import Foundation
